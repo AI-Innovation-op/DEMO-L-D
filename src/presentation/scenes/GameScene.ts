@@ -16,11 +16,14 @@ export class GameScene extends Phaser.Scene {
   private audio!: WebAudioSoundAdapter;
   private dialogues!: DialogueRepository;
 
-  // Visual Sprites
+  // Visual Sprites & Layers
   private bgImage!: Phaser.GameObjects.Image;
   private playerSprite!: Phaser.GameObjects.Image;
   private shalemSprite!: Phaser.GameObjects.Image;
   private allySprite?: Phaser.GameObjects.Image;
+
+  // Particle Systems
+  private emberParticles!: Phaser.GameObjects.Particles.ParticleEmitter;
 
   // Active Entities
   private enemies: Enemy[] = [];
@@ -30,7 +33,7 @@ export class GameScene extends Phaser.Scene {
   private bossSprite?: Phaser.GameObjects.Image;
 
   // Environment & Scenarios
-  private currentScenario: number = 1; // 1 = Oakhaven, 2 = Londinium, 3 = Catedral Invertida
+  private currentScenario: number = 1;
 
   // Floating text / Shalem dialogue balloon
   private shalemBalloonText!: Phaser.GameObjects.Text;
@@ -48,6 +51,7 @@ export class GameScene extends Phaser.Scene {
   private keyT!: Phaser.Input.Keyboard.Key; // Throw Weapon (Option B)
   private keyE!: Phaser.Input.Keyboard.Key; // Pick up Weapon (Option A & B)
   private keyM!: Phaser.Input.Keyboard.Key; // Shalem Minigame
+  private keyP!: Phaser.Input.Keyboard.Key; // Inventory & Lore
   private key1!: Phaser.Input.Keyboard.Key;
   private key2!: Phaser.Input.Keyboard.Key;
   private key3!: Phaser.Input.Keyboard.Key;
@@ -70,32 +74,52 @@ export class GameScene extends Phaser.Scene {
   }
 
   public create(): void {
-    // 1. Background image
+    // 1. Background image (640x360)
     this.bgImage = this.add.image(320, 180, 'bg_oakhaven').setDisplaySize(640, 360);
 
-    // 2. Setup audio BGM
+    // 2. Atmospheric Fog Particles
+    this.add.particles(320, 270, 'particle_fog', {
+      speedX: { min: -15, max: 15 },
+      speedY: { min: -5, max: 5 },
+      scale: { start: 1, end: 1.8 },
+      alpha: { start: 0.35, end: 0 },
+      lifespan: 4000,
+      frequency: 600
+    });
+
+    // 3. Floating Ember Particles from Bonfires
+    this.emberParticles = this.add.particles(280, 255, 'particle_ember', {
+      speedX: { min: -25, max: 35 },
+      speedY: { min: -40, max: -90 },
+      scale: { start: 1.2, end: 0.2 },
+      alpha: { start: 0.9, end: 0 },
+      lifespan: 1600,
+      frequency: 180
+    });
+
+    // 4. Setup audio BGM
     this.audio.playBgm('bgm_oakhaven_night');
 
-    // 3. Player Sprite
+    // 5. Player Sprite
     const playerTex = this.player.id === 'thomas' ? 'thomas_idle' : 'khaterine_idle';
     this.playerSprite = this.add.image(this.player.position.x, this.player.position.y, playerTex).setOrigin(0.5, 1);
 
-    // 4. Ally NPC Sprite (If Thomas, Khaterine is ally; if Khaterine, Thomas is ally)
+    // 6. Ally NPC Sprite (If Thomas, Khaterine is ally; if Khaterine, Thomas is ally)
     const allyTex = this.player.id === 'thomas' ? 'khaterine_idle' : 'thomas_idle';
-    this.allySprite = this.add.image(this.player.position.x - 50, this.player.position.y, allyTex).setOrigin(0.5, 1).setAlpha(0.85);
+    this.allySprite = this.add.image(this.player.position.x - 55, this.player.position.y, allyTex).setOrigin(0.5, 1).setAlpha(0.85);
 
-    // 5. Shalem Sprite (Cat)
+    // 7. Shalem Sprite (Cat)
     this.shalemSprite = this.add.image(this.player.position.x - 25, this.player.position.y - 10, 'shalem_cat').setOrigin(0.5, 1);
 
-    // 6. Shalem Dialogue Balloon
-    this.shalemBalloonBg = this.add.rectangle(320, 290, 480, 24, 0x181424, 0.85).setStrokeStyle(1, 0x5a4675);
-    this.shalemBalloonText = this.add.text(320, 290, 'Shalem: «¡Usa [A/D] para moverte, [J] para atacar y [T] para lanzar tu arma!»', {
+    // 8. Shalem Dialogue Balloon
+    this.shalemBalloonBg = this.add.rectangle(320, 332, 540, 24, 0x140f21, 0.9).setStrokeStyle(1, 0xd4af37);
+    this.shalemBalloonText = this.add.text(320, 332, 'Shalem: «¡Usa [A/D] para moverte, [J] atacar, [T] lanzar arma y [P] inventario!»', {
       fontFamily: 'sans-serif',
       fontSize: '10px',
       color: '#ffd700'
     }).setOrigin(0.5);
 
-    // 7. Setup Inputs
+    // 9. Setup Inputs
     if (this.input.keyboard) {
       this.cursors = this.input.keyboard.createCursorKeys();
       this.keyA = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
@@ -107,6 +131,7 @@ export class GameScene extends Phaser.Scene {
       this.keyT = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.T);
       this.keyE = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
       this.keyM = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M);
+      this.keyP = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.P);
       this.key1 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ONE);
       this.key2 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TWO);
       this.key3 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.THREE);
@@ -144,7 +169,14 @@ export class GameScene extends Phaser.Scene {
     if (Phaser.Input.Keyboard.JustDown(this.key2)) this.loadScenario(2);
     if (Phaser.Input.Keyboard.JustDown(this.key3)) this.loadScenario(3);
 
-    // Shalem Minigame
+    // Open Inventory & Prophecy with [P]
+    if (Phaser.Input.Keyboard.JustDown(this.keyP)) {
+      this.scene.pause('GameScene');
+      this.scene.launch('InventoryScene', { player: this.player });
+      return;
+    }
+
+    // Shalem Minigame [M]
     if (Phaser.Input.Keyboard.JustDown(this.keyM)) {
       if (this.player.levelUp.isMinigameReady) {
         this.scene.pause('GameScene');
@@ -159,14 +191,28 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Dodge [L]
+    // Dodge [L] with ghost afterimage trail
     if (Phaser.Input.Keyboard.JustDown(this.keyL)) {
       if (this.player.startDodge()) {
         this.audio.playSfx('dodge');
         const dashDir = this.player.facingDirection;
+
+        // Spawn afterimage ghost
+        const ghost = this.add.image(this.playerSprite.x, this.playerSprite.y, this.playerSprite.texture.key)
+          .setOrigin(0.5, 1)
+          .setAlpha(0.6)
+          .setTint(0x9933ff);
+        this.tweens.add({
+          targets: ghost,
+          alpha: 0,
+          scaleX: 1.2,
+          duration: 250,
+          onComplete: () => ghost.destroy()
+        });
+
         this.tweens.add({
           targets: this.playerSprite,
-          x: this.playerSprite.x + dashDir * 50,
+          x: this.playerSprite.x + dashDir * 55,
           alpha: 0.4,
           duration: 180,
           yoyo: true,
@@ -181,7 +227,7 @@ export class GameScene extends Phaser.Scene {
     // Block [K]
     if (this.keyK.isDown) {
       this.player.startBlock();
-      this.playerSprite.setTint(0x88bbff);
+      this.playerSprite.setTint(0x77aaff);
     } else if (this.player.state === CharacterState.BLOCKING) {
       this.player.stopBlock();
       this.playerSprite.clearTint();
@@ -190,7 +236,7 @@ export class GameScene extends Phaser.Scene {
     // Attack [J]
     if (Phaser.Input.Keyboard.JustDown(this.keyJ) && this.attackCooldown <= 0) {
       this.executeAttack();
-      this.attackCooldown = 280;
+      this.attackCooldown = 260;
     }
 
     // Voluntary Weapon Throw (Option B) [T]
@@ -242,16 +288,34 @@ export class GameScene extends Phaser.Scene {
   }
 
   private executeAttack(): void {
-    const attackTex = this.player.id === 'thomas' ? 'thomas_attack' : 'khaterine_idle';
-    this.playerSprite.setTexture(attackTex);
+    const isDisarmed = this.player.disarmManager.isPlayerDisarmed();
+    const attackTex = isDisarmed
+      ? 'thomas_disarmed'
+      : (this.player.id === 'thomas' ? 'thomas_attack' : 'khaterine_idle');
 
-    // Audio hit
+    this.playerSprite.setTexture(attackTex);
     this.audio.playCombatHit(false);
 
-    // Attack range box check
-    const attackRange = this.player.disarmManager.getCurrentWeapon().range;
     const playerX = this.playerSprite.x;
+    const playerY = this.playerSprite.y;
     const facing = this.player.facingDirection;
+    const attackRange = this.player.disarmManager.getCurrentWeapon().range;
+
+    // Visual Slash Arc Effect
+    if (!isDisarmed) {
+      const slash = this.add.image(playerX + facing * 25, playerY - 25, 'particle_slash_arc')
+        .setScale(facing > 0 ? 1 : -1, 1)
+        .setAlpha(0.85);
+
+      this.tweens.add({
+        targets: slash,
+        alpha: 0,
+        scaleX: facing > 0 ? 1.4 : -1.4,
+        scaleY: 1.4,
+        duration: 180,
+        onComplete: () => slash.destroy()
+      });
+    }
 
     // Check hit against active enemies
     for (const enemy of this.enemies) {
@@ -261,6 +325,10 @@ export class GameScene extends Phaser.Scene {
 
       if (dist <= attackRange + 25 && isAhead) {
         const res = CombatUseCases.executeAttackOnEnemy(this.player, enemy);
+
+        // Hit-stop micro freeze
+        this.cameras.main.shake(120, 0.008);
+        this.spawnDamageNumber(enemy.position.x, enemy.position.y - 35, res.damageDealt, false);
 
         // Enemy flinch & flash
         const sprite = this.enemySprites.get(enemy.id);
@@ -287,18 +355,45 @@ export class GameScene extends Phaser.Scene {
       const bossDist = Math.abs(this.currentBoss.position.x - playerX);
       const isAhead = (this.currentBoss.position.x - playerX) * facing > 0;
       if (bossDist <= attackRange + 40 && isAhead) {
-        CombatUseCases.executeAttackOnBoss(this.player, this.currentBoss);
+        const res = CombatUseCases.executeAttackOnBoss(this.player, this.currentBoss);
+
+        this.cameras.main.shake(180, 0.012);
+        this.spawnDamageNumber(this.currentBoss.position.x, this.currentBoss.position.y - 50, res.damageDealt, true);
 
         this.bossSprite.setTint(0xff5555);
         this.time.delayedCall(120, () => this.bossSprite?.clearTint());
       }
     }
 
-    // Reset texture after attack animation frame
+    // Reset texture after attack frame
     this.time.delayedCall(180, () => {
-      const idleTex = this.player.id === 'thomas' ? 'thomas_idle' : 'khaterine_idle';
+      const idleTex = isDisarmed
+        ? 'thomas_disarmed'
+        : (this.player.id === 'thomas' ? 'thomas_idle' : 'khaterine_idle');
       this.playerSprite.setTexture(idleTex);
       this.player.finishAttack();
+    });
+  }
+
+  private spawnDamageNumber(x: number, y: number, amount: number, isCritical: boolean): void {
+    const color = isCritical ? '#ffd700' : '#e699ff';
+    const text = this.add.text(x, y, `-${amount}`, {
+      fontFamily: 'Cinzel, Georgia, serif',
+      fontSize: isCritical ? '16px' : '12px',
+      color: color,
+      stroke: '#000',
+      strokeThickness: 3
+    }).setOrigin(0.5);
+
+    this.tweens.add({
+      targets: text,
+      y: y - 25,
+      alpha: 0,
+      scaleX: 1.2,
+      scaleY: 1.2,
+      duration: 600,
+      ease: 'Cubic.easeOut',
+      onComplete: () => text.destroy()
     });
   }
 
@@ -312,26 +407,31 @@ export class GameScene extends Phaser.Scene {
     this.audio.playWeaponThrowSound();
     this.audio.playDisarmSound();
 
-    // Create thrown sword projectile animation across screen
+    // Switch Thomas sprite to disarmed brawler stance
+    this.playerSprite.setTexture('thomas_disarmed');
+
+    // Thrown sword projectile with trail
     const thrownX = this.playerSprite.x;
     const dir = this.player.facingDirection;
-    const proj = this.add.image(thrownX, 240, 'icon_thrown_sword').setScale(1.2);
+    const proj = this.add.image(thrownX, 240, 'icon_thrown_sword').setScale(1.3);
     proj.setFlipX(dir < 0);
 
     this.tweens.add({
       targets: proj,
-      x: thrownX + dir * 180,
-      rotation: dir * Math.PI * 2,
-      duration: 260,
+      x: thrownX + dir * 190,
+      rotation: dir * Math.PI * 3,
+      duration: 280,
       ease: 'Cubic.easeOut',
       onComplete: () => {
         proj.destroy();
 
         // Stun enemies in impact area
         for (const enemy of this.enemies) {
-          if (Math.abs(enemy.position.x - (thrownX + dir * 180)) < 45) {
+          if (Math.abs(enemy.position.x - (thrownX + dir * 190)) < 50) {
             enemy.damagePosture(50);
             this.audio.playCombatHit(true);
+            this.spawnDamageNumber(enemy.position.x, enemy.position.y - 35, 45, true);
+
             const sprite = this.enemySprites.get(enemy.id);
             if (sprite) {
               sprite.setTint(0xffff55);
@@ -349,6 +449,9 @@ export class GameScene extends Phaser.Scene {
     const pickedUp = CombatUseCases.pickupNearbyWeapon(this.player);
     if (pickedUp) {
       this.audio.playSfx('dodge');
+      // Reset back to idle with equipped weapon
+      const idleTex = this.player.id === 'thomas' ? 'thomas_idle' : 'khaterine_idle';
+      this.playerSprite.setTexture(idleTex);
       this.triggerShalemBalloon("Shalem asiente: «¡Espada recuperada! Ahora demuestra lo que puedes hacer.»");
     } else {
       this.triggerShalemBalloon("Shalem mira alrededor: «No hay armas en el suelo cerca de ti. Acércate más a una.»");
@@ -411,7 +514,7 @@ export class GameScene extends Phaser.Scene {
         CombatUseCases.executeEnemyAttack(enemy, this.player, false);
         this.audio.playCombatHit(false);
 
-        // Flash player
+        // Flash player & damage text
         this.playerSprite.setTint(0xff5555);
         this.time.delayedCall(120, () => this.playerSprite.clearTint());
 
@@ -490,6 +593,8 @@ export class GameScene extends Phaser.Scene {
       // Oakhaven
       this.bgImage.setTexture('bg_oakhaven');
       this.audio.playBgm('bgm_oakhaven_night');
+      this.emberParticles.setPosition(280, 255);
+      this.emberParticles.start();
 
       // Spawn Ash Prowlers & Fanatic Monk
       const e1 = Enemy.createAshProwler('ash_1', new Vector2(380, 260));
@@ -509,6 +614,7 @@ export class GameScene extends Phaser.Scene {
       // Londinium
       this.bgImage.setTexture('bg_londinium');
       this.audio.playBgm('bgm_londinium_city');
+      this.emberParticles.stop(); // Stop bonfire embers in city
 
       // Spawn Golden Guards
       const g1 = Enemy.createGoldenGuard('guard_1', new Vector2(400, 260));
@@ -525,6 +631,8 @@ export class GameScene extends Phaser.Scene {
       // Catedral Invertida
       this.bgImage.setTexture('bg_cathedral');
       this.audio.playBgm('bgm_cathedral_abyss');
+      this.emberParticles.setPosition(320, 180);
+      this.emberParticles.start();
 
       // Boss Astaroth
       this.currentBoss = Boss.createAstaroth();
