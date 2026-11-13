@@ -33,6 +33,8 @@ export class GameScene extends Phaser.Scene {
   private droppedWeaponSprites: Map<string, Phaser.GameObjects.Container> = new Map();
   private currentBoss?: Boss;
   private bossSprite?: Phaser.GameObjects.Image;
+  private bossMarker?: Phaser.GameObjects.Text;
+  private bossMarkerTween?: Phaser.Tweens.Tween;
 
   // Environment & Scenarios
   private currentScenario: number = 1;
@@ -368,7 +370,6 @@ export class GameScene extends Phaser.Scene {
           this.time.delayedCall(120, () => sprite.clearTint());
 
           if (res.targetKilled) {
-            this.storyProgress.addProgress(25);
             this.tweens.add({
               targets: sprite,
               alpha: 0,
@@ -376,6 +377,17 @@ export class GameScene extends Phaser.Scene {
               duration: 250,
               onComplete: () => sprite.destroy()
             });
+
+            // Check if all regular minions are defeated
+            const remainingEnemies = this.enemies.filter(e => e.isAlive());
+            if (remainingEnemies.length === 0) {
+              this.storyProgress.completeMilestone('act1_monks');
+              this.storyProgress.completeMilestone('act1_beast');
+              this.storyProgress.addProgress(25);
+              this.triggerShalemBalloon("Shalem: «¡Los acechadores han caído! ¡Ahora avanza hacia la derecha y destruye a la Madre Morwenna junto a la pira!»", 5000);
+            } else {
+              this.storyProgress.addProgress(25);
+            }
           }
         }
         break;
@@ -383,10 +395,12 @@ export class GameScene extends Phaser.Scene {
     }
 
     // Check hit against Boss
-    if (this.currentBoss && this.bossSprite) {
+    if (this.currentBoss && this.bossSprite && this.currentBoss.health > 0) {
       const bossDist = Math.abs(this.currentBoss.position.x - playerX);
       const isAhead = (this.currentBoss.position.x - playerX) * facing > 0;
-      if (bossDist <= attackRange + 40 && isAhead) {
+      const effectiveReach = attackRange + 65;
+
+      if (bossDist <= effectiveReach && isAhead) {
         const res = CombatUseCases.executeAttackOnBoss(this.player, this.currentBoss);
 
         this.cameras.main.shake(180, 0.012);
@@ -394,6 +408,13 @@ export class GameScene extends Phaser.Scene {
 
         this.bossSprite.setTint(0xff5555);
         this.time.delayedCall(120, () => this.bossSprite?.clearTint());
+
+        if (res.targetKilled) {
+          this.handleBossDefeated();
+        }
+      } else if (isAhead && bossDist > effectiveReach && this.enemies.filter(e => e.isAlive()).length === 0) {
+        // Player is swinging in the air far from the boss — Shalem guides them!
+        this.triggerShalemBalloon("Shalem: «¡Estás demasiado lejos! ¡Acércate más a la Madre Morwenna en la derecha para alcanzarla con tu arma!»", 2800);
       }
     }
 
@@ -427,6 +448,153 @@ export class GameScene extends Phaser.Scene {
       ease: 'Cubic.easeOut',
       onComplete: () => text.destroy()
     });
+  }
+
+  private handleBossDefeated(): void {
+    if (!this.currentBoss) return;
+
+    this.audio.playFinisherSound(true);
+    this.cameras.main.flash(600, 255, 215, 0);
+    this.cameras.main.shake(400, 0.02);
+
+    if (this.bossMarker) {
+      this.bossMarker.destroy();
+      this.bossMarker = undefined;
+    }
+    if (this.bossMarkerTween) {
+      this.bossMarkerTween.stop();
+      this.bossMarkerTween = undefined;
+    }
+
+    if (this.bossSprite) {
+      this.tweens.add({
+        targets: this.bossSprite,
+        alpha: 0,
+        y: this.bossSprite.y + 25,
+        duration: 900,
+        onComplete: () => {
+          this.bossSprite?.destroy();
+          this.bossSprite = undefined;
+        }
+      });
+    }
+
+    // Advance story progress to 100%
+    if (this.currentScenario === 1) {
+      this.storyProgress.completeMilestone('act1_boss');
+      this.storyProgress.scenarioProgress = 100;
+
+      this.triggerShalemBalloon(
+        "Shalem: «¡La Madre Morwenna ha caído y su pira se extingue! ¡Oakhaven está libre! ¡Pulsa [2] para viajar a Londinium o habla con Khaterine con [C]!»",
+        7000
+      );
+
+      // Grand Victory Banner in Center
+      const bannerBg = this.add.rectangle(320, 160, 420, 75, 0x11081f, 0.94)
+        .setStrokeStyle(2, 0xffd700)
+        .setDepth(60);
+
+      const bannerTitle = this.add.text(320, 145, '★ ¡ACTO I COMPLETADO AL 100%! ★', {
+        fontFamily: 'Cinzel, Georgia, serif',
+        fontSize: '13px',
+        color: '#ffd700',
+        stroke: '#000',
+        strokeThickness: 3,
+        fontStyle: 'bold'
+      }).setOrigin(0.5).setDepth(61);
+
+      const bannerPrompt = this.add.text(320, 172, 'PULSA [2] O HAZ CLIC AQUÍ PARA VIAJAR A LONDINIUM ▶', {
+        fontFamily: 'monospace',
+        fontSize: '9px',
+        color: '#ffffff',
+        backgroundColor: '#3d1f5e',
+        padding: { x: 8, y: 4 }
+      }).setOrigin(0.5).setDepth(61).setInteractive({ useHandCursor: true });
+
+      bannerPrompt.on('pointerdown', () => {
+        bannerBg.destroy();
+        bannerTitle.destroy();
+        bannerPrompt.destroy();
+        this.loadScenario(2);
+      });
+    } else if (this.currentScenario === 2) {
+      this.storyProgress.completeMilestone('act2_boss');
+      this.storyProgress.scenarioProgress = 100;
+
+      this.triggerShalemBalloon(
+        "Shalem: «¡El Rex Malphas y su decreto han sido quebrantados! ¡Pulsa [3] para descender a la Catedral Invertida!»",
+        7000
+      );
+
+      // Victory Banner for Act II
+      const bannerBg = this.add.rectangle(320, 160, 420, 75, 0x11081f, 0.94)
+        .setStrokeStyle(2, 0xffd700)
+        .setDepth(60);
+
+      const bannerTitle = this.add.text(320, 145, '★ ¡ACTO II COMPLETADO AL 100%! ★', {
+        fontFamily: 'Cinzel, Georgia, serif',
+        fontSize: '13px',
+        color: '#ffd700',
+        stroke: '#000',
+        strokeThickness: 3,
+        fontStyle: 'bold'
+      }).setOrigin(0.5).setDepth(61);
+
+      const bannerPrompt = this.add.text(320, 172, 'PULSA [3] O HAZ CLIC AQUÍ PARA LA CATEDRAL INVERTIDA ▶', {
+        fontFamily: 'monospace',
+        fontSize: '9px',
+        color: '#ffffff',
+        backgroundColor: '#3d1f5e',
+        padding: { x: 8, y: 4 }
+      }).setOrigin(0.5).setDepth(61).setInteractive({ useHandCursor: true });
+
+      bannerPrompt.on('pointerdown', () => {
+        bannerBg.destroy();
+        bannerTitle.destroy();
+        bannerPrompt.destroy();
+        this.loadScenario(3);
+      });
+    } else {
+      this.storyProgress.completeMilestone('act3_astaroth');
+      this.storyProgress.scenarioProgress = 100;
+
+      this.triggerShalemBalloon(
+        "Shalem: «¡Astaroth y la teocracia han caído! La luz y la oscuridad han alcanzado el equilibrio. ¡HAS COMPLETADO LA DEMO!»",
+        10000
+      );
+
+      // Grand Game Cleared Banner
+      this.add.rectangle(320, 160, 440, 85, 0x11081f, 0.96)
+        .setStrokeStyle(3, 0xffd700)
+        .setDepth(60);
+
+      this.add.text(320, 140, '👑 ¡THE LIGHT IN THE DARKNESS: VICTORIA TOTAL! 👑', {
+        fontFamily: 'Cinzel, Georgia, serif',
+        fontSize: '13px',
+        color: '#ffd700',
+        stroke: '#000',
+        strokeThickness: 3,
+        fontStyle: 'bold'
+      }).setOrigin(0.5).setDepth(61);
+
+      this.add.text(320, 165, 'Albion ha sido liberada del dogma. ¡Gracias por jugar la Demo!', {
+        fontFamily: 'Cinzel, serif',
+        fontSize: '9.5px',
+        color: '#e699ff'
+      }).setOrigin(0.5).setDepth(61);
+
+      const replayBtn = this.add.text(320, 188, 'REINICIAR VIAJE DESDE EL ACTO I [1]', {
+        fontFamily: 'monospace',
+        fontSize: '9px',
+        color: '#ffffff',
+        backgroundColor: '#3d1f5e',
+        padding: { x: 8, y: 4 }
+      }).setOrigin(0.5).setDepth(61).setInteractive({ useHandCursor: true });
+
+      replayBtn.on('pointerdown', () => {
+        this.loadScenario(1);
+      });
+    }
   }
 
   private executeWeaponThrow(): void {
@@ -556,16 +724,31 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateBoss(delta: number): void {
-    if (!this.currentBoss || !this.bossSprite) return;
+    if (!this.currentBoss || !this.bossSprite || this.currentBoss.health <= 0) return;
+
+    // Boss Marker follows the boss position
+    if (this.bossMarker) {
+      this.bossMarker.x = this.bossSprite.x;
+    }
+
+    const dist = Math.abs(this.bossSprite.x - this.playerSprite.x);
+    const aliveEnemies = this.enemies.filter(e => e.isAlive()).length;
+
+    // When minions are defeated, the boss actively advances toward the player!
+    if (aliveEnemies === 0 && dist > 70) {
+      const dir = this.playerSprite.x > this.bossSprite.x ? 1 : -1;
+      const speed = 40 * (delta / 1000);
+      this.bossSprite.x += dir * speed;
+      this.currentBoss.position = new Vector2(this.bossSprite.x, this.bossSprite.y);
+      this.bossSprite.setFlipX(dir > 0);
+    }
 
     this.bossAttackTimer += delta;
 
     // Boss telegraphed attacks
     if (this.bossAttackTimer >= 2200) {
       this.bossAttackTimer = 0;
-      const dist = Math.abs(this.bossSprite.x - this.playerSprite.x);
-
-      if (dist < 120) {
+      if (dist < 95) {
         // Heavy hit from boss!
         this.audio.playCombatHit(true);
         CombatUseCases.executeEnemyAttack(
@@ -574,9 +757,40 @@ export class GameScene extends Phaser.Scene {
           true // Heavy attack: can trigger tactical crisis disarm!
         );
 
+        this.playerSprite.setTint(0xff4444);
+        this.time.delayedCall(140, () => this.playerSprite.clearTint());
         this.cameras.main.shake(250, 0.015);
       }
     }
+  }
+
+  private createBossMarker(bossName: string, x: number, y: number): void {
+    if (this.bossMarker) {
+      this.bossMarker.destroy();
+      this.bossMarker = undefined;
+    }
+    if (this.bossMarkerTween) {
+      this.bossMarkerTween.stop();
+      this.bossMarkerTween = undefined;
+    }
+
+    this.bossMarker = this.add.text(x, y - 75, `▼ JEFE: ${bossName.toUpperCase()} ▼`, {
+      fontFamily: 'Cinzel, Georgia, serif',
+      fontSize: '8.5px',
+      color: '#ff4444',
+      stroke: '#000000',
+      strokeThickness: 3,
+      fontStyle: 'bold'
+    }).setOrigin(0.5).setDepth(35);
+
+    this.bossMarkerTween = this.tweens.add({
+      targets: this.bossMarker,
+      y: y - 83,
+      duration: 650,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
   }
 
   private updateDroppedWeapons(): void {
@@ -620,6 +834,15 @@ export class GameScene extends Phaser.Scene {
     this.bossSprite?.destroy();
     this.bossSprite = undefined;
 
+    if (this.bossMarker) {
+      this.bossMarker.destroy();
+      this.bossMarker = undefined;
+    }
+    if (this.bossMarkerTween) {
+      this.bossMarkerTween.stop();
+      this.bossMarkerTween = undefined;
+    }
+
     const introLines = this.dialogues.getScenarioIntro(this.currentScenario);
 
     if (scenarioIndex === 1) {
@@ -640,6 +863,7 @@ export class GameScene extends Phaser.Scene {
       // Boss Madre Morwenna
       this.currentBoss = Boss.createMadreMorwenna();
       this.bossSprite = this.add.image(530, 260, 'boss_morwenna').setOrigin(0.5, 1);
+      this.createBossMarker('Madre Morwenna', 530, 260);
 
       const introText = introLines[0] ? `${introLines[0].speaker}: ${introLines[0].text}` : "Shalem: «Escenario 1: Oakhaven»";
       this.triggerShalemBalloon(introText, 4500);
@@ -657,6 +881,7 @@ export class GameScene extends Phaser.Scene {
       // Boss Rex Malphas (Alaric)
       this.currentBoss = Boss.createRexMalphas();
       this.bossSprite = this.add.image(520, 260, 'boss_malphas').setOrigin(0.5, 1);
+      this.createBossMarker('Rex Malphas', 520, 260);
 
       const introText = introLines[0] ? `${introLines[0].speaker}: ${introLines[0].text}` : "Shalem: «Escenario 2: Londinium»";
       this.triggerShalemBalloon(introText, 4500);
@@ -670,6 +895,7 @@ export class GameScene extends Phaser.Scene {
       // Boss Astaroth
       this.currentBoss = Boss.createAstaroth();
       this.bossSprite = this.add.image(520, 260, 'boss_malphas').setOrigin(0.5, 1).setTint(0x220033).setScale(1.4);
+      this.createBossMarker('Astaroth', 520, 260);
 
       const introText = introLines[0] ? `${introLines[0].speaker}: ${introLines[0].text}` : "Shalem: «Escenario 3: La Catedral Invertida»";
       this.triggerShalemBalloon(introText, 4500);

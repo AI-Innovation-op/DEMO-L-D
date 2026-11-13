@@ -33,6 +33,7 @@ export class HUDScene extends Phaser.Scene {
   private bossContainer!: Phaser.GameObjects.Container;
   private bossHealthFill!: Phaser.GameObjects.Rectangle;
   private bossTitleText!: Phaser.GameObjects.Text;
+  private bossHealthText!: Phaser.GameObjects.Text;
   private isBossUiShattered: boolean = false;
 
   // Cinematic Finisher Flash
@@ -65,7 +66,7 @@ export class HUDScene extends Phaser.Scene {
 
     this.levelUpReadyText = this.add.text(70, 50, '★ [M] MINIJUEGO SHALEM LISTO ★', {
       fontFamily: 'sans-serif',
-      fontSize: '9px',
+      fontSize: '8.5px',
       color: '#ffd700',
       backgroundColor: '#3b1d5c',
       padding: { x: 4, y: 2 }
@@ -74,7 +75,7 @@ export class HUDScene extends Phaser.Scene {
     // 4. Equipped Weapon Badge
     this.weaponBadgeText = this.add.text(12, 68, 'ARMA: Espada Corta del Monaguillo', {
       fontFamily: 'monospace',
-      fontSize: '9.5px',
+      fontSize: '9px',
       color: '#e2d4f0',
       stroke: '#000000',
       strokeThickness: 2
@@ -105,28 +106,34 @@ export class HUDScene extends Phaser.Scene {
       padding: { x: 4, y: 2 }
     }).setVisible(false);
 
-    // 5. Combo Text
-    this.comboText = this.add.text(440, 25, '', {
+    // 5. Combo Text — Dedicated Arcade Position (Center-Top, below Boss Bar)
+    this.comboText = this.add.text(285, 46, '', {
       fontFamily: 'Cinzel, Georgia, serif',
-      fontSize: '16px',
-      color: '#ffcc00',
+      fontSize: '13px',
+      color: '#ffd700',
       stroke: '#000000',
       strokeThickness: 3
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(40);
 
-    // 5.1 Top-Right Control Buttons (Audio Mute, Dialogue, Menu)
+    // 5.1 Top-Right Control Buttons with 100% Opaque Solid Background (Prevents any text overlap)
+    this.add.rectangle(521, 18, 222, 26, 0x0b0614, 1.0)
+      .setStrokeStyle(1, 0xd4af37)
+      .setDepth(45);
+
     const audioAdapter = WebAudioSoundAdapter.getInstance();
 
     // Sound Mute Toggle Button
-    const audioBtnBg = this.add.rectangle(440, 18, 75, 20, 0x1d142b).setStrokeStyle(1, 0x6e4b8a);
-    audioBtnBg.setInteractive({ useHandCursor: true });
+    const audioBtnBg = this.add.rectangle(445, 18, 62, 18, 0x1d142b)
+      .setStrokeStyle(1, 0x6e4b8a)
+      .setDepth(46)
+      .setInteractive({ useHandCursor: true });
 
-    const audioBtnText = this.add.text(440, 18, audioAdapter.getIsMuted() ? '🔇 MUTE' : '🔊 AUDIO', {
+    const audioBtnText = this.add.text(445, 18, audioAdapter.getIsMuted() ? '🔇 MUTE' : '🔊 AUDIO', {
       fontFamily: 'monospace',
-      fontSize: '8.5px',
+      fontSize: '8px',
       color: audioAdapter.getIsMuted() ? '#ff7777' : '#aaffaa',
       fontStyle: 'bold'
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(47);
 
     audioBtnBg.on('pointerdown', () => {
       const isMuted = audioAdapter.toggleMute();
@@ -134,16 +141,30 @@ export class HUDScene extends Phaser.Scene {
       audioBtnText.setColor(isMuted ? '#ff7777' : '#aaffaa');
     });
 
-    // Character Dialogue Button [C]
-    const dialogBtnBg = this.add.rectangle(520, 18, 70, 20, 0x1d142b).setStrokeStyle(1, 0xd4af37);
-    dialogBtnBg.setInteractive({ useHandCursor: true });
+    audioBtnBg.on('pointerover', () => audioBtnBg.setFillStyle(0x3e245c));
+    audioBtnBg.on('pointerout', () => audioBtnBg.setFillStyle(0x1d142b));
 
-    this.add.text(520, 18, '💬 CHARLA [C]', {
+    // Character Dialogue Button [C]
+    const dialogBtnBg = this.add.rectangle(517, 18, 70, 18, 0x1d142b)
+      .setStrokeStyle(1, 0xd4af37)
+      .setDepth(46)
+      .setInteractive({ useHandCursor: true });
+
+    const dialogBtnText = this.add.text(517, 18, '💬 CHARLA [C]', {
       fontFamily: 'Cinzel, monospace',
-      fontSize: '8.5px',
+      fontSize: '8px',
       color: '#ffd700',
       fontStyle: 'bold'
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(47);
+
+    dialogBtnBg.on('pointerover', () => {
+      dialogBtnBg.setFillStyle(0x3e245c);
+      dialogBtnText.setColor('#ffffff');
+    });
+    dialogBtnBg.on('pointerout', () => {
+      dialogBtnBg.setFillStyle(0x1d142b);
+      dialogBtnText.setColor('#ffd700');
+    });
 
     dialogBtnBg.on('pointerdown', () => {
       const gameScene = this.scene.get('GameScene') as unknown as { player: Character; currentScenario?: number };
@@ -157,15 +178,17 @@ export class HUDScene extends Phaser.Scene {
     });
 
     // Elegant Menu Button [P]
-    const menuBtnBg = this.add.rectangle(595, 18, 65, 20, 0x1d142b).setStrokeStyle(1, 0xd4af37);
-    menuBtnBg.setInteractive({ useHandCursor: true });
+    const menuBtnBg = this.add.rectangle(590, 18, 64, 18, 0x1d142b)
+      .setStrokeStyle(1, 0xd4af37)
+      .setDepth(46)
+      .setInteractive({ useHandCursor: true });
 
-    const menuBtnText = this.add.text(595, 18, '⚙ MENÚ [P]', {
+    const menuBtnText = this.add.text(590, 18, '⚙ MENÚ [P]', {
       fontFamily: 'Cinzel, monospace',
-      fontSize: '8.5px',
+      fontSize: '8px',
       color: '#ffd700',
       fontStyle: 'bold'
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(47);
 
     menuBtnBg.on('pointerover', () => {
       menuBtnBg.setFillStyle(0x3e245c);
@@ -187,18 +210,29 @@ export class HUDScene extends Phaser.Scene {
       }
     });
 
-    // 6. Boss UI Bar Container
-    this.bossContainer = this.add.container(320, 25);
-    const bossBg = this.add.rectangle(0, 0, 240, 12, 0x220505).setStrokeStyle(1, 0x661111);
-    this.bossHealthFill = this.add.rectangle(-120, 0, 240, 12, 0xdd2222).setOrigin(0, 0.5);
+    // 6. Boss UI Bar Container — Prominent Center Top (Depth 40, width 180, completely detached from controls)
+    this.bossContainer = this.add.container(285, 22).setDepth(40);
+    const bossBg = this.add.rectangle(0, 0, 180, 12, 0x220505).setStrokeStyle(1, 0x992222);
+    this.bossHealthFill = this.add.rectangle(-90, 0, 180, 12, 0xdd2222).setOrigin(0, 0.5);
+
     this.bossTitleText = this.add.text(0, -12, 'MADRE MORWENNA — VIGÍA DE LA PIRA', {
       fontFamily: 'Cinzel, serif',
-      fontSize: '10px',
+      fontSize: '8px',
       color: '#ffddaa',
+      stroke: '#000',
+      strokeThickness: 3,
+      fontStyle: 'bold'
+    }).setOrigin(0.5);
+
+    this.bossHealthText = this.add.text(0, 0, '350 / 350 HP', {
+      fontFamily: 'monospace',
+      fontSize: '7.5px',
+      color: '#ffffff',
       stroke: '#000',
       strokeThickness: 2
     }).setOrigin(0.5);
-    this.bossContainer.add([bossBg, this.bossHealthFill, this.bossTitleText]);
+
+    this.bossContainer.add([bossBg, this.bossHealthFill, this.bossTitleText, this.bossHealthText]);
 
     // 7. Cinematic Finisher Flash Overlay
     this.cinematicOverlay = this.add.rectangle(320, 180, 640, 360, 0xffffff, 0).setDepth(100);
@@ -225,22 +259,22 @@ export class HUDScene extends Phaser.Scene {
   public updateHUD(player: Character, currentBoss?: Boss, storyProgress?: StoryProgress): void {
     // Health
     const hpRatio = Math.max(0, player.stats.health / player.stats.maxHealth);
-    this.playerHealthFill.width = 110 * hpRatio;
+    this.playerHealthFill.setSize(Math.max(1, 110 * hpRatio), 10);
     this.playerHealthText.setText(`${player.stats.health}/${player.stats.maxHealth}`);
 
     // Posture
     const postureRatio = Math.max(0, player.stats.posture / player.stats.maxPosture);
-    this.playerPostureFill.width = 110 * postureRatio;
+    this.playerPostureFill.setSize(Math.max(1, 110 * postureRatio), 6);
 
     // Level Up / Shalem Ready
     const lvlExpRatio = Math.max(0, player.levelUp.currentExp / player.levelUp.maxExp);
-    this.levelUpFill.width = 110 * lvlExpRatio;
+    this.levelUpFill.setSize(Math.max(1, 110 * lvlExpRatio), 6);
     this.levelUpReadyText.setVisible(player.levelUp.isMinigameReady);
 
     // Story / Scenario Progress
     if (storyProgress) {
       const pct = Math.max(0, Math.min(100, storyProgress.scenarioProgress));
-      this.storyProgressFill.width = 168 * (pct / 100);
+      this.storyProgressFill.setSize(Math.max(1, 168 * (pct / 100)), 6);
       this.storyTitleText.setText(`${storyProgress.getScenarioName()} (${pct}%)`);
       this.storyObjectiveText.setText(`OBJETIVO: ${storyProgress.getCurrentObjective()}`);
     }
@@ -259,19 +293,20 @@ export class HUDScene extends Phaser.Scene {
     const combo = player.comboSystem.getComboCount();
     if (combo > 1) {
       const mult = player.comboSystem.getDamageMultiplier().toFixed(2);
-      this.comboText.setText(`${combo} GOLPES! x${mult}`);
+      this.comboText.setText(`★ ${combo} GOLPES! x${mult} ★`);
       this.comboText.setAlpha(1);
     } else {
       this.comboText.setText('');
     }
 
-    // Boss
+    // Boss Bar
     if (currentBoss && currentBoss.health > 0) {
       this.bossContainer.setVisible(true);
       if (!this.isBossUiShattered) {
         const bossRatio = Math.max(0, currentBoss.health / currentBoss.maxHealth);
-        this.bossHealthFill.width = 240 * bossRatio;
+        this.bossHealthFill.setSize(Math.max(1, 180 * bossRatio), 12);
         this.bossTitleText.setText(`${currentBoss.name.toUpperCase()} — ${currentBoss.title}`);
+        this.bossHealthText.setText(`${currentBoss.health} / ${currentBoss.maxHealth} HP`);
       }
     } else if (!this.isBossUiShattered) {
       this.bossContainer.setVisible(false);
@@ -284,11 +319,11 @@ export class HUDScene extends Phaser.Scene {
 
     // Shatter into golden infinite bar
     this.bossHealthFill.setFillStyle(0xffd700);
-    this.bossHealthFill.width = 240;
+    this.bossHealthFill.setSize(180, 12);
     this.bossTitleText.setText(`⚠ ${decreeTitle} ⚠`);
     this.bossTitleText.setColor('#ffe066');
+    this.bossHealthText.setText('∞ / ∞ (VIDA INFINITA)');
 
-    // Flashing infinite glow
     this.tweens.add({
       targets: this.bossHealthFill,
       alpha: 0.6,
