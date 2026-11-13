@@ -7,8 +7,21 @@ export class BootScene extends Phaser.Scene {
   }
 
   public preload(): void {
-    // Generate all procedural pixel art assets
+    // Generate all procedural pixel art assets as baseline/fallback
     ProceduralAssetGenerator.generateAll(this);
+
+    // Auto-detect and load any custom PNG sprites placed in public/assets/characters/
+    const customPngs = import.meta.glob('/public/assets/characters/*.png', { eager: true, query: '?url', import: 'default' });
+    for (const path in customPngs) {
+      const match = path.match(/\/([^/]+)\.png$/);
+      if (match) {
+        const key = match[1];
+        if (this.textures.exists(key)) {
+          this.textures.remove(key);
+        }
+        this.load.image(key, customPngs[path] as string);
+      }
+    }
 
     // Load the official artwork images from the public folder
     this.load.image('loading_shalem_wall', '/assets/loading/loading_shalem_wall.jpg');
