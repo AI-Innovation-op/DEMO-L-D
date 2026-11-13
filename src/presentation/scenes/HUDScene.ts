@@ -5,6 +5,7 @@ import { EventBus } from '../../domain/shared/DomainEvent';
 import { BossUiShatteredEvent } from '../../domain/boss/Boss';
 import { FinisherStyle, FinisherTriggeredEvent } from '../../domain/combat/CombatTypes';
 import { WebAudioSoundAdapter } from '../../infrastructure/audio/WebAudioSoundAdapter';
+import { StoryProgress } from '../../domain/story/StoryProgress';
 
 export class HUDScene extends Phaser.Scene {
   private playerHealthBg!: Phaser.GameObjects.Rectangle;
@@ -17,6 +18,11 @@ export class HUDScene extends Phaser.Scene {
   private levelUpBg!: Phaser.GameObjects.Rectangle;
   private levelUpFill!: Phaser.GameObjects.Rectangle;
   private levelUpReadyText!: Phaser.GameObjects.Text;
+
+  // Story Progress UI
+  private storyProgressFill!: Phaser.GameObjects.Rectangle;
+  private storyTitleText!: Phaser.GameObjects.Text;
+  private storyObjectiveText!: Phaser.GameObjects.Text;
 
   private weaponBadgeText!: Phaser.GameObjects.Text;
   private disarmWarningText!: Phaser.GameObjects.Text;
@@ -68,13 +74,30 @@ export class HUDScene extends Phaser.Scene {
     // 4. Equipped Weapon Badge
     this.weaponBadgeText = this.add.text(12, 68, 'ARMA: Espada Corta del Monaguillo', {
       fontFamily: 'monospace',
-      fontSize: '10px',
+      fontSize: '9.5px',
       color: '#e2d4f0',
       stroke: '#000000',
       strokeThickness: 2
     });
 
-    this.disarmWarningText = this.add.text(12, 84, '⚠ ¡DESARMADO! Pulsa [E] cerca de tu arma o ataca a puños', {
+    // 4.1 Story & Scenario Progress Bar
+    this.storyTitleText = this.add.text(12, 85, 'HISTORIA: ACTO I — OAKHAVEN (0%)', {
+      fontFamily: 'Cinzel, monospace',
+      fontSize: '8.5px',
+      color: '#ffd700',
+      fontStyle: 'bold'
+    });
+
+    this.add.rectangle(12, 98, 168, 6, 0x140c24).setOrigin(0, 0.5).setStrokeStyle(1, 0x6e4b8a);
+    this.storyProgressFill = this.add.rectangle(12, 98, 0, 6, 0xffd700).setOrigin(0, 0.5);
+
+    this.storyObjectiveText = this.add.text(12, 106, 'OBJETIVO: Purga la guardia de la pira', {
+      fontFamily: 'sans-serif',
+      fontSize: '8px',
+      color: '#bbaacc'
+    });
+
+    this.disarmWarningText = this.add.text(12, 122, '⚠ ¡DESARMADO! Pulsa [E] cerca de tu arma o ataca a puños', {
       fontFamily: 'sans-serif',
       fontSize: '9px',
       color: '#ff4444',
@@ -199,7 +222,7 @@ export class HUDScene extends Phaser.Scene {
     });
   }
 
-  public updateHUD(player: Character, currentBoss?: Boss): void {
+  public updateHUD(player: Character, currentBoss?: Boss, storyProgress?: StoryProgress): void {
     // Health
     const hpRatio = Math.max(0, player.stats.health / player.stats.maxHealth);
     this.playerHealthFill.width = 110 * hpRatio;
@@ -213,6 +236,14 @@ export class HUDScene extends Phaser.Scene {
     const lvlExpRatio = Math.max(0, player.levelUp.currentExp / player.levelUp.maxExp);
     this.levelUpFill.width = 110 * lvlExpRatio;
     this.levelUpReadyText.setVisible(player.levelUp.isMinigameReady);
+
+    // Story / Scenario Progress
+    if (storyProgress) {
+      const pct = Math.max(0, Math.min(100, storyProgress.scenarioProgress));
+      this.storyProgressFill.width = 168 * (pct / 100);
+      this.storyTitleText.setText(`${storyProgress.getScenarioName()} (${pct}%)`);
+      this.storyObjectiveText.setText(`OBJETIVO: ${storyProgress.getCurrentObjective()}`);
+    }
 
     // Weapon & Disarm
     const currentWeapon = player.disarmManager.getCurrentWeapon();

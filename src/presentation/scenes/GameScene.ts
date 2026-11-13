@@ -9,12 +9,14 @@ import { CombatUseCases } from '../../application/usecases/CombatUseCases';
 import { WebAudioSoundAdapter } from '../../infrastructure/audio/WebAudioSoundAdapter';
 import { DialogueRepository } from '../../infrastructure/dialogue/DialogueRepository';
 import { HUDScene } from './HUDScene';
+import { StoryProgress } from '../../domain/story/StoryProgress';
 
 export class GameScene extends Phaser.Scene {
   private player!: Character;
   private shalem!: ShalemCompanion;
   private audio!: WebAudioSoundAdapter;
   private dialogues!: DialogueRepository;
+  public storyProgress: StoryProgress = new StoryProgress();
 
   // Visual Sprites & Layers
   private bgImage!: Phaser.GameObjects.Image;
@@ -168,7 +170,7 @@ export class GameScene extends Phaser.Scene {
     // Sync HUD
     const hud = this.scene.get('HUDScene') as HUDScene;
     if (hud) {
-      hud.updateHUD(this.player, this.currentBoss);
+      hud.updateHUD(this.player, this.currentBoss, this.storyProgress);
     }
   }
 
@@ -366,6 +368,7 @@ export class GameScene extends Phaser.Scene {
           this.time.delayedCall(120, () => sprite.clearTint());
 
           if (res.targetKilled) {
+            this.storyProgress.addProgress(25);
             this.tweens.add({
               targets: sprite,
               alpha: 0,
@@ -608,6 +611,7 @@ export class GameScene extends Phaser.Scene {
 
   public loadScenario(scenarioIndex: number): void {
     this.currentScenario = scenarioIndex;
+    this.storyProgress.setAct(scenarioIndex);
 
     // Clear existing enemies & boss
     this.enemies.forEach(e => this.enemySprites.get(e.id)?.destroy());
