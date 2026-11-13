@@ -201,9 +201,16 @@ export class StoryIntroScene extends Phaser.Scene {
 
   private startGameplay(): void {
     this.audio.playFinisherSound(false);
-    this.cameras.main.fade(350, 0, 0, 0);
-    this.time.delayedCall(360, () => {
-      this.scene.start('GameScene', { characterId: this.characterId });
+    this.cameras.main.fade(300, 0, 0, 0);
+    this.time.delayedCall(320, () => {
+      this.scene.start('LoadingScene', {
+        targetScene: 'GameScene',
+        targetData: { characterId: this.characterId },
+        imageKey: 'loading_pyre_remains',
+        chapterTitle: 'ACTO I — LAS HOGUERAS DE OAKHAVEN',
+        tipText: '«Khaterine: No te apartes del camino empedrado. Los acechadores vigilan la niebla.»',
+        minDurationMs: 2000
+      });
       this.scene.launch('HUDScene');
     });
   }
