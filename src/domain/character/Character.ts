@@ -67,12 +67,18 @@ export class Character {
     );
   }
 
-  public move(dx: number): void {
+  public heal(amount: number): void {
+    this.stats.heal(amount);
+  }
+
+  public move(dx: number, dy: number = 0): void {
     if (this.state === CharacterState.STUNNED || this.state === CharacterState.DEAD) {
       return;
     }
     if (dx !== 0) {
       this.facingDirection = dx > 0 ? 1 : -1;
+    }
+    if (dx !== 0 || dy !== 0) {
       if (this.state === CharacterState.IDLE) {
         this.state = CharacterState.RUNNING;
       }

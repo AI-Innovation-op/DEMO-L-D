@@ -201,6 +201,31 @@ export class ProceduralAssetGenerator {
       }
     }
 
+    if (!textures.exists('particle_slash_heavy')) {
+      const c = textures.createCanvas('particle_slash_heavy', 80, 80);
+      if (c) {
+        const ctx = c.getContext();
+        ctx.beginPath();
+        ctx.arc(24, 56, 50, -Math.PI / 3, Math.PI / 3, false);
+        ctx.lineWidth = 12;
+        ctx.strokeStyle = 'rgba(255, 140, 20, 0.85)';
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(26, 56, 48, -Math.PI / 3, Math.PI / 3, false);
+        ctx.lineWidth = 6;
+        ctx.strokeStyle = '#ffd700';
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(28, 56, 46, -Math.PI / 3, Math.PI / 3, false);
+        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = '#ffffff';
+        ctx.stroke();
+        c.refresh();
+      }
+    }
+
     // ==========================================
     // 3. THOMAS (Detailed Multi-Frame Sprites)
     // ==========================================
@@ -369,6 +394,71 @@ export class ProceduralAssetGenerator {
 
         ctx.fillStyle = '#9933ff';
         ctx.fillRect(3, 3, 3, 3);
+        c.refresh();
+      }
+    }
+
+    // ==========================================
+    // 5.1 ELOWEN (Maiden of Oakhaven NPC)
+    // ==========================================
+    if (!textures.exists('elowen_npc')) {
+      const c = textures.createCanvas('elowen_npc', 48, 60);
+      if (c) {
+        const ctx = c.getContext();
+        // Golden Braided Hair
+        drawShadedRect(ctx, 16, 6, 16, 14, '#c8963e', '#e5b458', '#8f621f');
+        ctx.fillStyle = '#a87524';
+        ctx.fillRect(14, 12, 3, 16);
+        ctx.fillRect(31, 12, 3, 16);
+
+        // Serene Face & Cyan Eyes
+        drawShadedRect(ctx, 18, 12, 12, 10, '#f5d6c6', '#ffebd9', '#cca895');
+        ctx.fillStyle = '#44aacc';
+        ctx.fillRect(24, 15, 3, 2);
+        ctx.fillStyle = '#225566';
+        ctx.fillRect(25, 15, 1, 2);
+
+        // Celestial Blue & Lavender Dress
+        drawShadedRect(ctx, 14, 22, 20, 24, '#445b7a', '#5a779e', '#293a52');
+        // Linen White Apron
+        drawShadedRect(ctx, 17, 24, 14, 20, '#dbe2e8', '#f2f6fa', '#b2bcc7');
+        // Hem embroidery
+        ctx.fillStyle = '#eedd88';
+        ctx.fillRect(14, 44, 20, 2);
+
+        // Shoes
+        drawShadedRect(ctx, 17, 46, 5, 12, '#33241b', '#4d372a', '#1a100b');
+        drawShadedRect(ctx, 26, 46, 5, 12, '#33241b', '#4d372a', '#1a100b');
+
+        // Subtle Divine Sparkles around hands
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(12, 28, 2, 2);
+        ctx.fillRect(34, 28, 2, 2);
+        ctx.fillStyle = '#eedd88';
+        ctx.fillRect(11, 27, 4, 1);
+        ctx.fillRect(33, 27, 4, 1);
+        c.refresh();
+      }
+    }
+
+    if (!textures.exists('portrait_elowen')) {
+      const c = textures.createCanvas('portrait_elowen', 32, 32);
+      if (c) {
+        const ctx = c.getContext();
+        ctx.fillStyle = '#1c152b';
+        ctx.fillRect(0, 0, 32, 32);
+        ctx.strokeStyle = '#eedd88';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(1, 1, 30, 30);
+
+        // Hair
+        drawShadedRect(ctx, 8, 4, 16, 12, '#c8963e', '#e5b458', '#8f621f');
+        // Face & soft eyes
+        drawShadedRect(ctx, 10, 10, 12, 10, '#f5d6c6', '#ffebd9', '#cca895');
+        ctx.fillStyle = '#44aacc';
+        ctx.fillRect(14, 13, 2, 2);
+        // Dress collar
+        drawShadedRect(ctx, 6, 20, 20, 10, '#445b7a', '#5a779e', '#293a52');
         c.refresh();
       }
     }

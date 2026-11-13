@@ -36,6 +36,10 @@ export class HUDScene extends Phaser.Scene {
   private bossHealthText!: Phaser.GameObjects.Text;
   private isBossUiShattered: boolean = false;
 
+  // Dual Character & Interaction UI
+  private characterSwapText!: Phaser.GameObjects.Text;
+  private interactionPromptText!: Phaser.GameObjects.Text;
+
   // Cinematic Finisher Flash
   private cinematicOverlay!: Phaser.GameObjects.Rectangle;
   private cinematicText!: Phaser.GameObjects.Text;
@@ -45,6 +49,14 @@ export class HUDScene extends Phaser.Scene {
   }
 
   public create(): void {
+    // 0. Active Character & Dual Switch Indicator
+    this.characterSwapText = this.add.text(12, 1, '> THOMAS   [TAB: KHATERINE]', {
+      fontFamily: 'monospace',
+      fontSize: '8px',
+      color: '#ffd700',
+      fontStyle: 'bold'
+    }).setDepth(45);
+
     // 1. Health Bar
     this.add.text(12, 10, 'SALUD', { fontFamily: 'monospace', fontSize: '9px', color: '#ffaaaa' });
     this.playerHealthBg = this.add.rectangle(70, 14, 110, 10, 0x331111).setOrigin(0, 0.5);
@@ -244,6 +256,25 @@ export class HUDScene extends Phaser.Scene {
       strokeThickness: 4
     }).setOrigin(0.5).setDepth(101).setVisible(false);
 
+    // 8. Bottom Proximity Interaction Prompt
+    this.interactionPromptText = this.add.text(320, 328, '', {
+      fontFamily: 'monospace',
+      fontSize: '9.5px',
+      color: '#ffd700',
+      backgroundColor: 'rgba(11, 7, 18, 0.92)',
+      padding: { x: 10, y: 3 }
+    }).setOrigin(0.5).setDepth(50).setVisible(false);
+
+    // 9. Bottom Arcade Controls Legend Bar (Fluid 2.5D Belt-Scroll Legend)
+    this.add.rectangle(320, 351, 640, 18, 0x07040d, 0.96)
+      .setDepth(48)
+      .setStrokeStyle(1, 0x3d2852);
+    this.add.text(320, 351, 'WASD/Flechas: Mover 2.5D  |  J: Ligero  |  K: Fuerte  |  L: Guardia  |  Espacio: Esquivar  |  Tab: Cambiar  |  E: Interactuar', {
+      fontFamily: 'monospace',
+      fontSize: '7.5px',
+      color: '#d6c5eb'
+    }).setOrigin(0.5).setDepth(49);
+
     // Listen to Domain Events
     EventBus.getInstance().subscribe<BossUiShatteredEvent>('BossUiShattered', event => {
       this.shatterBossUi(event.decreeTitle);
@@ -256,7 +287,29 @@ export class HUDScene extends Phaser.Scene {
     });
   }
 
-  public updateHUD(player: Character, currentBoss?: Boss, storyProgress?: StoryProgress): void {
+  public updateHUD(
+    player: Character,
+    currentBoss?: Boss,
+    storyProgress?: StoryProgress,
+    interactionPrompt?: string,
+    allyName?: string
+  ): void {
+    // Active Dual Character
+    if (this.characterSwapText) {
+      const activeName = player.name.toUpperCase();
+      const otherName = (allyName || (player.id === 'thomas' ? 'Khaterine' : 'Thomas')).toUpperCase();
+      this.characterSwapText.setText(`> ${activeName}   [TAB: ${otherName}]`);
+    }
+
+    // Dynamic Proximity Interaction Prompt
+    if (this.interactionPromptText) {
+      if (interactionPrompt) {
+        this.interactionPromptText.setText(`[E] · ${interactionPrompt}`).setVisible(true);
+      } else {
+        this.interactionPromptText.setVisible(false);
+      }
+    }
+
     // Health
     const hpRatio = Math.max(0, player.stats.health / player.stats.maxHealth);
     this.playerHealthFill.setSize(Math.max(1, 110 * hpRatio), 10);

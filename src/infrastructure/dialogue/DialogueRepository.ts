@@ -42,6 +42,26 @@ export class DialogueRepository implements IDialoguePort {
     }
   }
 
+  public getElowenDialogue(): DialogueLine[] {
+    return [
+      {
+        speaker: 'Elowen',
+        portraitKey: 'portrait_elowen',
+        text: '«¡Thomas, has vuelto! Las campanas han estado tañendo sin descanso... Madre Morwenna dice que la noche exige una ofrenda para purificar el alba.»'
+      },
+      {
+        speaker: 'Thomas',
+        portraitKey: 'portrait_thomas',
+        text: '«No te acerques a la pira, Elowen. No hay salvación en ese fuego, solo ceniza y dogma. Khaterine y yo detendremos a la inquisición.»'
+      },
+      {
+        speaker: 'Elowen',
+        portraitKey: 'portrait_elowen',
+        text: '«Que la bendición de los antiguos te guarde... Toma este ungüento de mirra. Ten cuidado: los acechadores rondan por el sendero este.»'
+      }
+    ];
+  }
+
   public getShalemSarcasm(): string {
     const list = [
       '«¡Usa tus combos, Thomas! ¡El botón [J] no muerde!»',

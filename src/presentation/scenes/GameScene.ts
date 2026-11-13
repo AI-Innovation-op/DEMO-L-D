@@ -12,17 +12,22 @@ import { HUDScene } from './HUDScene';
 import { StoryProgress } from '../../domain/story/StoryProgress';
 
 export class GameScene extends Phaser.Scene {
-  private player!: Character;
+  // Dual Characters (Thomas & Khaterine)
+  public player!: Character;
+  public allyChar!: Character;
   private shalem!: ShalemCompanion;
   private audio!: WebAudioSoundAdapter;
   private dialogues!: DialogueRepository;
   public storyProgress: StoryProgress = new StoryProgress();
 
-  // Visual Sprites & Layers
+  // Visual Sprites & Ground Shadows
   private bgImage!: Phaser.GameObjects.Image;
   private playerSprite!: Phaser.GameObjects.Image;
+  private playerShadow!: Phaser.GameObjects.Ellipse;
+  private allySprite!: Phaser.GameObjects.Image;
+  private allyShadow!: Phaser.GameObjects.Ellipse;
   private shalemSprite!: Phaser.GameObjects.Image;
-  private allySprite?: Phaser.GameObjects.Image;
+  private shalemShadow!: Phaser.GameObjects.Ellipse;
 
   // Particle Systems
   private emberParticles!: Phaser.GameObjects.Particles.ParticleEmitter;
@@ -30,11 +35,26 @@ export class GameScene extends Phaser.Scene {
   // Active Entities
   private enemies: Enemy[] = [];
   private enemySprites: Map<string, Phaser.GameObjects.Image> = new Map();
+  private enemyShadows: Map<string, Phaser.GameObjects.Ellipse> = new Map();
   private droppedWeaponSprites: Map<string, Phaser.GameObjects.Container> = new Map();
+
+  // Boss
   private currentBoss?: Boss;
   private bossSprite?: Phaser.GameObjects.Image;
+  private bossShadow?: Phaser.GameObjects.Ellipse;
   private bossMarker?: Phaser.GameObjects.Text;
   private bossMarkerTween?: Phaser.Tweens.Tween;
+
+  // NPC: Elowen de Oakhaven
+  private elowenSprite?: Phaser.GameObjects.Image;
+  private elowenShadow?: Phaser.GameObjects.Ellipse;
+  private elowenBadge?: Phaser.GameObjects.Text;
+  private hasTalkedToElowen: boolean = false;
+
+  // Proximity Interaction
+  private activeInteractionTarget?: string;
+  private activeInteractionType?: 'elowen' | 'shalem' | 'ally' | 'weapon';
+  private floatingPromptBadge?: Phaser.GameObjects.Text;
 
   // Environment & Scenarios
   private currentScenario: number = 1;
@@ -44,18 +64,22 @@ export class GameScene extends Phaser.Scene {
   private shalemBalloonBg!: Phaser.GameObjects.Rectangle;
   private shalemBalloonTimer: number = 0;
 
-  // Keys
+  // Input Keys
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keyA!: Phaser.Input.Keyboard.Key;
   private keyD!: Phaser.Input.Keyboard.Key;
   private keyW!: Phaser.Input.Keyboard.Key;
-  private keyJ!: Phaser.Input.Keyboard.Key; // Attack
-  private keyK!: Phaser.Input.Keyboard.Key; // Block
-  private keyL!: Phaser.Input.Keyboard.Key; // Dodge
-  private keyT!: Phaser.Input.Keyboard.Key; // Throw Weapon (Option B)
-  private keyE!: Phaser.Input.Keyboard.Key; // Pick up Weapon (Option A & B)
+  private keyS!: Phaser.Input.Keyboard.Key;
+  private keyJ!: Phaser.Input.Keyboard.Key; // Light Attack
+  private keyK!: Phaser.Input.Keyboard.Key; // Heavy Attack
+  private keyL!: Phaser.Input.Keyboard.Key; // Guard
+  private keySpace!: Phaser.Input.Keyboard.Key; // Dodge
+  private keyTab!: Phaser.Input.Keyboard.Key; // Swap Thomas/Khaterine
+  private keyT!: Phaser.Input.Keyboard.Key; // Throw Weapon
+  private keyQ!: Phaser.Input.Keyboard.Key; // Throw Weapon alias
+  private keyE!: Phaser.Input.Keyboard.Key; // Interact / Talk / Pick up
   private keyM!: Phaser.Input.Keyboard.Key; // Shalem Minigame
-  private keyP!: Phaser.Input.Keyboard.Key; // Inventory & Lore
+  private keyP!: Phaser.Input.Keyboard.Key; // Menu Modal
   private keyC!: Phaser.Input.Keyboard.Key; // Character Dialogue
   private keyN!: Phaser.Input.Keyboard.Key; // Mute Audio
   private key1!: Phaser.Input.Keyboard.Key;
@@ -73,7 +97,13 @@ export class GameScene extends Phaser.Scene {
 
   public init(data: { characterId?: CharacterId }): void {
     const charId = data.characterId || 'thomas';
-    this.player = charId === 'thomas' ? Character.createThomas() : Character.createKhaterine();
+    if (charId === 'thomas') {
+      this.player = Character.createThomas();
+      this.allyChar = Character.createKhaterine();
+    } else {
+      this.player = Character.createKhaterine();
+      this.allyChar = Character.createThomas();
+    }
     this.shalem = new ShalemCompanion();
     this.audio = new WebAudioSoundAdapter();
     this.dialogues = new DialogueRepository();
@@ -81,7 +111,7 @@ export class GameScene extends Phaser.Scene {
 
   public create(): void {
     // 1. Background image (640x360)
-    this.bgImage = this.add.image(320, 180, 'bg_oakhaven').setDisplaySize(640, 360);
+    this.bgImage = this.add.image(320, 180, 'bg_oakhaven').setDisplaySize(640, 360).setDepth(0);
 
     // 2. Atmospheric Fog Particles
     this.add.particles(320, 270, 'particle_fog', {
@@ -91,7 +121,7 @@ export class GameScene extends Phaser.Scene {
       alpha: { start: 0.35, end: 0 },
       lifespan: 4000,
       frequency: 600
-    });
+    }).setDepth(5);
 
     // 3. Floating Ember Particles from Bonfires
     this.emberParticles = this.add.particles(280, 255, 'particle_ember', {
@@ -101,49 +131,72 @@ export class GameScene extends Phaser.Scene {
       alpha: { start: 0.9, end: 0 },
       lifespan: 1600,
       frequency: 180
-    });
+    }).setDepth(6);
 
     // 4. Setup audio BGM
     this.audio.playBgm('bgm_oakhaven_night');
 
     // 4.1 Atmospheric Vignette
-    this.add.image(320, 180, 'fx_vignette').setDisplaySize(640, 360).setDepth(15).setAlpha(0.6);
+    this.add.image(320, 180, 'fx_vignette').setDisplaySize(640, 360).setDepth(350).setAlpha(0.6);
 
-    // 4.2 Ground Shadows
-    this.add.image(this.player.position.x, 260, 'shadow_ground').setDepth(0).setAlpha(0.65);
+    // 5. Player & Shadows (2.5D Depth Arena)
+    const initX = 110;
+    const initY = 260;
+    this.player.position = new Vector2(initX, initY);
 
-    // 5. Player Sprite
+    this.playerShadow = this.add.ellipse(initX, initY, 26, 8, 0x000000, 0.45).setDepth(initY - 1);
     const playerTex = this.player.id === 'thomas' ? 'thomas_idle' : 'khaterine_idle';
-    this.playerSprite = this.add.image(this.player.position.x, this.player.position.y, playerTex).setOrigin(0.5, 1);
+    this.playerSprite = this.add.image(initX, initY, playerTex).setOrigin(0.5, 1).setDepth(initY);
 
-    // 6. Ally NPC Sprite (If Thomas, Khaterine is ally; if Khaterine, Thomas is ally)
-    const allyTex = this.player.id === 'thomas' ? 'khaterine_idle' : 'thomas_idle';
-    this.allySprite = this.add.image(this.player.position.x - 55, this.player.position.y, allyTex).setOrigin(0.5, 1).setAlpha(0.85);
+    // 6. Ally Companion (Walking alongside in 2.5D)
+    const allyInitX = 65;
+    const allyInitY = 250;
+    this.allyChar.position = new Vector2(allyInitX, allyInitY);
+    this.allyShadow = this.add.ellipse(allyInitX, allyInitY, 24, 7, 0x000000, 0.4).setDepth(allyInitY - 1);
+    const allyTex = this.allyChar.id === 'thomas' ? 'thomas_idle' : 'khaterine_idle';
+    this.allySprite = this.add.image(allyInitX, allyInitY, allyTex).setOrigin(0.5, 1).setAlpha(0.92).setDepth(allyInitY);
 
-    // 7. Shalem Sprite (Cat)
-    this.shalemSprite = this.add.image(this.player.position.x - 25, this.player.position.y - 10, 'shalem_cat').setOrigin(0.5, 1);
+    // 7. Shalem Sprite (Cat Companion in 2.5D)
+    const catInitX = 85;
+    const catInitY = 268;
+    this.shalemShadow = this.add.ellipse(catInitX, catInitY, 20, 6, 0x000000, 0.45).setDepth(catInitY - 1);
+    this.shalemSprite = this.add.image(catInitX, catInitY, 'shalem_cat').setOrigin(0.5, 1).setDepth(catInitY);
 
-    // 8. Shalem Dialogue Balloon with Portrait
-    this.shalemBalloonBg = this.add.rectangle(320, 332, 540, 26, 0x140f21, 0.92)
+    // 8. Floating Interaction Badge (Follows nearest interactable target)
+    this.floatingPromptBadge = this.add.text(0, 0, '[E] HABLAR', {
+      fontFamily: 'monospace',
+      fontSize: '8px',
+      color: '#ffd700',
+      backgroundColor: 'rgba(15, 8, 26, 0.9)',
+      padding: { x: 5, y: 2 }
+    }).setOrigin(0.5).setDepth(340).setVisible(false);
+
+    // 9. Shalem Dialogue Balloon
+    this.shalemBalloonBg = this.add.rectangle(320, 310, 540, 24, 0x140f21, 0.94)
       .setStrokeStyle(1, 0xd4af37)
-      .setDepth(25);
+      .setDepth(345)
+      .setVisible(false);
 
-    this.shalemBalloonText = this.add.text(320, 332, 'Shalem: «¡Usa [A/D] para moverte, [J] atacar, [T] lanzar arma y [P] inventario!»', {
-      fontFamily: 'sans-serif',
-      fontSize: '9.5px',
+    this.shalemBalloonText = this.add.text(320, 310, '', {
+      fontFamily: 'Cinzel, sans-serif',
+      fontSize: '9px',
       color: '#ffd700'
-    }).setOrigin(0.5).setDepth(26);
+    }).setOrigin(0.5).setDepth(346).setVisible(false);
 
-    // 9. Setup Inputs
+    // 10. Setup Inputs
     if (this.input.keyboard) {
       this.cursors = this.input.keyboard.createCursorKeys();
       this.keyA = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
       this.keyD = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
       this.keyW = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
+      this.keyS = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S);
       this.keyJ = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.J);
       this.keyK = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.K);
       this.keyL = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.L);
+      this.keySpace = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+      this.keyTab = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TAB);
       this.keyT = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.T);
+      this.keyQ = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q);
       this.keyE = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
       this.keyM = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M);
       this.keyP = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.P);
@@ -164,15 +217,22 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.handleInput(delta);
-    this.updateShalemCompanion(delta);
+    this.updateShalemAndAlly(delta);
     this.updateEnemies(delta);
     this.updateBoss(delta);
     this.updateDroppedWeapons();
+    this.updateProximityInteractions();
 
-    // Sync HUD
+    // Sync HUD with active character & dynamic interaction target
     const hud = this.scene.get('HUDScene') as HUDScene;
     if (hud) {
-      hud.updateHUD(this.player, this.currentBoss, this.storyProgress);
+      hud.updateHUD(
+        this.player,
+        this.currentBoss,
+        this.storyProgress,
+        this.activeInteractionTarget,
+        this.allyChar.name
+      );
     }
   }
 
@@ -186,7 +246,13 @@ export class GameScene extends Phaser.Scene {
     if (Phaser.Input.Keyboard.JustDown(this.key2)) this.loadScenario(2);
     if (Phaser.Input.Keyboard.JustDown(this.key3)) this.loadScenario(3);
 
-    // Open Inventory & Menu with [P]
+    // Swap Character with [TAB]
+    if (Phaser.Input.Keyboard.JustDown(this.keyTab)) {
+      this.swapActiveCharacter();
+      return;
+    }
+
+    // Open Menu Modal with [P]
     if (Phaser.Input.Keyboard.JustDown(this.keyP)) {
       this.scene.pause('GameScene');
       this.scene.launch('MenuModalScene', { player: this.player, audio: this.audio });
@@ -224,8 +290,8 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Dodge [L] with ghost afterimage trail
-    if (Phaser.Input.Keyboard.JustDown(this.keyL)) {
+    // Dodge [SPACE] with ghost afterimage trail
+    if (Phaser.Input.Keyboard.JustDown(this.keySpace)) {
       if (this.player.startDodge()) {
         this.audio.playSfx('dodge');
         const dashDir = this.player.facingDirection;
@@ -234,31 +300,35 @@ export class GameScene extends Phaser.Scene {
         const ghost = this.add.image(this.playerSprite.x, this.playerSprite.y, this.playerSprite.texture.key)
           .setOrigin(0.5, 1)
           .setAlpha(0.6)
-          .setTint(0x9933ff);
+          .setScale(this.playerSprite.scaleX, this.playerSprite.scaleY)
+          .setTint(0x9933ff)
+          .setDepth(this.playerSprite.depth - 1);
+
         this.tweens.add({
           targets: ghost,
           alpha: 0,
-          scaleX: 1.2,
+          scaleX: ghost.scaleX * 1.25,
           duration: 250,
           onComplete: () => ghost.destroy()
         });
 
+        const targetX = Phaser.Math.Clamp(this.playerSprite.x + dashDir * 60, 35, 605);
         this.tweens.add({
           targets: this.playerSprite,
-          x: this.playerSprite.x + dashDir * 55,
-          alpha: 0.4,
+          x: targetX,
+          alpha: 0.5,
           duration: 180,
           yoyo: true,
           onComplete: () => {
-            this.player.position = new Vector2(this.playerSprite.x, this.player.position.y);
+            this.player.position = new Vector2(this.playerSprite.x, this.playerSprite.y);
             this.player.finishDodge();
           }
         });
       }
     }
 
-    // Block [K]
-    if (this.keyK.isDown) {
+    // Block [L] (Held)
+    if (this.keyL.isDown) {
       this.player.startBlock();
       this.playerSprite.setTint(0x77aaff);
     } else if (this.player.state === CharacterState.BLOCKING) {
@@ -266,68 +336,226 @@ export class GameScene extends Phaser.Scene {
       this.playerSprite.clearTint();
     }
 
-    // Attack [J]
+    // Light Attack [J]
     if (Phaser.Input.Keyboard.JustDown(this.keyJ) && this.attackCooldown <= 0) {
-      this.executeAttack();
-      this.attackCooldown = 260;
+      this.executeAttack(false);
+      this.attackCooldown = 240;
     }
 
-    // Voluntary Weapon Throw (Option B) [T]
-    if (Phaser.Input.Keyboard.JustDown(this.keyT)) {
+    // Heavy Attack [K]
+    if (Phaser.Input.Keyboard.JustDown(this.keyK) && this.attackCooldown <= 0) {
+      this.executeAttack(true);
+      this.attackCooldown = 420;
+    }
+
+    // Voluntary Weapon Throw (Option B) [T] or [Q]
+    if (Phaser.Input.Keyboard.JustDown(this.keyT) || Phaser.Input.Keyboard.JustDown(this.keyQ)) {
       this.executeWeaponThrow();
     }
 
-    // Pick Up Weapon (Option A & B) [E]
+    // Proximity Interaction / Pick Up [E]
     if (Phaser.Input.Keyboard.JustDown(this.keyE)) {
-      this.executeWeaponPickup();
+      this.executeContextInteraction();
     }
 
-    // Movement (A / D)
+    // 2.5D Movement (A / D / W / S or Arrows)
     let moveX = 0;
-    if (this.keyA.isDown || this.cursors.left.isDown) {
-      moveX = -1;
-    } else if (this.keyD.isDown || this.cursors.right.isDown) {
-      moveX = 1;
-    }
+    let moveY = 0;
 
-    if (moveX !== 0 && this.player.state !== CharacterState.BLOCKING && this.player.state !== CharacterState.ATTACKING) {
-      const speed = this.player.stats.speed * (delta / 1000);
-      const newX = Phaser.Math.Clamp(this.playerSprite.x + moveX * speed, 30, 610);
-      this.playerSprite.x = newX;
-      this.player.position = new Vector2(newX, this.player.position.y);
-      this.player.move(moveX);
-      this.playerSprite.setFlipX(moveX < 0);
-    } else {
-      this.player.move(0);
-    }
+    if (this.keyA.isDown || this.cursors.left.isDown) moveX -= 1;
+    if (this.keyD.isDown || this.cursors.right.isDown) moveX += 1;
+    if (this.keyW.isDown || this.cursors.up.isDown) moveY -= 1;
+    if (this.keyS.isDown || this.cursors.down.isDown) moveY += 1;
 
-    // Jump (W / SPACE)
-    if ((Phaser.Input.Keyboard.JustDown(this.keyW) || Phaser.Input.Keyboard.JustDown(this.cursors.space)) && this.playerSprite.y >= 260) {
-      if (this.player.jump()) {
-        this.audio.playSfx('jump');
-        this.tweens.add({
-          targets: this.playerSprite,
-          y: 200,
-          duration: 220,
-          yoyo: true,
-          ease: 'Sine.easeOut',
-          onComplete: () => {
-            this.player.land();
-            this.playerSprite.y = 260;
-          }
-        });
+    if ((moveX !== 0 || moveY !== 0) &&
+        this.player.state !== CharacterState.BLOCKING &&
+        this.player.state !== CharacterState.ATTACKING) {
+
+      const mag = Math.hypot(moveX, moveY);
+      const normX = moveX / mag;
+      const normY = moveY / mag;
+
+      const baseSpeed = this.player.stats.speed;
+      const vx = normX * baseSpeed * 1.05 * (delta / 1000);
+      const vy = normY * baseSpeed * 0.72 * (delta / 1000);
+
+      const nextX = Phaser.Math.Clamp(this.playerSprite.x + vx, 35, 605);
+      const nextY = Phaser.Math.Clamp(this.playerSprite.y + vy, 205, 315);
+
+      this.playerSprite.setPosition(nextX, nextY);
+      this.player.position = new Vector2(nextX, nextY);
+
+      if (moveX !== 0) {
+        this.player.facingDirection = moveX > 0 ? 1 : -1;
       }
+      this.player.move(moveX, moveY);
+
+      // 2.5D Perspective Scaling (scale smoothly between 0.88 and 1.10)
+      const scale = 0.88 + ((nextY - 205) / 110) * 0.22;
+      this.playerSprite.setScale(this.player.facingDirection > 0 ? scale : -scale, scale);
+
+      // Depth sorting
+      this.playerSprite.setDepth(nextY);
+      this.playerShadow.setPosition(nextX, nextY).setDepth(nextY - 1).setScale(scale);
+    } else {
+      this.player.move(0, 0);
     }
   }
 
-  private executeAttack(): void {
+  private swapActiveCharacter(): void {
+    this.audio.playSfx('dodge');
+    this.cameras.main.flash(200, 160, 80, 240);
+
+    // Swap characters
+    const temp = this.player;
+    this.player = this.allyChar;
+    this.allyChar = temp;
+
+    // Swap positions
+    const oldPlayerX = this.playerSprite.x;
+    const oldPlayerY = this.playerSprite.y;
+    this.playerSprite.setPosition(this.allySprite.x, this.allySprite.y);
+    this.allySprite.setPosition(oldPlayerX, oldPlayerY);
+
+    this.player.position = new Vector2(this.playerSprite.x, this.playerSprite.y);
+    this.allyChar.position = new Vector2(this.allySprite.x, this.allySprite.y);
+
+    // Swap textures
+    const playerTex = this.player.id === 'thomas' ? 'thomas_idle' : 'khaterine_idle';
+    const allyTex = this.allyChar.id === 'thomas' ? 'thomas_idle' : 'khaterine_idle';
+
+    this.playerSprite.setTexture(playerTex);
+    this.allySprite.setTexture(allyTex);
+
+    this.triggerShalemBalloon(
+      `Shalem: «¡Ahora juegas como ${this.player.name}! ${this.player.id === 'khaterine' ? '¡Purifica las sombras con tus rezos!' : '¡Avanza con tu espada y tus puños!' }»`,
+      3500
+    );
+  }
+
+  private executeContextInteraction(): void {
+    if (this.activeInteractionType === 'elowen') {
+      this.interactWithElowen();
+    } else if (this.activeInteractionType === 'weapon') {
+      this.executeWeaponPickup();
+    } else if (this.activeInteractionType === 'shalem') {
+      if (this.player.levelUp.isMinigameReady) {
+        this.scene.pause('GameScene');
+        this.scene.launch('ShalemMinigameScene', {
+          player: this.player,
+          shalem: this.shalem,
+          audio: this.audio
+        });
+      } else {
+        this.triggerShalemBalloon(`Shalem: «${this.dialogues.getShalemSarcasm()}»`, 4000);
+      }
+    } else if (this.activeInteractionType === 'ally') {
+      this.scene.pause('GameScene');
+      this.scene.launch('CharacterDialogueScene', {
+        player: this.player,
+        scenarioIndex: this.currentScenario,
+        audio: this.audio
+      });
+    } else {
+      // Fallback: check weapon pickup
+      this.executeWeaponPickup();
+    }
+  }
+
+  private interactWithElowen(): void {
+    this.audio.playSfx('menu_select');
+    const lines = this.dialogues.getElowenDialogue ? this.dialogues.getElowenDialogue() : [];
+    const textToShow = lines[0] ? `${lines[0].speaker}: ${lines[0].text}` : 'Elowen: «¡Thomas, cuídate de la pira!»';
+
+    if (!this.hasTalkedToElowen) {
+      this.hasTalkedToElowen = true;
+      this.player.heal(35);
+      this.storyProgress.completeMilestone('act1_dialogue');
+      this.storyProgress.addProgress(15);
+      this.spawnDamageNumber(this.playerSprite.x, this.playerSprite.y - 45, 35, false, '#88ff88');
+    }
+    this.triggerShalemBalloon(textToShow, 7000);
+  }
+
+  private updateProximityInteractions(): void {
+    const px = this.playerSprite.x;
+    const py = this.playerSprite.y;
+
+    let closestDist = Infinity;
+    let targetType: 'elowen' | 'shalem' | 'ally' | 'weapon' | undefined = undefined;
+    let targetLabel: string | undefined = undefined;
+    let targetX = 0;
+    let targetY = 0;
+
+    // 1. Check Elowen (Scenario 1)
+    if (this.currentScenario === 1 && this.elowenSprite) {
+      const dist = Math.hypot(px - this.elowenSprite.x, py - this.elowenSprite.y);
+      if (dist < 48 && dist < closestDist) {
+        closestDist = dist;
+        targetType = 'elowen';
+        targetLabel = 'Elowen de Oakhaven';
+        targetX = this.elowenSprite.x;
+        targetY = this.elowenSprite.y - 55;
+      }
+    }
+
+    // 2. Check Dropped Weapons
+    for (const [, container] of this.droppedWeaponSprites.entries()) {
+      const dist = Math.hypot(px - container.x, py - container.y);
+      if (dist < 42 && dist < closestDist) {
+        closestDist = dist;
+        targetType = 'weapon';
+        targetLabel = 'Recoger Arma';
+        targetX = container.x;
+        targetY = container.y - 25;
+      }
+    }
+
+    // 3. Check Shalem
+    const distShalem = Math.hypot(px - this.shalemSprite.x, py - this.shalemSprite.y);
+    if (distShalem < 42 && distShalem < closestDist) {
+      closestDist = distShalem;
+      targetType = 'shalem';
+      targetLabel = 'Shalem el Gato';
+      targetX = this.shalemSprite.x;
+      targetY = this.shalemSprite.y - 30;
+    }
+
+    // 4. Check Ally
+    const distAlly = Math.hypot(px - this.allySprite.x, py - this.allySprite.y);
+    if (distAlly < 45 && distAlly < closestDist) {
+      closestDist = distAlly;
+      targetType = 'ally';
+      targetLabel = `${this.allyChar.name} (Compañero/a)`;
+      targetX = this.allySprite.x;
+      targetY = this.allySprite.y - 55;
+    }
+
+    this.activeInteractionType = targetType;
+    this.activeInteractionTarget = targetLabel;
+
+    if (targetType && targetLabel && this.floatingPromptBadge) {
+      this.floatingPromptBadge
+        .setPosition(targetX, targetY)
+        .setText(`[E] ${targetType === 'weapon' ? 'RECOGER' : 'HABLAR'}`)
+        .setVisible(true);
+    } else if (this.floatingPromptBadge) {
+      this.floatingPromptBadge.setVisible(false);
+    }
+  }
+
+  private executeAttack(isHeavy: boolean): void {
     const isDisarmed = this.player.disarmManager.isPlayerDisarmed();
     const attackTex = isDisarmed
       ? 'thomas_disarmed'
       : (this.player.id === 'thomas' ? 'thomas_attack' : 'khaterine_idle');
 
     this.playerSprite.setTexture(attackTex);
-    this.audio.playCombatHit(false);
+    this.audio.playCombatHit(isHeavy);
+
+    if (isHeavy) {
+      this.cameras.main.shake(180, 0.014);
+    }
 
     const playerX = this.playerSprite.x;
     const playerY = this.playerSprite.y;
@@ -336,34 +564,38 @@ export class GameScene extends Phaser.Scene {
 
     // Visual Slash Arc Effect
     if (!isDisarmed) {
-      const slash = this.add.image(playerX + facing * 25, playerY - 25, 'particle_slash_arc')
-        .setScale(facing > 0 ? 1 : -1, 1)
-        .setAlpha(0.85);
+      const arcKey = isHeavy ? 'particle_slash_heavy' : 'particle_slash_arc';
+      const slash = this.add.image(playerX + facing * (isHeavy ? 30 : 25), playerY - 25, arcKey)
+        .setScale(facing > 0 ? (isHeavy ? 1.2 : 1) : (isHeavy ? -1.2 : -1), isHeavy ? 1.2 : 1)
+        .setAlpha(0.9)
+        .setDepth(playerY + 2);
 
       this.tweens.add({
         targets: slash,
         alpha: 0,
-        scaleX: facing > 0 ? 1.4 : -1.4,
-        scaleY: 1.4,
-        duration: 180,
+        scaleX: facing > 0 ? (isHeavy ? 1.6 : 1.35) : (isHeavy ? -1.6 : -1.35),
+        scaleY: isHeavy ? 1.6 : 1.35,
+        duration: isHeavy ? 240 : 180,
         onComplete: () => slash.destroy()
       });
     }
 
-    // Check hit against active enemies
+    const reachX = attackRange + (isHeavy ? 65 : 45);
+    const reachY = isHeavy ? 35 : 26;
+
+    // Check hit against active enemies in 2.5D
     for (const enemy of this.enemies) {
       if (!enemy.isAlive()) continue;
-      const dist = Math.abs(enemy.position.x - playerX);
-      const isAhead = (enemy.position.x - playerX) * facing > 0;
+      const dx = (enemy.position.x - playerX) * facing;
+      const dy = Math.abs(enemy.position.y - playerY);
 
-      if (dist <= attackRange + 25 && isAhead) {
+      if (dx > 0 && dx <= reachX && dy <= reachY) {
         const res = CombatUseCases.executeAttackOnEnemy(this.player, enemy);
 
-        // Hit-stop micro freeze
-        this.cameras.main.shake(120, 0.008);
-        this.spawnDamageNumber(enemy.position.x, enemy.position.y - 35, res.damageDealt, false);
+        this.cameras.main.shake(isHeavy ? 160 : 100, isHeavy ? 0.012 : 0.006);
+        const finalDamage = isHeavy ? Math.round(res.damageDealt * 1.6) : res.damageDealt;
+        this.spawnDamageNumber(enemy.position.x, enemy.position.y - 35, finalDamage, isHeavy);
 
-        // Enemy flinch & flash
         const sprite = this.enemySprites.get(enemy.id);
         if (sprite) {
           sprite.setTint(0xff3333);
@@ -375,10 +607,13 @@ export class GameScene extends Phaser.Scene {
               alpha: 0,
               y: sprite.y - 15,
               duration: 250,
-              onComplete: () => sprite.destroy()
+              onComplete: () => {
+                sprite.destroy();
+                this.enemyShadows.get(enemy.id)?.destroy();
+                this.enemyShadows.delete(enemy.id);
+              }
             });
 
-            // Check if all regular minions are defeated
             const remainingEnemies = this.enemies.filter(e => e.isAlive());
             if (remainingEnemies.length === 0) {
               this.storyProgress.completeMilestone('act1_monks');
@@ -394,17 +629,19 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Check hit against Boss
+    // Check hit against Boss in 2.5D
     if (this.currentBoss && this.bossSprite && this.currentBoss.health > 0) {
-      const bossDist = Math.abs(this.currentBoss.position.x - playerX);
-      const isAhead = (this.currentBoss.position.x - playerX) * facing > 0;
-      const effectiveReach = attackRange + 65;
+      const bdx = (this.currentBoss.position.x - playerX) * facing;
+      const bdy = Math.abs(this.currentBoss.position.y - playerY);
+      const effectiveReachX = reachX + 25;
+      const effectiveReachY = reachY + 16;
 
-      if (bossDist <= effectiveReach && isAhead) {
+      if (bdx > 0 && bdx <= effectiveReachX && bdy <= effectiveReachY) {
         const res = CombatUseCases.executeAttackOnBoss(this.player, this.currentBoss);
 
-        this.cameras.main.shake(180, 0.012);
-        this.spawnDamageNumber(this.currentBoss.position.x, this.currentBoss.position.y - 50, res.damageDealt, true);
+        this.cameras.main.shake(isHeavy ? 200 : 140, isHeavy ? 0.016 : 0.01);
+        const finalDamage = isHeavy ? Math.round(res.damageDealt * 1.6) : res.damageDealt;
+        this.spawnDamageNumber(this.currentBoss.position.x, this.currentBoss.position.y - 50, finalDamage, true);
 
         this.bossSprite.setTint(0xff5555);
         this.time.delayedCall(120, () => this.bossSprite?.clearTint());
@@ -412,14 +649,13 @@ export class GameScene extends Phaser.Scene {
         if (res.targetKilled) {
           this.handleBossDefeated();
         }
-      } else if (isAhead && bossDist > effectiveReach && this.enemies.filter(e => e.isAlive()).length === 0) {
-        // Player is swinging in the air far from the boss — Shalem guides them!
-        this.triggerShalemBalloon("Shalem: «¡Estás demasiado lejos! ¡Acércate más a la Madre Morwenna en la derecha para alcanzarla con tu arma!»", 2800);
+      } else if (bdx > effectiveReachX && this.enemies.filter(e => e.isAlive()).length === 0) {
+        this.triggerShalemBalloon("Shalem: «¡Estás demasiado lejos! ¡Acércate más a la Madre Morwenna para alcanzarla con tu arma!»", 2800);
       }
     }
 
     // Reset texture after attack frame
-    this.time.delayedCall(180, () => {
+    this.time.delayedCall(isHeavy ? 260 : 170, () => {
       const idleTex = isDisarmed
         ? 'thomas_disarmed'
         : (this.player.id === 'thomas' ? 'thomas_idle' : 'khaterine_idle');
@@ -428,15 +664,15 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private spawnDamageNumber(x: number, y: number, amount: number, isCritical: boolean): void {
-    const color = isCritical ? '#ffd700' : '#e699ff';
-    const text = this.add.text(x, y, `-${amount}`, {
+  private spawnDamageNumber(x: number, y: number, amount: number, isCritical: boolean, customColor?: string): void {
+    const color = customColor || (isCritical ? '#ffd700' : '#e699ff');
+    const text = this.add.text(x, y, `${customColor ? '+' : '-'}${amount}`, {
       fontFamily: 'Cinzel, Georgia, serif',
       fontSize: isCritical ? '16px' : '12px',
       color: color,
       stroke: '#000',
       strokeThickness: 3
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(330);
 
     this.tweens.add({
       targets: text,
@@ -475,6 +711,8 @@ export class GameScene extends Phaser.Scene {
         onComplete: () => {
           this.bossSprite?.destroy();
           this.bossSprite = undefined;
+          this.bossShadow?.destroy();
+          this.bossShadow = undefined;
         }
       });
     }
@@ -492,7 +730,7 @@ export class GameScene extends Phaser.Scene {
       // Grand Victory Banner in Center
       const bannerBg = this.add.rectangle(320, 160, 420, 75, 0x11081f, 0.94)
         .setStrokeStyle(2, 0xffd700)
-        .setDepth(60);
+        .setDepth(360);
 
       const bannerTitle = this.add.text(320, 145, '★ ¡ACTO I COMPLETADO AL 100%! ★', {
         fontFamily: 'Cinzel, Georgia, serif',
@@ -501,7 +739,7 @@ export class GameScene extends Phaser.Scene {
         stroke: '#000',
         strokeThickness: 3,
         fontStyle: 'bold'
-      }).setOrigin(0.5).setDepth(61);
+      }).setOrigin(0.5).setDepth(361);
 
       const bannerPrompt = this.add.text(320, 172, 'PULSA [2] O HAZ CLIC AQUÍ PARA VIAJAR A LONDINIUM ▶', {
         fontFamily: 'monospace',
@@ -509,7 +747,7 @@ export class GameScene extends Phaser.Scene {
         color: '#ffffff',
         backgroundColor: '#3d1f5e',
         padding: { x: 8, y: 4 }
-      }).setOrigin(0.5).setDepth(61).setInteractive({ useHandCursor: true });
+      }).setOrigin(0.5).setDepth(361).setInteractive({ useHandCursor: true });
 
       bannerPrompt.on('pointerdown', () => {
         bannerBg.destroy();
@@ -529,7 +767,7 @@ export class GameScene extends Phaser.Scene {
       // Victory Banner for Act II
       const bannerBg = this.add.rectangle(320, 160, 420, 75, 0x11081f, 0.94)
         .setStrokeStyle(2, 0xffd700)
-        .setDepth(60);
+        .setDepth(360);
 
       const bannerTitle = this.add.text(320, 145, '★ ¡ACTO II COMPLETADO AL 100%! ★', {
         fontFamily: 'Cinzel, Georgia, serif',
@@ -538,7 +776,7 @@ export class GameScene extends Phaser.Scene {
         stroke: '#000',
         strokeThickness: 3,
         fontStyle: 'bold'
-      }).setOrigin(0.5).setDepth(61);
+      }).setOrigin(0.5).setDepth(361);
 
       const bannerPrompt = this.add.text(320, 172, 'PULSA [3] O HAZ CLIC AQUÍ PARA LA CATEDRAL INVERTIDA ▶', {
         fontFamily: 'monospace',
@@ -546,7 +784,7 @@ export class GameScene extends Phaser.Scene {
         color: '#ffffff',
         backgroundColor: '#3d1f5e',
         padding: { x: 8, y: 4 }
-      }).setOrigin(0.5).setDepth(61).setInteractive({ useHandCursor: true });
+      }).setOrigin(0.5).setDepth(361).setInteractive({ useHandCursor: true });
 
       bannerPrompt.on('pointerdown', () => {
         bannerBg.destroy();
@@ -566,7 +804,7 @@ export class GameScene extends Phaser.Scene {
       // Grand Game Cleared Banner
       this.add.rectangle(320, 160, 440, 85, 0x11081f, 0.96)
         .setStrokeStyle(3, 0xffd700)
-        .setDepth(60);
+        .setDepth(360);
 
       this.add.text(320, 140, '👑 ¡THE LIGHT IN THE DARKNESS: VICTORIA TOTAL! 👑', {
         fontFamily: 'Cinzel, Georgia, serif',
@@ -575,13 +813,13 @@ export class GameScene extends Phaser.Scene {
         stroke: '#000',
         strokeThickness: 3,
         fontStyle: 'bold'
-      }).setOrigin(0.5).setDepth(61);
+      }).setOrigin(0.5).setDepth(361);
 
       this.add.text(320, 165, 'Albion ha sido liberada del dogma. ¡Gracias por jugar la Demo!', {
         fontFamily: 'Cinzel, serif',
         fontSize: '9.5px',
         color: '#e699ff'
-      }).setOrigin(0.5).setDepth(61);
+      }).setOrigin(0.5).setDepth(361);
 
       const replayBtn = this.add.text(320, 188, 'REINICIAR VIAJE DESDE EL ACTO I [1]', {
         fontFamily: 'monospace',
@@ -589,7 +827,7 @@ export class GameScene extends Phaser.Scene {
         color: '#ffffff',
         backgroundColor: '#3d1f5e',
         padding: { x: 8, y: 4 }
-      }).setOrigin(0.5).setDepth(61).setInteractive({ useHandCursor: true });
+      }).setOrigin(0.5).setDepth(361).setInteractive({ useHandCursor: true });
 
       replayBtn.on('pointerdown', () => {
         this.loadScenario(1);
@@ -607,13 +845,12 @@ export class GameScene extends Phaser.Scene {
     this.audio.playWeaponThrowSound();
     this.audio.playDisarmSound();
 
-    // Switch Thomas sprite to disarmed brawler stance
     this.playerSprite.setTexture('thomas_disarmed');
 
-    // Thrown sword projectile with trail
     const thrownX = this.playerSprite.x;
+    const thrownY = this.playerSprite.y - 15;
     const dir = this.player.facingDirection;
-    const proj = this.add.image(thrownX, 240, 'icon_thrown_sword').setScale(1.3);
+    const proj = this.add.image(thrownX, thrownY, 'icon_thrown_sword').setScale(1.3).setDepth(thrownY);
     proj.setFlipX(dir < 0);
 
     this.tweens.add({
@@ -625,9 +862,9 @@ export class GameScene extends Phaser.Scene {
       onComplete: () => {
         proj.destroy();
 
-        // Stun enemies in impact area
+        // Stun enemies in impact area in 2.5D
         for (const enemy of this.enemies) {
-          if (Math.abs(enemy.position.x - (thrownX + dir * 190)) < 50) {
+          if (Math.abs(enemy.position.x - (thrownX + dir * 190)) < 55 && Math.abs(enemy.position.y - thrownY) < 30) {
             enemy.damagePosture(50);
             this.audio.playCombatHit(true);
             this.spawnDamageNumber(enemy.position.x, enemy.position.y - 35, 45, true);
@@ -649,7 +886,6 @@ export class GameScene extends Phaser.Scene {
     const pickedUp = CombatUseCases.pickupNearbyWeapon(this.player);
     if (pickedUp) {
       this.audio.playSfx('dodge');
-      // Reset back to idle with equipped weapon
       const idleTex = this.player.id === 'thomas' ? 'thomas_idle' : 'khaterine_idle';
       this.playerSprite.setTexture(idleTex);
       this.triggerShalemBalloon("Shalem asiente: «¡Espada recuperada! Ahora demuestra lo que puedes hacer.»");
@@ -658,24 +894,32 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private updateShalemCompanion(delta: number): void {
-    // Smoothly follow player
-    const targetX = this.playerSprite.x - 30 * this.player.facingDirection;
-    const targetY = this.playerSprite.y - 4;
-    this.shalemSprite.x = Phaser.Math.Linear(this.shalemSprite.x, targetX, 0.08);
-    this.shalemSprite.y = Phaser.Math.Linear(this.shalemSprite.y, targetY, 0.1);
-    this.shalemSprite.setFlipX(this.player.facingDirection < 0);
+  private updateShalemAndAlly(_delta: number): void {
+    const px = this.playerSprite.x;
+    const py = this.playerSprite.y;
+    const facing = this.player.facingDirection;
 
-    // Follow ally
-    if (this.allySprite) {
-      const allyTargetX = this.playerSprite.x - 60 * this.player.facingDirection;
-      this.allySprite.x = Phaser.Math.Linear(this.allySprite.x, allyTargetX, 0.05);
-      this.allySprite.setFlipX(this.player.facingDirection < 0);
-    }
+    // Ally follows smoothly in 2.5D
+    const allyTargetX = px - 45 * facing;
+    const allyTargetY = py - 4;
+    this.allySprite.x = Phaser.Math.Linear(this.allySprite.x, allyTargetX, 0.08);
+    this.allySprite.y = Phaser.Math.Linear(this.allySprite.y, allyTargetY, 0.08);
+    this.allySprite.setFlipX(facing < 0);
+    this.allySprite.setDepth(this.allySprite.y);
+    this.allyShadow.setPosition(this.allySprite.x, this.allySprite.y).setDepth(this.allySprite.y - 1);
+
+    // Shalem Cat follows smoothly in 2.5D
+    const catTargetX = px - 22 * facing;
+    const catTargetY = py + 6;
+    this.shalemSprite.x = Phaser.Math.Linear(this.shalemSprite.x, catTargetX, 0.1);
+    this.shalemSprite.y = Phaser.Math.Linear(this.shalemSprite.y, catTargetY, 0.1);
+    this.shalemSprite.setFlipX(facing < 0);
+    this.shalemSprite.setDepth(this.shalemSprite.y);
+    this.shalemShadow.setPosition(this.shalemSprite.x, this.shalemSprite.y).setDepth(this.shalemSprite.y - 1);
 
     // Balloon timer
     if (this.shalemBalloonTimer > 0) {
-      this.shalemBalloonTimer -= delta;
+      this.shalemBalloonTimer -= _delta;
       if (this.shalemBalloonTimer <= 0) {
         this.shalemBalloonBg.setVisible(false);
         this.shalemBalloonText.setVisible(false);
@@ -697,27 +941,33 @@ export class GameScene extends Phaser.Scene {
       if (!enemy.isAlive()) continue;
 
       const sprite = this.enemySprites.get(enemy.id);
+      const shadow = this.enemyShadows.get(enemy.id);
       if (!sprite) continue;
 
-      // Move toward player
+      // Move toward player across both X and Y in 2.5D
       const dx = this.playerSprite.x - enemy.position.x;
-      const dist = Math.abs(dx);
-      const dir = dx > 0 ? 1 : -1;
-      sprite.setFlipX(dir > 0);
+      const dy = this.playerSprite.y - enemy.position.y;
+      const dist = Math.hypot(dx, dy);
+      const dirX = dx > 0 ? 1 : -1;
+      sprite.setFlipX(dirX > 0);
 
-      if (dist > 35 && enemy.state !== 'STUNNED') {
-        const speed = enemy.speed * (delta / 1000);
-        enemy.position = new Vector2(enemy.position.x + dir * speed, enemy.position.y);
-        sprite.x = enemy.position.x;
-      } else if (dist <= 35 && this.enemyAttackTimer >= 1400) {
+      if (dist > 38 && enemy.state !== 'STUNNED') {
+        const speedX = enemy.speed * (delta / 1000);
+        const speedY = (enemy.speed * 0.65) * (delta / 1000);
+
+        const newX = enemy.position.x + (dx / dist) * speedX;
+        const newY = enemy.position.y + (dy / dist) * speedY;
+
+        enemy.position = new Vector2(newX, newY);
+        sprite.setPosition(newX, newY).setDepth(newY);
+        if (shadow) shadow.setPosition(newX, newY).setDepth(newY - 1);
+      } else if (dist <= 38 && this.enemyAttackTimer >= 1400) {
         // Enemy attacks player!
         CombatUseCases.executeEnemyAttack(enemy, this.player, false);
         this.audio.playCombatHit(false);
 
-        // Flash player & damage text
         this.playerSprite.setTint(0xff5555);
         this.time.delayedCall(120, () => this.playerSprite.clearTint());
-
         this.enemyAttackTimer = 0;
       }
     }
@@ -726,35 +976,41 @@ export class GameScene extends Phaser.Scene {
   private updateBoss(delta: number): void {
     if (!this.currentBoss || !this.bossSprite || this.currentBoss.health <= 0) return;
 
-    // Boss Marker follows the boss position
     if (this.bossMarker) {
       this.bossMarker.x = this.bossSprite.x;
     }
 
-    const dist = Math.abs(this.bossSprite.x - this.playerSprite.x);
+    const dx = this.playerSprite.x - this.bossSprite.x;
+    const dy = this.playerSprite.y - this.bossSprite.y;
+    const dist = Math.hypot(dx, dy);
     const aliveEnemies = this.enemies.filter(e => e.isAlive()).length;
 
-    // When minions are defeated, the boss actively advances toward the player!
-    if (aliveEnemies === 0 && dist > 70) {
-      const dir = this.playerSprite.x > this.bossSprite.x ? 1 : -1;
-      const speed = 40 * (delta / 1000);
-      this.bossSprite.x += dir * speed;
+    // When minions are defeated, boss actively advances toward player in 2.5D!
+    if (aliveEnemies === 0 && dist > 65) {
+      const speedX = 40 * (delta / 1000);
+      const speedY = 26 * (delta / 1000);
+
+      this.bossSprite.x += (dx / dist) * speedX;
+      this.bossSprite.y += (dy / dist) * speedY;
       this.currentBoss.position = new Vector2(this.bossSprite.x, this.bossSprite.y);
-      this.bossSprite.setFlipX(dir > 0);
+
+      this.bossSprite.setFlipX(dx > 0);
+      this.bossSprite.setDepth(this.bossSprite.y);
+      if (this.bossShadow) {
+        this.bossShadow.setPosition(this.bossSprite.x, this.bossSprite.y).setDepth(this.bossSprite.y - 1);
+      }
     }
 
     this.bossAttackTimer += delta;
 
-    // Boss telegraphed attacks
     if (this.bossAttackTimer >= 2200) {
       this.bossAttackTimer = 0;
-      if (dist < 95) {
-        // Heavy hit from boss!
+      if (dist < 80) {
         this.audio.playCombatHit(true);
         CombatUseCases.executeEnemyAttack(
           { attackPower: this.currentBoss.attackPower, isAlive: () => true } as unknown as Enemy,
           this.player,
-          true // Heavy attack: can trigger tactical crisis disarm!
+          true
         );
 
         this.playerSprite.setTint(0xff4444);
@@ -781,7 +1037,7 @@ export class GameScene extends Phaser.Scene {
       stroke: '#000000',
       strokeThickness: 3,
       fontStyle: 'bold'
-    }).setOrigin(0.5).setDepth(35);
+    }).setOrigin(0.5).setDepth(340);
 
     this.bossMarkerTween = this.tweens.add({
       targets: this.bossMarker,
@@ -807,7 +1063,7 @@ export class GameScene extends Phaser.Scene {
     // Add new dropped items
     for (const item of dropped) {
       if (!this.droppedWeaponSprites.has(item.id)) {
-        const c = this.add.container(item.position.x, 255);
+        const c = this.add.container(item.position.x, 265).setDepth(265);
         const icon = this.add.image(0, 0, 'icon_sword').setScale(1.2);
         const text = this.add.text(0, -18, '[E] RECOGER', {
           fontFamily: 'monospace',
@@ -827,12 +1083,19 @@ export class GameScene extends Phaser.Scene {
     this.currentScenario = scenarioIndex;
     this.storyProgress.setAct(scenarioIndex);
 
-    // Clear existing enemies & boss
-    this.enemies.forEach(e => this.enemySprites.get(e.id)?.destroy());
+    // Clear existing enemies, shadows & boss
+    this.enemies.forEach(e => {
+      this.enemySprites.get(e.id)?.destroy();
+      this.enemyShadows.get(e.id)?.destroy();
+    });
     this.enemies = [];
     this.enemySprites.clear();
+    this.enemyShadows.clear();
+
     this.bossSprite?.destroy();
     this.bossSprite = undefined;
+    this.bossShadow?.destroy();
+    this.bossShadow = undefined;
 
     if (this.bossMarker) {
       this.bossMarker.destroy();
@@ -841,6 +1104,16 @@ export class GameScene extends Phaser.Scene {
     if (this.bossMarkerTween) {
       this.bossMarkerTween.stop();
       this.bossMarkerTween = undefined;
+    }
+
+    // Clear Elowen if moving to another scenario
+    if (this.elowenSprite) {
+      this.elowenSprite.destroy();
+      this.elowenSprite = undefined;
+      this.elowenShadow?.destroy();
+      this.elowenShadow = undefined;
+      this.elowenBadge?.destroy();
+      this.elowenBadge = undefined;
     }
 
     const introLines = this.dialogues.getScenarioIntro(this.currentScenario);
@@ -852,17 +1125,36 @@ export class GameScene extends Phaser.Scene {
       this.emberParticles.setPosition(280, 255);
       this.emberParticles.start();
 
-      // Spawn Ash Prowlers & Fanatic Monk
-      const e1 = Enemy.createAshProwler('ash_1', new Vector2(380, 260));
-      const e2 = Enemy.createFanaticMonk('monk_1', new Vector2(480, 260));
+      // Spawn Elowen NPC near the garden fence (as in reference video!)
+      this.elowenShadow = this.add.ellipse(270, 225, 24, 7, 0x000000, 0.45).setDepth(224);
+      this.elowenSprite = this.add.image(270, 225, 'elowen_npc').setOrigin(0.5, 1).setDepth(225);
+
+      this.tweens.add({
+        targets: this.elowenSprite,
+        scaleY: 1.025,
+        duration: 1200,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+      });
+
+      // Spawn Ash Prowlers & Fanatic Monk in 2.5D space
+      const e1 = Enemy.createAshProwler('ash_1', new Vector2(380, 245));
+      const e2 = Enemy.createFanaticMonk('monk_1', new Vector2(460, 280));
       this.enemies.push(e1, e2);
 
-      this.enemySprites.set(e1.id, this.add.image(e1.position.x, e1.position.y, 'ash_prowler').setOrigin(0.5, 1));
-      this.enemySprites.set(e2.id, this.add.image(e2.position.x, e2.position.y, 'fanatic_monk').setOrigin(0.5, 1));
+      const s1 = this.add.ellipse(380, 245, 26, 8, 0x000000, 0.45).setDepth(244);
+      const s2 = this.add.ellipse(460, 280, 24, 7, 0x000000, 0.45).setDepth(279);
+      this.enemyShadows.set(e1.id, s1);
+      this.enemyShadows.set(e2.id, s2);
+
+      this.enemySprites.set(e1.id, this.add.image(e1.position.x, e1.position.y, 'ash_prowler').setOrigin(0.5, 1).setDepth(245));
+      this.enemySprites.set(e2.id, this.add.image(e2.position.x, e2.position.y, 'fanatic_monk').setOrigin(0.5, 1).setDepth(280));
 
       // Boss Madre Morwenna
       this.currentBoss = Boss.createMadreMorwenna();
-      this.bossSprite = this.add.image(530, 260, 'boss_morwenna').setOrigin(0.5, 1);
+      this.bossShadow = this.add.ellipse(530, 260, 32, 9, 0x000000, 0.5).setDepth(259);
+      this.bossSprite = this.add.image(530, 260, 'boss_morwenna').setOrigin(0.5, 1).setDepth(260);
       this.createBossMarker('Madre Morwenna', 530, 260);
 
       const introText = introLines[0] ? `${introLines[0].speaker}: ${introLines[0].text}` : "Shalem: «Escenario 1: Oakhaven»";
@@ -871,16 +1163,19 @@ export class GameScene extends Phaser.Scene {
       // Londinium
       this.bgImage.setTexture('bg_londinium');
       this.audio.playBgm('bgm_londinium_city');
-      this.emberParticles.stop(); // Stop bonfire embers in city
+      this.emberParticles.stop();
 
-      // Spawn Golden Guards
-      const g1 = Enemy.createGoldenGuard('guard_1', new Vector2(400, 260));
+      // Spawn Golden Guards in 2.5D
+      const g1 = Enemy.createGoldenGuard('guard_1', new Vector2(400, 255));
       this.enemies.push(g1);
-      this.enemySprites.set(g1.id, this.add.image(g1.position.x, g1.position.y, 'golden_guard').setOrigin(0.5, 1));
+      const s1 = this.add.ellipse(400, 255, 24, 7, 0x000000, 0.45).setDepth(254);
+      this.enemyShadows.set(g1.id, s1);
+      this.enemySprites.set(g1.id, this.add.image(g1.position.x, g1.position.y, 'golden_guard').setOrigin(0.5, 1).setDepth(255));
 
-      // Boss Rex Malphas (Alaric)
+      // Boss Rex Malphas
       this.currentBoss = Boss.createRexMalphas();
-      this.bossSprite = this.add.image(520, 260, 'boss_malphas').setOrigin(0.5, 1);
+      this.bossShadow = this.add.ellipse(520, 260, 32, 9, 0x000000, 0.5).setDepth(259);
+      this.bossSprite = this.add.image(520, 260, 'boss_malphas').setOrigin(0.5, 1).setDepth(260);
       this.createBossMarker('Rex Malphas', 520, 260);
 
       const introText = introLines[0] ? `${introLines[0].speaker}: ${introLines[0].text}` : "Shalem: «Escenario 2: Londinium»";
@@ -894,7 +1189,8 @@ export class GameScene extends Phaser.Scene {
 
       // Boss Astaroth
       this.currentBoss = Boss.createAstaroth();
-      this.bossSprite = this.add.image(520, 260, 'boss_malphas').setOrigin(0.5, 1).setTint(0x220033).setScale(1.4);
+      this.bossShadow = this.add.ellipse(520, 260, 40, 10, 0x000000, 0.6).setDepth(259);
+      this.bossSprite = this.add.image(520, 260, 'boss_malphas').setOrigin(0.5, 1).setTint(0x220033).setScale(1.4).setDepth(260);
       this.createBossMarker('Astaroth', 520, 260);
 
       const introText = introLines[0] ? `${introLines[0].speaker}: ${introLines[0].text}` : "Shalem: «Escenario 3: La Catedral Invertida»";
