@@ -100,6 +100,12 @@ export class GameScene extends Phaser.Scene {
     // 4. Setup audio BGM
     this.audio.playBgm('bgm_oakhaven_night');
 
+    // 4.1 Atmospheric Vignette
+    this.add.image(320, 180, 'fx_vignette').setDisplaySize(640, 360).setDepth(15).setAlpha(0.6);
+
+    // 4.2 Ground Shadows
+    this.add.image(this.player.position.x, 260, 'shadow_ground').setDepth(0).setAlpha(0.65);
+
     // 5. Player Sprite
     const playerTex = this.player.id === 'thomas' ? 'thomas_idle' : 'khaterine_idle';
     this.playerSprite = this.add.image(this.player.position.x, this.player.position.y, playerTex).setOrigin(0.5, 1);
@@ -111,13 +117,16 @@ export class GameScene extends Phaser.Scene {
     // 7. Shalem Sprite (Cat)
     this.shalemSprite = this.add.image(this.player.position.x - 25, this.player.position.y - 10, 'shalem_cat').setOrigin(0.5, 1);
 
-    // 8. Shalem Dialogue Balloon
-    this.shalemBalloonBg = this.add.rectangle(320, 332, 540, 24, 0x140f21, 0.9).setStrokeStyle(1, 0xd4af37);
+    // 8. Shalem Dialogue Balloon with Portrait
+    this.shalemBalloonBg = this.add.rectangle(320, 332, 540, 26, 0x140f21, 0.92)
+      .setStrokeStyle(1, 0xd4af37)
+      .setDepth(25);
+
     this.shalemBalloonText = this.add.text(320, 332, 'Shalem: «¡Usa [A/D] para moverte, [J] atacar, [T] lanzar arma y [P] inventario!»', {
       fontFamily: 'sans-serif',
-      fontSize: '10px',
+      fontSize: '9.5px',
       color: '#ffd700'
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(26);
 
     // 9. Setup Inputs
     if (this.input.keyboard) {
@@ -169,10 +178,10 @@ export class GameScene extends Phaser.Scene {
     if (Phaser.Input.Keyboard.JustDown(this.key2)) this.loadScenario(2);
     if (Phaser.Input.Keyboard.JustDown(this.key3)) this.loadScenario(3);
 
-    // Open Inventory & Prophecy with [P]
+    // Open Inventory & Menu with [P]
     if (Phaser.Input.Keyboard.JustDown(this.keyP)) {
       this.scene.pause('GameScene');
-      this.scene.launch('InventoryScene', { player: this.player });
+      this.scene.launch('MenuModalScene', { player: this.player, audio: this.audio });
       return;
     }
 

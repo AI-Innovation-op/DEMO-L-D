@@ -82,13 +82,44 @@ export class HUDScene extends Phaser.Scene {
     }).setVisible(false);
 
     // 5. Combo Text
-    this.comboText = this.add.text(500, 30, '', {
+    this.comboText = this.add.text(440, 25, '', {
       fontFamily: 'Cinzel, Georgia, serif',
-      fontSize: '18px',
+      fontSize: '16px',
       color: '#ffcc00',
       stroke: '#000000',
       strokeThickness: 3
     }).setOrigin(0.5);
+
+    // 5.1 Elegant Top-Right Menu Button
+    const menuBtnBg = this.add.rectangle(590, 18, 75, 20, 0x1d142b).setStrokeStyle(1, 0xd4af37);
+    menuBtnBg.setInteractive({ useHandCursor: true });
+
+    const menuBtnText = this.add.text(590, 18, '⚙ MENÚ [P]', {
+      fontFamily: 'Cinzel, monospace',
+      fontSize: '9px',
+      color: '#ffd700',
+      fontStyle: 'bold'
+    }).setOrigin(0.5);
+
+    menuBtnBg.on('pointerover', () => {
+      menuBtnBg.setFillStyle(0x3e245c);
+      menuBtnText.setColor('#ffffff');
+    });
+
+    menuBtnBg.on('pointerout', () => {
+      menuBtnBg.setFillStyle(0x1d142b);
+      menuBtnText.setColor('#ffd700');
+    });
+
+    menuBtnBg.on('pointerdown', () => {
+      const gameScene = this.scene.get('GameScene');
+      if (gameScene && gameScene.scene.isActive()) {
+        gameScene.scene.pause();
+        this.scene.launch('MenuModalScene', {
+          player: (gameScene as unknown as { player: Character }).player
+        });
+      }
+    });
 
     // 6. Boss UI Bar Container
     this.bossContainer = this.add.container(320, 25);

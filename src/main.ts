@@ -4,6 +4,7 @@ import { TitleScene } from './presentation/scenes/TitleScene';
 import { GameScene } from './presentation/scenes/GameScene';
 import { HUDScene } from './presentation/scenes/HUDScene';
 import { ShalemMinigameScene } from './presentation/scenes/ShalemMinigameScene';
+import { MenuModalScene } from './presentation/scenes/MenuModalScene';
 import { InventoryScene } from './presentation/scenes/InventoryScene';
 
 const config: Phaser.Types.Core.GameConfig = {
@@ -18,7 +19,7 @@ const config: Phaser.Types.Core.GameConfig = {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH
   },
-  scene: [BootScene, TitleScene, GameScene, HUDScene, ShalemMinigameScene, InventoryScene]
+  scene: [BootScene, TitleScene, GameScene, HUDScene, ShalemMinigameScene, MenuModalScene, InventoryScene]
 };
 
 window.addEventListener('DOMContentLoaded', () => {
