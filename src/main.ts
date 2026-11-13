@@ -7,6 +7,7 @@ import { HUDScene } from './presentation/scenes/HUDScene';
 import { ShalemMinigameScene } from './presentation/scenes/ShalemMinigameScene';
 import { MenuModalScene } from './presentation/scenes/MenuModalScene';
 import { InventoryScene } from './presentation/scenes/InventoryScene';
+import { CharacterDialogueScene } from './presentation/scenes/CharacterDialogueScene';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -28,7 +29,8 @@ const config: Phaser.Types.Core.GameConfig = {
     HUDScene,
     ShalemMinigameScene,
     MenuModalScene,
-    InventoryScene
+    InventoryScene,
+    CharacterDialogueScene
   ]
 };
 

@@ -52,6 +52,8 @@ export class GameScene extends Phaser.Scene {
   private keyE!: Phaser.Input.Keyboard.Key; // Pick up Weapon (Option A & B)
   private keyM!: Phaser.Input.Keyboard.Key; // Shalem Minigame
   private keyP!: Phaser.Input.Keyboard.Key; // Inventory & Lore
+  private keyC!: Phaser.Input.Keyboard.Key; // Character Dialogue
+  private keyN!: Phaser.Input.Keyboard.Key; // Mute Audio
   private key1!: Phaser.Input.Keyboard.Key;
   private key2!: Phaser.Input.Keyboard.Key;
   private key3!: Phaser.Input.Keyboard.Key;
@@ -141,6 +143,8 @@ export class GameScene extends Phaser.Scene {
       this.keyE = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
       this.keyM = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M);
       this.keyP = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.P);
+      this.keyC = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.C);
+      this.keyN = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.N);
       this.key1 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ONE);
       this.key2 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TWO);
       this.key3 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.THREE);
@@ -183,6 +187,22 @@ export class GameScene extends Phaser.Scene {
       this.scene.pause('GameScene');
       this.scene.launch('MenuModalScene', { player: this.player, audio: this.audio });
       return;
+    }
+
+    // Interactive Character Dialogue with [C]
+    if (Phaser.Input.Keyboard.JustDown(this.keyC)) {
+      this.scene.pause('GameScene');
+      this.scene.launch('CharacterDialogueScene', {
+        player: this.player,
+        scenarioIndex: this.currentScenario,
+        audio: this.audio
+      });
+      return;
+    }
+
+    // Toggle Audio Mute with [N]
+    if (Phaser.Input.Keyboard.JustDown(this.keyN)) {
+      this.audio.toggleMute();
     }
 
     // Shalem Minigame [M]

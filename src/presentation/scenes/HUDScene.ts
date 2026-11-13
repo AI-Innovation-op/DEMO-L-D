@@ -4,6 +4,7 @@ import { Boss } from '../../domain/boss/Boss';
 import { EventBus } from '../../domain/shared/DomainEvent';
 import { BossUiShatteredEvent } from '../../domain/boss/Boss';
 import { FinisherStyle, FinisherTriggeredEvent } from '../../domain/combat/CombatTypes';
+import { WebAudioSoundAdapter } from '../../infrastructure/audio/WebAudioSoundAdapter';
 
 export class HUDScene extends Phaser.Scene {
   private playerHealthBg!: Phaser.GameObjects.Rectangle;
@@ -90,13 +91,55 @@ export class HUDScene extends Phaser.Scene {
       strokeThickness: 3
     }).setOrigin(0.5);
 
-    // 5.1 Elegant Top-Right Menu Button
-    const menuBtnBg = this.add.rectangle(590, 18, 75, 20, 0x1d142b).setStrokeStyle(1, 0xd4af37);
+    // 5.1 Top-Right Control Buttons (Audio Mute, Dialogue, Menu)
+    const audioAdapter = WebAudioSoundAdapter.getInstance();
+
+    // Sound Mute Toggle Button
+    const audioBtnBg = this.add.rectangle(440, 18, 75, 20, 0x1d142b).setStrokeStyle(1, 0x6e4b8a);
+    audioBtnBg.setInteractive({ useHandCursor: true });
+
+    const audioBtnText = this.add.text(440, 18, audioAdapter.getIsMuted() ? '🔇 MUTE' : '🔊 AUDIO', {
+      fontFamily: 'monospace',
+      fontSize: '8.5px',
+      color: audioAdapter.getIsMuted() ? '#ff7777' : '#aaffaa',
+      fontStyle: 'bold'
+    }).setOrigin(0.5);
+
+    audioBtnBg.on('pointerdown', () => {
+      const isMuted = audioAdapter.toggleMute();
+      audioBtnText.setText(isMuted ? '🔇 MUTE' : '🔊 AUDIO');
+      audioBtnText.setColor(isMuted ? '#ff7777' : '#aaffaa');
+    });
+
+    // Character Dialogue Button [C]
+    const dialogBtnBg = this.add.rectangle(520, 18, 70, 20, 0x1d142b).setStrokeStyle(1, 0xd4af37);
+    dialogBtnBg.setInteractive({ useHandCursor: true });
+
+    this.add.text(520, 18, '💬 CHARLA [C]', {
+      fontFamily: 'Cinzel, monospace',
+      fontSize: '8.5px',
+      color: '#ffd700',
+      fontStyle: 'bold'
+    }).setOrigin(0.5);
+
+    dialogBtnBg.on('pointerdown', () => {
+      const gameScene = this.scene.get('GameScene') as unknown as { player: Character; currentScenario?: number };
+      if (gameScene) {
+        this.scene.pause('GameScene');
+        this.scene.launch('CharacterDialogueScene', {
+          player: gameScene.player,
+          scenarioIndex: gameScene.currentScenario || 1
+        });
+      }
+    });
+
+    // Elegant Menu Button [P]
+    const menuBtnBg = this.add.rectangle(595, 18, 65, 20, 0x1d142b).setStrokeStyle(1, 0xd4af37);
     menuBtnBg.setInteractive({ useHandCursor: true });
 
-    const menuBtnText = this.add.text(590, 18, '⚙ MENÚ [P]', {
+    const menuBtnText = this.add.text(595, 18, '⚙ MENÚ [P]', {
       fontFamily: 'Cinzel, monospace',
-      fontSize: '9px',
+      fontSize: '8.5px',
       color: '#ffd700',
       fontStyle: 'bold'
     }).setOrigin(0.5);

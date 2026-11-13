@@ -1,15 +1,54 @@
 import { IAudioPort } from '../../application/ports/IAudioPort';
 
 /**
- * Procedural WebAudio sound generator.
+ * Procedural WebAudio sound generator with full Mute / Unmute capability.
  * Produces crisp arcade / medieval fantasy SFX without requiring external audio files.
  */
 export class WebAudioSoundAdapter implements IAudioPort {
+  private static instance: WebAudioSoundAdapter;
   private ctx: AudioContext | null = null;
   private currentBgmOsc: OscillatorNode | null = null;
   private bgmInterval: number | null = null;
+  private isMuted: boolean = false;
+  private lastTrackKey: string = 'bgm_oakhaven_night';
 
-  private initContext(): AudioContext {
+  constructor() {
+    // Restore mute preference from localStorage if available
+    try {
+      const savedMute = localStorage.getItem('totd_audio_muted');
+      if (savedMute !== null) {
+        this.isMuted = savedMute === 'true';
+      }
+    } catch {}
+  }
+
+  public static getInstance(): WebAudioSoundAdapter {
+    if (!WebAudioSoundAdapter.instance) {
+      WebAudioSoundAdapter.instance = new WebAudioSoundAdapter();
+    }
+    return WebAudioSoundAdapter.instance;
+  }
+
+  public toggleMute(): boolean {
+    this.isMuted = !this.isMuted;
+    try {
+      localStorage.setItem('totd_audio_muted', String(this.isMuted));
+    } catch {}
+
+    if (this.isMuted) {
+      this.stopBgm();
+    } else {
+      this.playBgm(this.lastTrackKey);
+    }
+    return this.isMuted;
+  }
+
+  public getIsMuted(): boolean {
+    return this.isMuted;
+  }
+
+  private initContext(): AudioContext | null {
+    if (this.isMuted) return null;
     if (!this.ctx) {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       this.ctx = new AudioCtx();
@@ -21,19 +60,22 @@ export class WebAudioSoundAdapter implements IAudioPort {
   }
 
   public playBgm(trackKey: string, _loop: boolean = true): void {
+    this.lastTrackKey = trackKey;
+    if (this.isMuted) return;
+
     try {
       this.stopBgm();
       const ctx = this.initContext();
+      if (!ctx) return;
 
-      // Simple procedural ambient synth loop for arcade vibe
       let noteSeq = [220, 247, 261, 293, 329, 293, 261, 196]; // A minor medieval mode
       if (trackKey.includes('boss')) {
-        noteSeq = [164, 174, 164, 155, 146, 155, 164, 220]; // Dissonant tense boss motif
+        noteSeq = [164, 174, 164, 155, 146, 155, 164, 220]; // Dissonant boss motif
       }
 
       let step = 0;
       this.bgmInterval = window.setInterval(() => {
-        if (!this.ctx) return;
+        if (!this.ctx || this.isMuted) return;
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
 
@@ -50,9 +92,7 @@ export class WebAudioSoundAdapter implements IAudioPort {
         osc.stop(ctx.currentTime + 0.36);
         step++;
       }, 350);
-    } catch {
-      // Audio autoplay policy fallback
-    }
+    } catch {}
   }
 
   public stopBgm(): void {
@@ -68,8 +108,10 @@ export class WebAudioSoundAdapter implements IAudioPort {
   }
 
   public playSfx(sfxKey: string): void {
+    if (this.isMuted) return;
     try {
       const ctx = this.initContext();
+      if (!ctx) return;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
 
@@ -95,14 +137,14 @@ export class WebAudioSoundAdapter implements IAudioPort {
         osc.start(now);
         osc.stop(now + 0.18);
       }
-    } catch {
-      // Safe fallback
-    }
+    } catch {}
   }
 
   public playCombatHit(isCritical: boolean = false): void {
+    if (this.isMuted) return;
     try {
       const ctx = this.initContext();
+      if (!ctx) return;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
 
@@ -125,11 +167,12 @@ export class WebAudioSoundAdapter implements IAudioPort {
   }
 
   public playDisarmSound(): void {
+    if (this.isMuted) return;
     try {
       const ctx = this.initContext();
+      if (!ctx) return;
       const now = ctx.currentTime;
 
-      // Metallic clang and clatter
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'sawtooth';
@@ -147,8 +190,10 @@ export class WebAudioSoundAdapter implements IAudioPort {
   }
 
   public playWeaponThrowSound(): void {
+    if (this.isMuted) return;
     try {
       const ctx = this.initContext();
+      if (!ctx) return;
       const now = ctx.currentTime;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -168,8 +213,10 @@ export class WebAudioSoundAdapter implements IAudioPort {
   }
 
   public playFinisherSound(isCinematic: boolean): void {
+    if (this.isMuted) return;
     try {
       const ctx = this.initContext();
+      if (!ctx) return;
       const now = ctx.currentTime;
 
       const osc1 = ctx.createOscillator();
@@ -189,8 +236,10 @@ export class WebAudioSoundAdapter implements IAudioPort {
   }
 
   public playBossPhaseChangeSound(): void {
+    if (this.isMuted) return;
     try {
       const ctx = this.initContext();
+      if (!ctx) return;
       const now = ctx.currentTime;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();

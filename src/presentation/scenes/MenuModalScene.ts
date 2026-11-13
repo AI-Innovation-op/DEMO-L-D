@@ -388,7 +388,7 @@ export class MenuModalScene extends Phaser.Scene {
       const col = index % 2;
       const row = Math.floor(index / 2);
       const cx = -135 + col * 270;
-      const cy = -65 + row * 38;
+      const cy = -65 + row * 32;
 
       const keyPill = this.add.rectangle(cx - 70, cy, 95, 18, 0x2e1f42).setStrokeStyle(1, 0x6e4b8a);
       const keyLabel = this.add.text(cx - 70, cy, c.key, {
@@ -407,6 +407,29 @@ export class MenuModalScene extends Phaser.Scene {
 
       this.contentContainer.add([keyPill, keyLabel, descLabel]);
     });
+
+    // Audio Mute Quick Toggle Button inside Controls Tab
+    const audioAdapter = WebAudioSoundAdapter.getInstance();
+    const isMuted = audioAdapter.getIsMuted();
+    const muteTogglePill = this.add.rectangle(0, 95, 260, 22, isMuted ? 0x551a1a : 0x1f3d24)
+      .setStrokeStyle(1, isMuted ? 0xff7777 : 0x77ff77)
+      .setInteractive({ useHandCursor: true });
+
+    const muteToggleText = this.add.text(0, 95, isMuted ? '🔇 AUDIO: SILENCIADO (Clic para activar)' : '🔊 AUDIO: ACTIVADO (Clic para silenciar)', {
+      fontFamily: 'monospace',
+      fontSize: '8.5px',
+      color: '#ffffff',
+      fontStyle: 'bold'
+    }).setOrigin(0.5);
+
+    muteTogglePill.on('pointerdown', () => {
+      const mutedNow = audioAdapter.toggleMute();
+      muteTogglePill.setFillStyle(mutedNow ? 0x551a1a : 0x1f3d24);
+      muteTogglePill.setStrokeStyle(1, mutedNow ? 0xff7777 : 0x77ff77);
+      muteToggleText.setText(mutedNow ? '🔇 AUDIO: SILENCIADO (Clic para activar)' : '🔊 AUDIO: ACTIVADO (Clic para silenciar)');
+    });
+
+    this.contentContainer.add([muteTogglePill, muteToggleText]);
   }
 
   private closeMenu(): void {
