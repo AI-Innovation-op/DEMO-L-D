@@ -1,0 +1,210 @@
+import Phaser from 'phaser';
+import { CharacterId } from '../../domain/character/CharacterEnums';
+import { WebAudioSoundAdapter } from '../../infrastructure/audio/WebAudioSoundAdapter';
+
+export class StoryIntroScene extends Phaser.Scene {
+  private characterId: CharacterId = 'thomas';
+  private audio!: WebAudioSoundAdapter;
+
+  private currentSlideIndex: number = 0;
+  private dialogText!: Phaser.GameObjects.Text;
+  private slideIndicator!: Phaser.GameObjects.Text;
+
+  private fullTextToType: string = '';
+  private currentTypedLength: number = 0;
+  private typewriterTimer?: Phaser.Time.TimerEvent;
+  private isTyping: boolean = false;
+
+  private slides = [
+    {
+      title: 'I. EL NARRADOR DEL ABISMO',
+      text: '«Permíteme ilustrarte, ingenuo mortal. Mi nombre es Shalem, Gran Marqués de las Brasas Susurrantes... aunque por azares del destino ahora tenga el incomprendido —pero indiscutiblemente glorioso— aspecto de un felino negro.»'
+    },
+    {
+      title: 'II. EL REINO DE ALBION Y EL CÁLIZ SOLAR',
+      text: '«Esta tierra se llama Albion. Durante siglos, la Iglesia del Cáliz Solar ha gobernado bajo una máscara de santidad, alimentando hogueras nocturnas con la fe de los inocentes para ocultar su verdadero pacto con el demonio Astaroth.»'
+    },
+    {
+      title: 'III. LA CESTA DE LOS DOS HUÉRFANOS',
+      text: '«Hace dieciocho años, dos bebés llegaron a la parroquia de Oakhaven en la misma cesta de mimbre: Thomas y Elowen. Para salvar al niño, Khaterine desvió el aura mágica... condenando a Elowen a pasar su vida vigilada como la falsa elegida.»'
+    },
+    {
+      title: 'IV. LA VERDAD DE LA PROFECÍA',
+      text: '«Pero la Profecía Original no hablaba de maldad. Decía algo muy distinto: "Solo la Oscuridad que elija amar será la única Luz en las Tinieblas". ¡Despierta! ¡Ha llegado la hora de empuñar tu fuego y descubrir quién eres!»'
+    }
+  ];
+
+  constructor() {
+    super('StoryIntroScene');
+  }
+
+  public init(data: { characterId?: CharacterId }): void {
+    this.characterId = data.characterId || 'thomas';
+    this.audio = new WebAudioSoundAdapter();
+    this.currentSlideIndex = 0;
+  }
+
+  public create(): void {
+    // 1. Atmospheric Gothic Background
+    this.add.image(320, 180, 'bg_oakhaven').setDisplaySize(640, 360).setAlpha(0.45);
+
+    // Dark vignette overlay
+    this.add.image(320, 180, 'fx_vignette').setDisplaySize(640, 360).setAlpha(0.85);
+
+    // Ambient floating embers & fog
+    this.add.particles(320, 240, 'particle_ember', {
+      speedX: { min: -20, max: 20 },
+      speedY: { min: -30, max: -70 },
+      scale: { start: 1, end: 0.2 },
+      alpha: { start: 0.8, end: 0 },
+      lifespan: 2500,
+      frequency: 250
+    });
+
+    // 2. Center Stage: Shalem on Ancient Pedestal
+    this.add.rectangle(320, 160, 100, 35, 0x1b1429).setStrokeStyle(1, 0x7a5a3a);
+    const shalemSprite = this.add.image(320, 142, 'shalem_cat').setScale(2.8);
+
+    // Floating idle animation for Shalem
+    this.tweens.add({
+      targets: shalemSprite,
+      y: 138,
+      duration: 1500,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
+
+    // Pedestal runes
+    this.add.text(320, 160, '✦ SHALEM ✦', {
+      fontFamily: 'Cinzel, monospace',
+      fontSize: '8px',
+      color: '#ffd700'
+    }).setOrigin(0.5);
+
+    // 3. Skip Intro Button (Top Right)
+    const skipBtn = this.add.text(615, 18, 'SALTAR INTRO [ESC] >>', {
+      fontFamily: 'monospace',
+      fontSize: '10px',
+      color: '#cbb8e0',
+      backgroundColor: 'rgba(20, 12, 33, 0.85)',
+      padding: { x: 8, y: 4 }
+    }).setOrigin(1, 0.5).setInteractive({ useHandCursor: true });
+
+    skipBtn.on('pointerover', () => skipBtn.setColor('#ffd700'));
+    skipBtn.on('pointerout', () => skipBtn.setColor('#cbb8e0'));
+    skipBtn.on('pointerdown', () => this.startGameplay());
+
+    // 4. Large Story Dialogue Box (Bottom)
+    this.add.rectangle(320, 280, 580, 120, 0x110c1c, 0.94).setStrokeStyle(2, 0xd4af37);
+    this.add.rectangle(320, 280, 572, 112, 0x000000, 0).setStrokeStyle(1, 0x5a3e75);
+
+    // Shalem Portrait inside Dialog Box
+    this.add.image(62, 275, 'portrait_shalem').setScale(2.0);
+
+    // Speaker Name Banner
+    this.add.text(105, 230, 'SHALEM — GRAN MARQUÉS DE LAS BRASAS', {
+      fontFamily: 'Cinzel, Georgia, serif',
+      fontSize: '10.5px',
+      color: '#ffd700',
+      fontStyle: 'bold'
+    });
+
+    // Slide Title Indicator
+    this.slideIndicator = this.add.text(585, 230, '1 / 4', {
+      fontFamily: 'monospace',
+      fontSize: '9px',
+      color: '#c2b0d6'
+    }).setOrigin(1, 0);
+
+    // Dialogue Body Text
+    this.dialogText = this.add.text(105, 250, '', {
+      fontFamily: 'serif',
+      fontSize: '11px',
+      color: '#f0e6ff',
+      wordWrap: { width: 480 },
+      lineSpacing: 4
+    });
+
+    // Advance Button
+    const nextBtn = this.add.text(585, 325, 'CONTINUAR [ESPACIO / CLIC] ▶', {
+      fontFamily: 'monospace',
+      fontSize: '9px',
+      color: '#ffd700',
+      backgroundColor: '#2e1d42',
+      padding: { x: 8, y: 3 }
+    }).setOrigin(1, 0.5).setInteractive({ useHandCursor: true });
+
+    nextBtn.on('pointerdown', () => this.handleAdvance());
+
+    // 5. Input Controls
+    this.input.keyboard?.on('keydown-SPACE', () => this.handleAdvance());
+    this.input.keyboard?.on('keydown-ENTER', () => this.handleAdvance());
+    this.input.keyboard?.on('keydown-ESC', () => this.startGameplay());
+    this.input.keyboard?.on('keydown-S', () => this.startGameplay());
+    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (pointer.y > 200) {
+        this.handleAdvance();
+      }
+    });
+
+    // Play BGM and start first slide
+    this.audio.playBgm('bgm_oakhaven_night');
+    this.showSlide(0);
+  }
+
+  private showSlide(index: number): void {
+    if (index >= this.slides.length) {
+      this.startGameplay();
+      return;
+    }
+
+    this.currentSlideIndex = index;
+    const slide = this.slides[index];
+
+    this.slideIndicator.setText(`${index + 1} / ${this.slides.length} — ${slide.title}`);
+    this.fullTextToType = slide.text;
+    this.currentTypedLength = 0;
+    this.dialogText.setText('');
+    this.isTyping = true;
+
+    if (this.typewriterTimer) {
+      this.typewriterTimer.remove();
+    }
+
+    this.audio.playSfx('dodge');
+
+    this.typewriterTimer = this.time.addEvent({
+      delay: 24,
+      repeat: this.fullTextToType.length - 1,
+      callback: () => {
+        this.currentTypedLength++;
+        this.dialogText.setText(this.fullTextToType.substring(0, this.currentTypedLength));
+        if (this.currentTypedLength >= this.fullTextToType.length) {
+          this.isTyping = false;
+        }
+      }
+    });
+  }
+
+  private handleAdvance(): void {
+    if (this.isTyping) {
+      // Complete current typing instantly
+      if (this.typewriterTimer) this.typewriterTimer.remove();
+      this.dialogText.setText(this.fullTextToType);
+      this.isTyping = false;
+    } else {
+      // Move to next slide
+      this.showSlide(this.currentSlideIndex + 1);
+    }
+  }
+
+  private startGameplay(): void {
+    this.audio.playFinisherSound(false);
+    this.cameras.main.fade(350, 0, 0, 0);
+    this.time.delayedCall(360, () => {
+      this.scene.start('GameScene', { characterId: this.characterId });
+      this.scene.launch('HUDScene');
+    });
+  }
+}

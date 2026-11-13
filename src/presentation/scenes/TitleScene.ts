@@ -144,7 +144,6 @@ export class TitleScene extends Phaser.Scene {
   }
 
   private startGame(): void {
-    this.scene.start('GameScene', { characterId: this.selectedCharacter });
-    this.scene.launch('HUDScene');
+    this.scene.start('StoryIntroScene', { characterId: this.selectedCharacter });
   }
 }

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { BootScene } from './presentation/scenes/BootScene';
 import { TitleScene } from './presentation/scenes/TitleScene';
+import { StoryIntroScene } from './presentation/scenes/StoryIntroScene';
 import { GameScene } from './presentation/scenes/GameScene';
 import { HUDScene } from './presentation/scenes/HUDScene';
 import { ShalemMinigameScene } from './presentation/scenes/ShalemMinigameScene';
@@ -19,7 +20,16 @@ const config: Phaser.Types.Core.GameConfig = {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH
   },
-  scene: [BootScene, TitleScene, GameScene, HUDScene, ShalemMinigameScene, MenuModalScene, InventoryScene]
+  scene: [
+    BootScene,
+    TitleScene,
+    StoryIntroScene,
+    GameScene,
+    HUDScene,
+    ShalemMinigameScene,
+    MenuModalScene,
+    InventoryScene
+  ]
 };
 
 window.addEventListener('DOMContentLoaded', () => {
