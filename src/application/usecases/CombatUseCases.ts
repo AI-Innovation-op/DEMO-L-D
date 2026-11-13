@@ -102,9 +102,13 @@ export class CombatUseCases {
   /**
    * Enemy hits Player.
    */
-  public static executeEnemyAttack(enemy: Enemy, player: Character, isHeavyAttack: boolean = false): void {
-    if (!enemy.isAlive()) return;
-    player.takeHit(enemy.attackPower, isHeavyAttack);
+  public static executeEnemyAttack(
+    enemy: Enemy,
+    player: Character,
+    isHeavyAttack: boolean = false
+  ): { absorbedByGuard: number; damageToHealth: number } {
+    if (!enemy.isAlive()) return { absorbedByGuard: 0, damageToHealth: 0 };
+    return player.takeHit(enemy.attackPower, isHeavyAttack);
   }
 
   /**

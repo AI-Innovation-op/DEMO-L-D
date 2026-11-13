@@ -119,7 +119,7 @@ export class HUDScene extends Phaser.Scene {
     }).setVisible(false);
 
     // 5. Combo Text — Dedicated Arcade Position (Center-Top, below Boss Bar)
-    this.comboText = this.add.text(285, 46, '', {
+    this.comboText = this.add.text(305, 46, '', {
       fontFamily: 'Cinzel, Georgia, serif',
       fontSize: '13px',
       color: '#ffd700',
@@ -222,12 +222,12 @@ export class HUDScene extends Phaser.Scene {
       }
     });
 
-    // 6. Boss UI Bar Container — Prominent Center Top (Depth 40, width 180, completely detached from controls)
-    this.bossContainer = this.add.container(285, 22).setDepth(40);
-    const bossBg = this.add.rectangle(0, 0, 180, 12, 0x220505).setStrokeStyle(1, 0x992222);
-    this.bossHealthFill = this.add.rectangle(-90, 0, 180, 12, 0xdd2222).setOrigin(0, 0.5);
+    // 6. Boss UI Bar Container — Prominent Center Top (Depth 40, width 160, completely isolated from health and controls)
+    this.bossContainer = this.add.container(305, 22).setDepth(40);
+    const bossBg = this.add.rectangle(0, 0, 160, 12, 0x220505).setStrokeStyle(1, 0x992222);
+    this.bossHealthFill = this.add.rectangle(-80, 0, 160, 12, 0xdd2222).setOrigin(0, 0.5);
 
-    this.bossTitleText = this.add.text(0, -12, 'MADRE MORWENNA — VIGÍA DE LA PIRA', {
+    this.bossTitleText = this.add.text(0, -12, 'MADRE MORWENNA', {
       fontFamily: 'Cinzel, serif',
       fontSize: '8px',
       color: '#ffddaa',
@@ -357,8 +357,8 @@ export class HUDScene extends Phaser.Scene {
       this.bossContainer.setVisible(true);
       if (!this.isBossUiShattered) {
         const bossRatio = Math.max(0, currentBoss.health / currentBoss.maxHealth);
-        this.bossHealthFill.setSize(Math.max(1, 180 * bossRatio), 12);
-        this.bossTitleText.setText(`${currentBoss.name.toUpperCase()} — ${currentBoss.title}`);
+        this.bossHealthFill.setSize(Math.max(1, 160 * bossRatio), 12);
+        this.bossTitleText.setText(currentBoss.name.toUpperCase());
         this.bossHealthText.setText(`${currentBoss.health} / ${currentBoss.maxHealth} HP`);
       }
     } else if (!this.isBossUiShattered) {
@@ -372,7 +372,7 @@ export class HUDScene extends Phaser.Scene {
 
     // Shatter into golden infinite bar
     this.bossHealthFill.setFillStyle(0xffd700);
-    this.bossHealthFill.setSize(180, 12);
+    this.bossHealthFill.setSize(160, 12);
     this.bossTitleText.setText(`⚠ ${decreeTitle} ⚠`);
     this.bossTitleText.setColor('#ffe066');
     this.bossHealthText.setText('∞ / ∞ (VIDA INFINITA)');

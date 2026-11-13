@@ -90,6 +90,7 @@ export class GameScene extends Phaser.Scene {
   private attackCooldown: number = 0;
   private enemyAttackTimer: number = 0;
   private bossAttackTimer: number = 0;
+  private timeSinceLastHit: number = 0;
 
   constructor() {
     super('GameScene');
@@ -214,6 +215,12 @@ export class GameScene extends Phaser.Scene {
   public update(_time: number, delta: number): void {
     if (this.player.state === CharacterState.DEAD) {
       return;
+    }
+
+    this.timeSinceLastHit += delta;
+    // Posture (Guardia / Escudo) regenerates smoothly if not hit for 2.2 seconds!
+    if (this.timeSinceLastHit >= 2200 && this.player.stats.posture < this.player.stats.maxPosture) {
+      this.player.stats.restorePosture(25 * (delta / 1000));
     }
 
     this.handleInput(delta);
@@ -962,12 +969,21 @@ export class GameScene extends Phaser.Scene {
         sprite.setPosition(newX, newY).setDepth(newY);
         if (shadow) shadow.setPosition(newX, newY).setDepth(newY - 1);
       } else if (dist <= 38 && this.enemyAttackTimer >= 1400) {
-        // Enemy attacks player!
-        CombatUseCases.executeEnemyAttack(enemy, this.player, false);
-        this.audio.playCombatHit(false);
+        // Enemy attacks player: guardia/shield absorbs first!
+        const hitRes = CombatUseCases.executeEnemyAttack(enemy, this.player, false);
+        this.timeSinceLastHit = 0;
 
-        this.playerSprite.setTint(0xff5555);
-        this.time.delayedCall(120, () => this.playerSprite.clearTint());
+        if (hitRes.damageToHealth > 0) {
+          this.audio.playCombatHit(false);
+          this.playerSprite.setTint(0xff5555);
+          this.time.delayedCall(120, () => this.playerSprite.clearTint());
+          this.spawnDamageNumber(this.playerSprite.x, this.playerSprite.y - 45, hitRes.damageToHealth, false, '#ff4444');
+        } else if (hitRes.absorbedByGuard > 0) {
+          this.audio.playSfx('block');
+          this.playerSprite.setTint(0x55aaff);
+          this.time.delayedCall(120, () => this.playerSprite.clearTint());
+          this.spawnDamageNumber(this.playerSprite.x, this.playerSprite.y - 45, hitRes.absorbedByGuard, false, '#55aaff');
+        }
         this.enemyAttackTimer = 0;
       }
     }
@@ -1006,16 +1022,25 @@ export class GameScene extends Phaser.Scene {
     if (this.bossAttackTimer >= 2200) {
       this.bossAttackTimer = 0;
       if (dist < 80) {
-        this.audio.playCombatHit(true);
-        CombatUseCases.executeEnemyAttack(
+        const hitRes = CombatUseCases.executeEnemyAttack(
           { attackPower: this.currentBoss.attackPower, isAlive: () => true } as unknown as Enemy,
           this.player,
           true
         );
+        this.timeSinceLastHit = 0;
 
-        this.playerSprite.setTint(0xff4444);
-        this.time.delayedCall(140, () => this.playerSprite.clearTint());
-        this.cameras.main.shake(250, 0.015);
+        if (hitRes.damageToHealth > 0) {
+          this.audio.playCombatHit(true);
+          this.playerSprite.setTint(0xff4444);
+          this.time.delayedCall(140, () => this.playerSprite.clearTint());
+          this.cameras.main.shake(250, 0.015);
+          this.spawnDamageNumber(this.playerSprite.x, this.playerSprite.y - 50, hitRes.damageToHealth, true, '#ff3333');
+        } else if (hitRes.absorbedByGuard > 0) {
+          this.audio.playSfx('block');
+          this.playerSprite.setTint(0x55aaff);
+          this.time.delayedCall(120, () => this.playerSprite.clearTint());
+          this.spawnDamageNumber(this.playerSprite.x, this.playerSprite.y - 50, hitRes.absorbedByGuard, false, '#55aaff');
+        }
       }
     }
   }

@@ -159,40 +159,71 @@ export class Character {
     }
   }
 
-  public takeHit(amount: number, isHeavyAttack: boolean = false): void {
+  public takeHit(amount: number, isHeavyAttack: boolean = false): { absorbedByGuard: number; damageToHealth: number } {
     if (this.state === CharacterState.DODGING || this.state === CharacterState.DEAD) {
-      return; // Invulnerable while dodging
+      return { absorbedByGuard: 0, damageToHealth: 0 }; // Invulnerable while dodging
     }
 
-    if (this.state === CharacterState.BLOCKING) {
-      // Blocking reduces damage and takes posture hit
-      const postureBroken = this.stats.damagePosture(amount * 1.5);
-      const reducedDamage = Math.max(1, Math.round(amount * 0.25));
-      this.stats.takeDamage(reducedDamage);
+    let absorbedByGuard = 0;
+    let damageToHealth = 0;
 
-      if (postureBroken || (isHeavyAttack && this.stats.isVulnerableToHeavyHits)) {
-        // Guard broken! Tactical Crisis disarm
+    if (this.state === CharacterState.BLOCKING) {
+      // Actively blocking with [L]: posture absorbs incoming attack with high efficiency
+      const blockDamage = Math.max(1, Math.round(amount * 0.7));
+      if (this.stats.posture > 0) {
+        absorbedByGuard = Math.min(this.stats.posture, blockDamage);
+        const postureBroken = this.stats.damagePosture(blockDamage);
+
+        if (postureBroken || (isHeavyAttack && this.stats.isVulnerableToHeavyHits)) {
+          // Posture broken or heavy attack crisis!
+          damageToHealth = Math.max(1, Math.round(blockDamage * 0.3));
+          this.stats.takeDamage(damageToHealth);
+          this.state = CharacterState.STUNNED;
+          this.disarmManager.triggerTacticalCrisis(this.position);
+        }
+      } else {
+        // Posture is 0: takes chip damage
+        damageToHealth = this.stats.takeDamage(Math.round(amount * 0.4));
+      }
+    } else {
+      // Normal hit: GUARDIA (Armadura/Escudo) absorbs damage FIRST!
+      if (this.stats.posture > 0) {
+        if (this.stats.posture >= amount) {
+          // Fully absorbed by Guardia! Health is 100% protected!
+          absorbedByGuard = amount;
+          this.stats.damagePosture(amount);
+          damageToHealth = 0;
+        } else {
+          // Guardia is broken, overflow hits health
+          absorbedByGuard = this.stats.posture;
+          const overflow = amount - this.stats.posture;
+          this.stats.damagePosture(absorbedByGuard); // sets posture to 0
+          damageToHealth = this.stats.takeDamage(overflow);
+        }
+      } else {
+        // Guardia is 0: Full direct damage to health
+        damageToHealth = this.stats.takeDamage(amount);
+      }
+
+      // Heavy attack on fragile Thomas can disarm him if guard breaks
+      if (isHeavyAttack && this.stats.isVulnerableToHeavyHits && this.stats.posture === 0) {
         this.state = CharacterState.STUNNED;
         this.disarmManager.triggerTacticalCrisis(this.position);
       }
-      return;
     }
 
-    // Direct hit!
-    const effectiveDamage = this.stats.takeDamage(amount);
-    EventBus.getInstance().publish(
-      new CharacterDamagedEvent(this.id, effectiveDamage, this.stats.health)
-    );
-
-    // Heavy attack on fragile Thomas can disarm him directly
-    if (isHeavyAttack && this.stats.isVulnerableToHeavyHits) {
-      this.disarmManager.triggerTacticalCrisis(this.position);
+    if (damageToHealth > 0) {
+      EventBus.getInstance().publish(
+        new CharacterDamagedEvent(this.id, damageToHealth, this.stats.health)
+      );
     }
 
     if (!this.stats.isAlive()) {
       this.state = CharacterState.DEAD;
       EventBus.getInstance().publish(new CharacterDiedEvent(this.id));
     }
+
+    return { absorbedByGuard, damageToHealth };
   }
 
   public throwEquippedWeapon(): boolean {
