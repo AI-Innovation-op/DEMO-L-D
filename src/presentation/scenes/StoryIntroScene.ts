@@ -211,7 +211,6 @@ export class StoryIntroScene extends Phaser.Scene {
         tipText: '«Khaterine: No te apartes del camino empedrado. Los acechadores vigilan la niebla.»',
         minDurationMs: 2000
       });
-      this.scene.launch('HUDScene');
     });
   }
 }

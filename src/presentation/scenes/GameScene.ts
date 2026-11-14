@@ -58,6 +58,7 @@ export class GameScene extends Phaser.Scene {
 
   // Environment & Scenarios
   private currentScenario: number = 1;
+  private initialScenario: number = 1;
 
   // Floating text / Shalem dialogue balloon
   private shalemBalloonText!: Phaser.GameObjects.Text;
@@ -96,8 +97,9 @@ export class GameScene extends Phaser.Scene {
     super('GameScene');
   }
 
-  public init(data: { characterId?: CharacterId }): void {
+  public init(data: { characterId?: CharacterId; scenarioIndex?: number }): void {
     const charId = data.characterId || 'thomas';
+    this.initialScenario = data.scenarioIndex || 1;
     if (charId === 'thomas') {
       this.player = Character.createThomas();
       this.allyChar = Character.createKhaterine();
@@ -208,8 +210,13 @@ export class GameScene extends Phaser.Scene {
       this.key3 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.THREE);
     }
 
-    // Load Initial Scenario 1 (Oakhaven)
-    this.loadScenario(1);
+    // 11. Launch HUDScene if not already running
+    if (!this.scene.isActive('HUDScene')) {
+      this.scene.launch('HUDScene');
+    }
+
+    // Load Initial Scenario (Oakhaven, Londinium or Catedral Invertida)
+    this.loadScenario(this.initialScenario);
   }
 
   public update(_time: number, delta: number): void {
@@ -760,7 +767,7 @@ export class GameScene extends Phaser.Scene {
         bannerBg.destroy();
         bannerTitle.destroy();
         bannerPrompt.destroy();
-        this.loadScenario(2);
+        this.transitionToActWithLoading(2);
       });
     } else if (this.currentScenario === 2) {
       this.storyProgress.completeMilestone('act2_boss');
@@ -797,7 +804,7 @@ export class GameScene extends Phaser.Scene {
         bannerBg.destroy();
         bannerTitle.destroy();
         bannerPrompt.destroy();
-        this.loadScenario(3);
+        this.transitionToActWithLoading(3);
       });
     } else {
       this.storyProgress.completeMilestone('act3_astaroth');
@@ -837,9 +844,50 @@ export class GameScene extends Phaser.Scene {
       }).setOrigin(0.5).setDepth(361).setInteractive({ useHandCursor: true });
 
       replayBtn.on('pointerdown', () => {
-        this.loadScenario(1);
+        this.transitionToActWithLoading(1);
       });
     }
+  }
+
+  private transitionToActWithLoading(targetAct: number): void {
+    if (this.scene.isActive('HUDScene')) {
+      this.scene.stop('HUDScene');
+    }
+
+    const configs: Record<number, { image: string; title: string; tip: string }> = {
+      1: {
+        image: 'loading_pyre_remains',
+        title: 'ACTO I — OAKHAVEN: LAS HOGUERAS DE LA INQUISICIÓN',
+        tip: '«Códice de Albion: En las afueras de Oakhaven, la niebla oculta inquisidores y secretos olvidados.»'
+      },
+      2: {
+        image: 'loading_londinium_gate',
+        title: 'ACTO II — LONDINIUM: LA CIUDADELA DORADA',
+        tip: '«Códice de Albion: El Rex Malphas domina Londinium con mano de hierro y decretos solares tiránicos.»'
+      },
+      3: {
+        image: 'loading_shalem_wall',
+        title: 'ACTO III — LA CATEDRAL INVERTIDA: EL ABISMO',
+        tip: '«Shalem: La gravedad se quiebra en este lugar sacrílego. ¡Prepárate para enfrentar al demonio Astaroth!»'
+      }
+    };
+
+    const cfg = configs[targetAct] || configs[1];
+
+    this.cameras.main.fade(300, 0, 0, 0);
+    this.time.delayedCall(320, () => {
+      this.scene.start('LoadingScene', {
+        targetScene: 'GameScene',
+        targetData: {
+          characterId: this.player.id,
+          scenarioIndex: targetAct
+        },
+        imageKey: cfg.image,
+        chapterTitle: cfg.title,
+        tipText: cfg.tip,
+        minDurationMs: 2000
+      });
+    });
   }
 
   private executeWeaponThrow(): void {
