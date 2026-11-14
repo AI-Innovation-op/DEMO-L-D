@@ -7,23 +7,13 @@ export class BootScene extends Phaser.Scene {
   }
 
   public preload(): void {
-    // Generate all procedural pixel art assets as baseline/fallback
-    ProceduralAssetGenerator.generateAll(this);
+    // 1. Custom character sprites from public/assets/characters/
+    this.load.image('thomas_idle', '/assets/characters/thomas_idle.png');
+    this.load.image('thomas_attack', '/assets/characters/thomas_attack.png');
+    this.load.image('thomas_disarmed', '/assets/characters/thomas_disarmed.png');
+    this.load.image('portrait_thomas', '/assets/characters/portrait_thomas.png');
 
-    // Auto-detect and load any custom PNG sprites placed in public/assets/characters/
-    const customPngs = import.meta.glob('/public/assets/characters/*.png', { eager: true, query: '?url', import: 'default' });
-    for (const path in customPngs) {
-      const match = path.match(/\/([^/]+)\.png$/);
-      if (match) {
-        const key = match[1];
-        if (this.textures.exists(key)) {
-          this.textures.remove(key);
-        }
-        this.load.image(key, customPngs[path] as string);
-      }
-    }
-
-    // Load the official artwork images from the public folder
+    // 2. Load the official artwork images from the public folder
     this.load.image('loading_shalem_wall', '/assets/loading/loading_shalem_wall.jpg');
     this.load.image('loading_bridge_journey', '/assets/loading/loading_bridge_journey.jpg');
     this.load.image('loading_londinium_gate', '/assets/loading/loading_londinium_gate.jpg');
@@ -32,6 +22,9 @@ export class BootScene extends Phaser.Scene {
   }
 
   public create(): void {
+    // Generate all procedural pixel art assets as baseline/fallback for any missing textures
+    ProceduralAssetGenerator.generateAll(this);
+
     // Start with the artwork loading screen before entering TitleScene
     this.scene.start('LoadingScene', {
       targetScene: 'TitleScene',

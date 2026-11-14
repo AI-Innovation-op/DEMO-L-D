@@ -100,7 +100,7 @@ export class TitleScene extends Phaser.Scene {
       this.updateCardSelection();
     });
 
-    const sprite = this.add.image(0, -35, textureKey).setScale(1.4);
+    const sprite = this.add.image(0, -32, textureKey).setDisplaySize(42, 68);
     const title = this.add.text(0, 15, name, {
       fontFamily: 'Cinzel, Georgia, serif',
       fontSize: '14px',

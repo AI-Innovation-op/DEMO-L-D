@@ -136,9 +136,9 @@ export class CharacterDialogueScene extends Phaser.Scene {
       .setStrokeStyle(1, 0x5a3e75);
 
     // Left Portrait Box
-    this.leftPortrait = this.add.image(65, 275, 'portrait_thomas').setScale(2.2);
+    this.leftPortrait = this.add.image(65, 275, 'portrait_thomas').setDisplaySize(68, 68);
     // Right Portrait Box
-    this.rightPortrait = this.add.image(575, 275, 'khaterine_idle').setScale(1.8).setVisible(false);
+    this.rightPortrait = this.add.image(575, 275, 'khaterine_idle').setDisplaySize(68, 68).setVisible(false);
 
     // Speaker Name Banner
     this.speakerNameText = this.add.text(115, 225, 'THOMAS', {
@@ -202,10 +202,10 @@ export class CharacterDialogueScene extends Phaser.Scene {
 
     // Configure portraits
     if (beat.portraitSide === 'left') {
-      this.leftPortrait.setTexture(beat.portraitKey).setVisible(true).setAlpha(1.0);
+      this.leftPortrait.setTexture(beat.portraitKey).setDisplaySize(68, 68).setVisible(true).setAlpha(1.0);
       this.rightPortrait.setAlpha(0.35);
     } else {
-      this.rightPortrait.setTexture(beat.portraitKey).setVisible(true).setAlpha(1.0);
+      this.rightPortrait.setTexture(beat.portraitKey).setDisplaySize(68, 68).setVisible(true).setAlpha(1.0);
       this.leftPortrait.setAlpha(0.35);
     }
 
