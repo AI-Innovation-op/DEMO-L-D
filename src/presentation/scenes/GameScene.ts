@@ -1242,7 +1242,7 @@ export class GameScene extends Phaser.Scene {
         color: '#e699ff'
       }).setOrigin(0.5).setDepth(361);
 
-      this.victoryBannerPrompt = this.add.text(320, 182, 'PULSA [ENTER] O HAZ CLIC AQUÍ PARA REINICIAR EL VIAJE [1] ▶', {
+      this.victoryBannerPrompt = this.add.text(320, 182, 'PULSA [ENTER] O HAZ CLIC AQUÍ PARA VER EL EPÍLOGO CANÓNICO ▶', {
         fontFamily: 'monospace',
         fontSize: '8.5px',
         color: '#ffffff',
@@ -1254,7 +1254,16 @@ export class GameScene extends Phaser.Scene {
       this.victoryBannerPrompt.on('pointerdown', () => {
         victorySub.destroy();
         this.clearActExit();
-        this.transitionToActWithLoading(1);
+        this.cameras.main.fade(320, 0, 0, 0);
+        this.time.delayedCall(340, () => {
+          if (this.scene.isActive('HUDScene')) {
+            this.scene.stop('HUDScene');
+          }
+          this.scene.start('CinematicScene', {
+            actTransition: 3,
+            characterId: this.player.id
+          });
+        });
       });
     }
   }
@@ -1329,7 +1338,7 @@ export class GameScene extends Phaser.Scene {
     const retryAction = () => {
       this.closeGameOverModal();
       this.saveCheckpoint();
-      this.transitionToActWithLoading(this.currentScenario);
+      this.transitionToActWithLoading(this.currentScenario, true);
     };
 
     const menuAction = () => {
@@ -1451,10 +1460,41 @@ export class GameScene extends Phaser.Scene {
     this.isActCleared = false;
   }
 
-  private transitionToActWithLoading(targetAct: number): void {
+  private transitionToActWithLoading(targetAct: number, forceDirect: boolean = false): void {
     if (this.isTransitioningAct) return;
     this.isTransitioningAct = true;
     this.clearActExit();
+
+    // If moving between acts naturally, trigger the illustrated CinematicScene!
+    if (!forceDirect && this.currentScenario === 1 && targetAct === 2) {
+      this.cameras.main.fade(320, 0, 0, 0);
+      this.time.delayedCall(340, () => {
+        if (this.scene.isActive('HUDScene')) {
+          this.scene.stop('HUDScene');
+        }
+        this.scene.start('CinematicScene', {
+          actTransition: 1,
+          targetAct: 2,
+          characterId: this.player.id
+        });
+      });
+      return;
+    }
+
+    if (!forceDirect && this.currentScenario === 2 && targetAct === 3) {
+      this.cameras.main.fade(320, 0, 0, 0);
+      this.time.delayedCall(340, () => {
+        if (this.scene.isActive('HUDScene')) {
+          this.scene.stop('HUDScene');
+        }
+        this.scene.start('CinematicScene', {
+          actTransition: 2,
+          targetAct: 3,
+          characterId: this.player.id
+        });
+      });
+      return;
+    }
 
     const configs: Record<number, { image: string; title: string; story: string; tip: string }> = {
       1: {

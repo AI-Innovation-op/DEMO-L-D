@@ -9,6 +9,7 @@ import { ShalemMinigameScene } from './presentation/scenes/ShalemMinigameScene';
 import { MenuModalScene } from './presentation/scenes/MenuModalScene';
 import { InventoryScene } from './presentation/scenes/InventoryScene';
 import { CharacterDialogueScene } from './presentation/scenes/CharacterDialogueScene';
+import { CinematicScene } from './presentation/scenes/CinematicScene';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -32,7 +33,8 @@ const config: Phaser.Types.Core.GameConfig = {
     ShalemMinigameScene,
     MenuModalScene,
     InventoryScene,
-    CharacterDialogueScene
+    CharacterDialogueScene,
+    CinematicScene
   ]
 };
 

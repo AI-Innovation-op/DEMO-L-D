@@ -8,7 +8,8 @@ export class MenuModalScene extends Phaser.Scene {
   private player!: Character;
   private audio!: WebAudioSoundAdapter;
   private prophecy!: ProphecyRepository;
-  private activeTab: 'STATUS' | 'ARSENAL' | 'PROPHECY' | 'CONTROLS' = 'STATUS';
+  private activeTab: 'STATUS' | 'ARSENAL' | 'PROPHECY' | 'CHRONICLES' | 'CONTROLS' = 'STATUS';
+  private selectedChronicleIndex: number = 0;
 
   // Container & Content Objects
   private modalContainer!: Phaser.GameObjects.Container;
@@ -60,14 +61,15 @@ export class MenuModalScene extends Phaser.Scene {
 
     // Tabs Navigation Bar
     const tabs = [
-      { key: 'STATUS', label: '1. PERSONAJE' },
+      { key: 'STATUS', label: '1. HÉROE' },
       { key: 'ARSENAL', label: '2. ARSENAL' },
       { key: 'PROPHECY', label: '3. PROFECÍA' },
-      { key: 'CONTROLS', label: '4. CONTROLES' }
+      { key: 'CHRONICLES', label: '4. CÓDICE' },
+      { key: 'CONTROLS', label: '5. CONTROLES' }
     ];
 
-    const tabWidth = 120;
-    const tabStartX = -220;
+    const tabWidth = 98;
+    const tabStartX = -255;
 
     tabs.forEach((tab, index) => {
       const tx = tabStartX + index * (tabWidth + 6);
@@ -79,13 +81,13 @@ export class MenuModalScene extends Phaser.Scene {
 
       const tabText = this.add.text(tx + tabWidth / 2, ty, tab.label, {
         fontFamily: 'Cinzel, serif',
-        fontSize: '9px',
+        fontSize: '8.5px',
         color: '#c2b0d6',
         fontStyle: 'bold'
       }).setOrigin(0.5);
 
       tabBg.on('pointerdown', () => {
-        this.activeTab = tab.key as 'STATUS' | 'ARSENAL' | 'PROPHECY' | 'CONTROLS';
+        this.activeTab = tab.key as 'STATUS' | 'ARSENAL' | 'PROPHECY' | 'CHRONICLES' | 'CONTROLS';
         this.audio.playSfx('dodge');
         this.updateTabStyles();
         this.renderContent();
@@ -164,6 +166,8 @@ export class MenuModalScene extends Phaser.Scene {
       this.renderArsenalTab();
     } else if (this.activeTab === 'PROPHECY') {
       this.renderProphecyTab();
+    } else if (this.activeTab === 'CHRONICLES') {
+      this.renderChroniclesTab();
     } else {
       this.renderControlsTab();
     }
@@ -369,7 +373,141 @@ export class MenuModalScene extends Phaser.Scene {
   }
 
   // ==========================================
-  // TAB 4: CONTROLES & GUÍA TÁCTICA
+  // TAB 4: CÓDICE DE ALBION (LOS 20 CAPÍTULOS DE KEVIN)
+  // ==========================================
+  private renderChroniclesTab(): void {
+    const chronicles = [
+      {
+        id: 'act1',
+        title: 'I. OAKHAVEN (CAPS I–VI)',
+        sub: 'Las Cenizas de la Inquisición',
+        portrait: 'morwenna_crucible',
+        speaker: 'THOMAS & CEDRIC',
+        text: '«Dieciocho inviernos vivió Thomas como un modesto monaguillo en Oakhaven, ignorando que en su sangre latía el fuego del Abismo legado por las nueve brujas sacrificadas en la Luna Roja. Cuando Madre Morwenna marchó con sus bestias de ceniza para arrancar a Elowen hacia la pira, el Padre Cedric entregó a Thomas el Rosario de Madera y la primera tablilla. Thomas despertó el fuego negro en su hoja, quebrando las hogueras de la Inquisición.»',
+        quote: '«Shalem: "Un buen comienzo, monaguillo. Pero el humo de Oakhaven solo fue la mecha de la tormenta".»'
+      },
+      {
+        id: 'campanario',
+        title: 'II. EL CAMPANARIO (CAPS VII–IX)',
+        sub: 'La Reja Suelta y el Pájaro',
+        portrait: 'elowen_campanario',
+        speaker: 'ELOWEN DE OAKHAVEN',
+        text: '«Recluida en la celda del campanario, Elowen soportó el castigo de la sal gruesa. Antes de que los caballeros dorados la trasladasen a Londinium como ofrenda, Elowen quebró el crisol sagrado de Morwenna con su luz plateada. Con carbón y una tira de lino atada a su pájaro de madera, envió su mensaje a Thomas: "Londinium es sacrificio. Reja suelta." Thomas juró derribar las murallas de la capital.»',
+        quote: '«Shalem: "El coraje de esa chica supera al de cualquier rey con corona de latón podrido".»'
+      },
+      {
+        id: 'act2',
+        title: 'III. LONDINIUM (CAPS X–XVII)',
+        sub: 'La Corona del Deseo y Alaric',
+        portrait: 'portrait_malphas',
+        speaker: 'REX MALPHAS (ALARIC)',
+        text: '«La Ciudadela Dorada brillaba con la hipocresía del Cáliz Solar. Los caballeros imperiales custodiaban a un monarca que vendió a su familia: Rex Malphas, el antiguo maestro Alaric del Sauce Negro. Thomas y Khaterine se abrieron paso hasta el trono astral, donde Malphas reveló que Thomas era el hijo de la Luna Roja. Al quebrar al falso rey, las leyes de la gravedad y la realidad colapsaron.»',
+        quote: '«Shalem: "Los espejos de Alaric eran hermosos, pero la verdad siempre corta más profundo que el cristal".»'
+      },
+      {
+        id: 'act3',
+        title: 'IV. CATEDRAL INVERTIDA (CAPS XVIII–XX)',
+        sub: 'Alba Gris y la Luz en las Tinieblas',
+        portrait: 'portrait_astaroth',
+        speaker: 'THOMAS & ELOWEN',
+        text: '«Suspendida sobre el vacío cósmico, la Catedral Invertida aguardaba la manifestación de Astaroth, el Padre de las Cenizas. Elowen sacrificó su Gota de Luz Divina para forjar Alba Gris: la espada biseccionada que no pertenece ni al Cielo ni al Abismo. Al elegir amar en lugar de odiar, Thomas venció a Astaroth, disipando la niebla de dieciocho años y trayendo el primer amanecer.»',
+        quote: '«Shalem: "Solo la Oscuridad que elija amar será la única Luz en las Tinieblas. Nunca lo olvides".»'
+      }
+    ];
+
+    // Left List (Chronicle Selectors)
+    const listX = -155;
+    const listW = 195;
+
+    chronicles.forEach((c, idx) => {
+      const cy = -58 + idx * 46;
+      const isSelected = idx === this.selectedChronicleIndex;
+
+      const btnBg = this.add.rectangle(listX, cy, listW, 40, isSelected ? 0x3d2259 : 0x181026)
+        .setStrokeStyle(1.5, isSelected ? 0xffd700 : 0x483259)
+        .setInteractive({ useHandCursor: true });
+
+      const titleTxt = this.add.text(listX - listW / 2 + 10, cy - 8, c.title, {
+        fontFamily: 'Cinzel, monospace',
+        fontSize: '8.5px',
+        color: isSelected ? '#ffd700' : '#d2c2e8',
+        fontStyle: 'bold'
+      });
+
+      const subTxt = this.add.text(listX - listW / 2 + 10, cy + 7, c.sub, {
+        fontFamily: 'sans-serif',
+        fontSize: '7px',
+        color: isSelected ? '#ffffff' : '#8874a3'
+      });
+
+      btnBg.on('pointerdown', () => {
+        this.selectedChronicleIndex = idx;
+        this.audio.playSfx('menu_select');
+        this.renderContent();
+      });
+
+      this.contentContainer.add([btnBg, titleTxt, subTxt]);
+    });
+
+    // Right Detail View
+    const cur = chronicles[this.selectedChronicleIndex] || chronicles[0];
+    const rightX = 105;
+    const rightW = 310;
+    const rightH = 195;
+
+    const detailBg = this.add.rectangle(rightX, 10, rightW, rightH, 0x140c21)
+      .setStrokeStyle(1.5, 0xd4af37);
+    const detailInner = this.add.rectangle(rightX, 10, rightW - 6, rightH - 6, 0x000000, 0)
+      .setStrokeStyle(1, 0x5a3b75);
+
+    // Mini Portrait / Artwork Badge
+    let img;
+    if (this.textures.exists(cur.portrait)) {
+      img = this.add.image(rightX - rightW / 2 + 38, -45, cur.portrait).setDisplaySize(54, 54);
+    }
+    const border = this.add.rectangle(rightX - rightW / 2 + 38, -45, 56, 56, 0x000000, 0)
+      .setStrokeStyle(1, 0xd4af37);
+
+    const bannerTitle = this.add.text(rightX - rightW / 2 + 75, -60, cur.title, {
+      fontFamily: 'Cinzel, Georgia, serif',
+      fontSize: '10px',
+      color: '#ffd700',
+      fontStyle: 'bold'
+    });
+
+    const speakerBanner = this.add.text(rightX - rightW / 2 + 75, -42, `Crónica canónica · ${cur.speaker}`, {
+      fontFamily: 'monospace',
+      fontSize: '7.5px',
+      color: '#b094db'
+    });
+
+    const divider = this.add.rectangle(rightX, -10, rightW - 20, 1, 0x6e4b8a);
+
+    const body = this.add.text(rightX - rightW / 2 + 12, 0, cur.text, {
+      fontFamily: 'serif',
+      fontSize: '8.5px',
+      color: '#f0e6ff',
+      wordWrap: { width: rightW - 24 },
+      lineSpacing: 3
+    });
+
+    const quoteBox = this.add.rectangle(rightX, 82, rightW - 20, 26, 0x241538).setStrokeStyle(1, 0x7a5296);
+    const quoteText = this.add.text(rightX, 82, cur.quote, {
+      fontFamily: 'serif',
+      fontSize: '7.5px',
+      color: '#ffd700',
+      fontStyle: 'italic',
+      align: 'center',
+      wordWrap: { width: rightW - 30 }
+    }).setOrigin(0.5);
+
+    const detailObjects: Phaser.GameObjects.GameObject[] = [detailBg, detailInner, border, bannerTitle, speakerBanner, divider, body, quoteBox, quoteText];
+    if (img) detailObjects.unshift(img);
+    this.contentContainer.add(detailObjects);
+  }
+
+  // ==========================================
+  // TAB 5: CONTROLES & GUÍA TÁCTICA
   // ==========================================
   private renderControlsTab(): void {
     const controls = [
