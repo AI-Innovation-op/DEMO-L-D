@@ -3,7 +3,7 @@ import { Character } from '../../domain/character/Character';
 import { WebAudioSoundAdapter } from '../../infrastructure/audio/WebAudioSoundAdapter';
 
 export interface DialogueBeat {
-  speaker: 'Thomas' | 'Khaterine' | 'Shalem';
+  speaker: 'Thomas' | 'Khaterine' | 'Shalem' | 'Elowen' | string;
   portraitKey: string;
   portraitSide: 'left' | 'right';
   text: string;
@@ -32,12 +32,47 @@ export class CharacterDialogueScene extends Phaser.Scene {
     super('CharacterDialogueScene');
   }
 
-  public init(data: { player: Character; scenarioIndex?: number; audio?: WebAudioSoundAdapter }): void {
+  public init(data: { player: Character; scenarioIndex?: number; audio?: WebAudioSoundAdapter; dialogueType?: string }): void {
     this.player = data.player;
     this.currentScenario = data.scenarioIndex || 1;
     this.audio = data.audio || WebAudioSoundAdapter.getInstance();
     this.currentBeatIndex = 0;
-    this.dialogueBeats = this.generateDialogueForScenario(this.currentScenario);
+
+    const type = data.dialogueType || 'party';
+    if (type === 'elowen') {
+      this.dialogueBeats = this.generateElowenDialogue();
+    } else {
+      this.dialogueBeats = this.generateDialogueForScenario(this.currentScenario);
+    }
+  }
+
+  private generateElowenDialogue(): DialogueBeat[] {
+    return [
+      {
+        speaker: 'Elowen',
+        portraitKey: 'portrait_elowen',
+        portraitSide: 'right',
+        text: '«Thomas... ¿recuerdas cuando éramos niños y subíamos a la colina del viejo roble antes del amanecer? Tenías miedo de atravesar el sendero oscuro del bosque y me preguntaste qué haríamos si la luz nunca llegaba.»'
+      },
+      {
+        speaker: 'Thomas',
+        portraitKey: 'portrait_thomas',
+        portraitSide: 'left',
+        text: '«Me tomaste de la mano y me dijiste que la encontraríamos juntos. Jamás olvidé esa promesa, Elowen. No permitiré que Morwenna ni los inquisidores te hagan daño.»'
+      },
+      {
+        speaker: 'Elowen',
+        portraitKey: 'portrait_elowen',
+        portraitSide: 'right',
+        text: '«Durante dieciocho años me obligaron a arrodillarme sobre sal gruesa para purificar una culpa que jamás fue mía... Pero el Padre Cedric me enseñó que la bondad no se compra con dogmas. Toma mi bendición, Thomas: sana tus heridas y mantén tu corazón puro.»'
+      },
+      {
+        speaker: 'Shalem',
+        portraitKey: 'portrait_shalem',
+        portraitSide: 'left',
+        text: '«Qué conmovedor... casi se me cae un bigote de la emoción. Menos sentimentalismo y más estar alerta, Thomas: ¡esos Acechadores de Ceniza tienen colmillos muy reales!»'
+      }
+    ];
   }
 
   private generateDialogueForScenario(scenario: number): DialogueBeat[] {
@@ -53,31 +88,31 @@ export class CharacterDialogueScene extends Phaser.Scene {
           speaker: mainProtagonist,
           portraitKey: mainPortrait,
           portraitSide: 'left',
-          text: `«${allyName}... ¿Por qué Morwenna vigila con tanto recelo a Elowen? Si la profecía habla de una criatura nacida del Abismo, ¿por qué sospechan de ella?»`
+          text: `«${allyName}... El Padre Cedric se interpuso frente a los Acechadores de Ceniza solo con una antorcha para salvar a los niños. Antes de morir me dijo: "Tus manos siguen siendo las del buen muchacho que cuidaba a los enfermos". No pienso fallarle.»`
         },
         {
           speaker: allyName,
           portraitKey: allyPortrait,
           portraitSide: 'right',
-          text: '«Hay verdades que aún no estás listo para escuchar... La Iglesia del Cáliz Solar ve demonios en cualquier alma pura que no pueda doblegar. Mantén tu fe firme y no te apartes de mi lado.»'
+          text: '«Cedric poseía una fe auténtica en medio de una Iglesia podrida de hipocresía. Morwenna cree que Elowen es el fruto del Abismo... No descansará hasta que purguemos a sus inquisidores de Oakhaven.»'
         },
         {
           speaker: 'Shalem',
           portraitKey: 'portrait_shalem',
           portraitSide: 'left',
-          text: '«Qué momento tan conmovedor. Casi se me cae una lágrima de la pata. Menos charla filosófica y más esquivar los colmillos de esos acechadores de ceniza, por favor.»'
+          text: '«Dieciocho años viviendo como un felino bajo el cuidado de un monaguillo... Menos charlas morales y más afilar el acero, saco de carne. ¡Que esos Acechadores tienen dientes muy afilados!»'
         },
         {
           speaker: mainProtagonist,
           portraitKey: mainPortrait,
           portraitSide: 'left',
-          text: '«Shalem, eres absolutamente insoportable.»'
+          text: '«Shalem, a veces olvido que comandabas legiones en el Abismo.»'
         },
         {
           speaker: 'Shalem',
           portraitKey: 'portrait_shalem',
           portraitSide: 'right',
-          text: '«Soy un marqués del Abismo, muchacho. La arrogancia y el sarcasmo vienen incluidos en mi linaje aristocrático. ¡Ahora a pelear!»'
+          text: '«Comandé los nueve fuegos del Abismo, muchacho. Y por cierto: cuando ganemos, exijo que me consigas trucha y sardinas frescas de Londinium.»'
         }
       ];
     } else if (scenario === 2) {
@@ -86,19 +121,19 @@ export class CharacterDialogueScene extends Phaser.Scene {
           speaker: mainProtagonist,
           portraitKey: mainPortrait,
           portraitSide: 'left',
-          text: '«El Rey Malphas... Lleva las galas de la realeza de Londinium, pero bajo su piel corre humo del Abismo. ¿Quién era Alaric antes de todo esto?»'
+          text: '«El Rey Malphas... es Alaric. Tu antiguo maestro en el Aquelarre del Sauce Negro. Me dijo: "No tuve que obligarlos a odiarte, solo tuve que enseñarles a temerte".»'
         },
         {
           speaker: allyName,
           portraitKey: allyPortrait,
           portraitSide: 'right',
-          text: '«Alaric era el maestro más sabio de nuestro aquelarre... hasta que el deseo de poder lo consumió. Nos vendió a Astaroth a cambio de un trono y una corona demoníaca. No sientas piedad por él.»'
+          text: '«Alaric vendió a su familia en la Noche de la Luna Roja a cambio de una corona maldita y el poder de alterar la realidad. Tuve miedo al ver sus ojos grises en ti de bebé... pero elegí amarte. Tu alma es tuya, Thomas.»'
         },
         {
           speaker: 'Shalem',
           portraitKey: 'portrait_shalem',
           portraitSide: 'left',
-          text: '«Yo sugiero que antes de clavarle la espada en el pecho, le exijamos que nos entregue la bodega real de sardinas y salmón ahumado. Hay que tener prioridades tácticas.»'
+          text: '«El "Monarca de los Deseos" y su salón de espejos temporales. Yo solo deseo que le arranques esa corona de oropel de un buen mandoble.»'
         }
       ];
     } else {
@@ -107,19 +142,19 @@ export class CharacterDialogueScene extends Phaser.Scene {
           speaker: mainProtagonist,
           portraitKey: mainPortrait,
           portraitSide: 'left',
-          text: '«La Catedral Invertida... Las leyes del cielo y la tierra se han roto. Si derroto a Astaroth, ¿el fuego demoníaco en mi interior se apagará para siempre?»'
+          text: '«La Catedral Invertida... Las leyes del mundo están rotas. Elowen sacrificó su Gota de Luz Divina para forjar Alba Gris... Si este fuego se apaga al final, ¿quién seré?»'
         },
         {
           speaker: allyName,
           portraitKey: allyPortrait,
           portraitSide: 'right',
-          text: '«Tu sangre jamás determinó quién eres. Tuve miedo de ti cuando eras un bebé en esa cesta, pero cada mañana elegí amarte y protegerte. Eres más humano que todos los falsos santos de este reino.»'
+          text: '«Serás el muchacho que prometió encontrar la luz junto a Elowen. Lyra y las brujas del Sauce Negro nos acompañan en este filo. ¡No estás solo!»'
         },
         {
           speaker: 'Shalem',
           portraitKey: 'portrait_shalem',
           portraitSide: 'left',
-          text: '«... (Shalem baja las orejas en completo silencio, luego ronronea bajito) ... Bueno, Thomas. Si este es el fin del mundo... ha sido un honor luchar a tu lado.»'
+          text: '«Tenía en mis garras el contrato para liberarme y volver al Abismo. Lo quemé. No pienso dejarte morir solo frente a Astaroth, idiota... Ha sido un verdadero honor luchar a tu lado.»'
         }
       ];
     }

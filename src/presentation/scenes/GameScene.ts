@@ -478,17 +478,26 @@ export class GameScene extends Phaser.Scene {
 
   private interactWithElowen(): void {
     this.audio.playSfx('menu_select');
-    const lines = this.dialogues.getElowenDialogue ? this.dialogues.getElowenDialogue() : [];
-    const textToShow = lines[0] ? `${lines[0].speaker}: ${lines[0].text}` : 'Elowen: «¡Thomas, cuídate de la pira!»';
 
     if (!this.hasTalkedToElowen) {
       this.hasTalkedToElowen = true;
       this.player.heal(35);
+      this.player.stats.restorePosture(this.player.stats.maxPosture);
       this.storyProgress.completeMilestone('act1_dialogue');
       this.storyProgress.addProgress(15);
       this.spawnDamageNumber(this.playerSprite.x, this.playerSprite.y - 45, 35, false, '#88ff88');
+
+      // Pause GameScene and open canonical Elowen dialogue overlay
+      this.scene.pause('GameScene');
+      this.scene.launch('CharacterDialogueScene', {
+        player: this.player,
+        scenarioIndex: 1,
+        audio: this.audio,
+        dialogueType: 'elowen'
+      });
+    } else {
+      this.triggerShalemBalloon("Elowen: «Que la verdadera luz guarde tus pasos, Thomas...»", 5000);
     }
-    this.triggerShalemBalloon(textToShow, 7000);
   }
 
   private updateProximityInteractions(): void {

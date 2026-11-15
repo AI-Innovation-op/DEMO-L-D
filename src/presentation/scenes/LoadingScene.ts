@@ -36,8 +36,13 @@ export class LoadingScene extends Phaser.Scene {
     '«Táctica de Combate: Muévete en 2.5D con WASD para flanquear a los monjes inquisidores y evitar quedar acorralado.»',
     '«Consejo de Shalem: Si lanzas tu espada con [T] aturdirás a los enemigos. ¡Luego corre con [E] para recuperarla o pelea a puños!»',
     '«Códice de Albion: En Oakhaven, la joven Elowen cuida el huerto. Pulsa [E] junto a ella para escucharla y recibir su bendición curativa.»',
-    '«Consejo de Shalem: La barra de Level Up desbloquea mis minijuegos con [M]. ¡Responder con sabiduría te otorgará armas de leyenda!»',
-    '«Códice de Albion: El Rex Malphas gobierna la Ciudadela Dorada con decretos tiránicos que alteran la propia realidad.»'
+    '«Consejo de Shalem: Un demonio menor en forma de gato persa aprecia dos cosas: silencio y sardinas del Támesis. ¡No me hagas correr!»',
+    '«Códice de Albion: Nueve brujas dieron su vida en la Luna Roja para marcar a Thomas con un Sello de Ceniza y otorgarle libre albedrío.»',
+    '«Códice de Albion: El Oráculo del Abismo sentenció: "El primogénito de la sangre marchita portará el fuego de los caídos o quemará el trono de los hombres".»',
+    '«Códice de Albion: El Padre Cedric salvó a Thomas de las llamas de Oakhaven y lo crio como novicio hasta que la Inquisición llegó.»',
+    '«Códice de Albion: Alba Gris es la espada legendaria forjada en la frontera del abismo, uniendo fuego negro y luz sagrada.»',
+    '«Códice de Albion: La Abadesa Morwenna bendice las armas de la Inquisición con su incensario de humo verde y letales cánticos.»',
+    '«Códice de Albion: El Rex Alaric selló un pacto oscuro con Malphas creyendo salvar su dinastía a cambio de su propia carne.»'
   ];
 
   constructor() {

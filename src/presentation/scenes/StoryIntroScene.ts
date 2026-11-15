@@ -17,20 +17,20 @@ export class StoryIntroScene extends Phaser.Scene {
 
   private slides = [
     {
-      title: 'I. EL NARRADOR DEL ABISMO',
-      text: '«Permíteme ilustrarte, ingenuo mortal. Mi nombre es Shalem, Gran Marqués de las Brasas Susurrantes... aunque por azares del destino ahora tenga el incomprendido —pero indiscutiblemente glorioso— aspecto de un felino negro.»'
+      title: 'I. EL MARQUÉS Y EL REINO DE ALBION',
+      text: '«Permíteme ilustrarte, ingenuo mortal. Mi nombre es Shalem, antiguo Gran Marqués de las Brasas Susurrantes... reducido por azares del destino a convivir como un gato negro con monaguillos incapaces de abrir una lata de sardinas. Pero escucha con atención, pues la noche perpetua de Albion oculta verdades atroces tras el Cáliz Solar.»'
     },
     {
-      title: 'II. EL REINO DE ALBION Y EL CÁLIZ SOLAR',
-      text: '«Esta tierra se llama Albion. Durante siglos, la Iglesia del Cáliz Solar ha gobernado bajo una máscara de santidad, alimentando hogueras nocturnas con la fe de los inocentes para ocultar su verdadero pacto con el demonio Astaroth.»'
+      title: 'II. LA NOCHE DE LA LUNA ROJA',
+      text: '«Hace dieciocho años, en el Bosque del Sauce Negro, el brujo Alaric traicionó a su propio aquelarre por un trono de oro y pactó con el demonio Astaroth. Las brujas fueron sacrificadas y del ritual nació un niño: Thomas. Pero con su último aliento de amor, las hechiceras le otorgaron al recién nacido algo imprevisto: Libre Albedrío.»'
     },
     {
-      title: 'III. LA CESTA DE LOS DOS HUÉRFANOS',
-      text: '«Hace dieciocho años, dos bebés llegaron a la parroquia de Oakhaven en la misma cesta de mimbre: Thomas y Elowen. Para salvar al niño, Khaterine desvió el aura mágica... condenando a Elowen a pasar su vida vigilada como la falsa elegida.»'
+      title: 'III. LA CESTA DE MIMBRE Y EL SELLO DE CENIZA',
+      text: '«Khaterine rescató a Thomas y a la pequeña Elowen, hija de su difunta amiga Lyra. Para proteger al niño de la Inquisición, Khaterine grabó el Sello de Ceniza en su pecho... pero la energía residual impregnó las mantas de Elowen, condenando a la niña a dieciocho años de crueles penitencias sobre sal gruesa como la falsa elegida.»'
     },
     {
-      title: 'IV. LA VERDAD DE LA PROFECÍA',
-      text: '«Pero la Profecía Original no hablaba de maldad. Decía algo muy distinto: "Solo la Oscuridad que elija amar será la única Luz en las Tinieblas". ¡Despierta! ¡Ha llegado la hora de empuñar tu fuego y descubrir quién eres!»'
+      title: 'IV. EL ORÁCULO DEL ABISMO',
+      text: '«"De las cenizas del Abismo brotará una semilla de dos sangres... Pues cuando el trono de oro se pudra y el cielo llore ceniza, solo la Oscuridad que elija amar será la única Luz en las Tinieblas". ¡Despierta, Thomas! Tu sangre no decide quién eres... ¡ha llegado la hora de elegir tu destino!»'
     }
   ];
 

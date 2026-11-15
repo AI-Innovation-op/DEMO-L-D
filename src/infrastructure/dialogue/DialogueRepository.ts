@@ -6,37 +6,54 @@ export class DialogueRepository implements IDialoguePort {
       return [
         {
           speaker: 'Shalem',
-          text: '«Vaya, vaya... Oakhaven bajo la niebla. El rebaño duerme creyendo que las monjas rezan por su salvación. Si supieran qué invocan en esas hogueras...»'
+          portraitKey: 'portrait_shalem',
+          text: '«Oakhaven bajo la niebla... Los aldeanos duermen creyendo que la Iglesia del Cáliz Solar los protege de los demonios. Si supieran qué invocan en esas hogueras...»'
         },
         {
           speaker: 'Thomas',
-          text: '«Khaterine me advirtió que la Madre Morwenna reunió a los inquisidores. Debo encontrar a Elowen antes de que la obliguen a entrar en la pira.»'
+          portraitKey: 'portrait_thomas',
+          text: '«Khaterine me advirtió que la Madre Morwenna prepara el traslado de Elowen hacia la capital. No permitiré que la arrojen a la pira.»'
         },
         {
           speaker: 'Shalem',
-          text: '«No te precipites, muchacho. Recuerda moverte con [A/D], esquivar con [L] y atacar con [J]. ¡Y por el Abismo, no pierdas tu espada!»'
+          portraitKey: 'portrait_shalem',
+          text: '«Mueve tus pies con [WASD] en 2.5D, usa [K] para tu guardia de armadura y ataca con [J]. ¡Y por el Abismo, no pierdas tu espada, muchacho!»'
         }
       ];
     } else if (scenarioIndex === 2) {
       return [
         {
           speaker: 'Shalem',
-          text: '«Londinium... La Ciudadela Dorada. Huele a incienso caro y a traición añeja. El Rey Malphas nos espera en su trono flotante.»'
+          portraitKey: 'portrait_shalem',
+          text: '«Londinium... La Ciudadela Dorada. Huele a incienso sacro y a traición añeja. El Rey Malphas nos aguarda en su trono astral.»'
         },
         {
           speaker: 'Thomas',
-          text: '«Reconstruí los tres fragmentos de la Profecía Original. Ya sé quién es en verdad el Rey... y qué sangre corre por mis venas.»'
+          portraitKey: 'portrait_thomas',
+          text: '«Reuní los fragmentos de la profecía... El Rey no es otro que Alaric, el antiguo maestro de Khaterine. Y yo llevo la sangre de Astaroth.»'
+        },
+        {
+          speaker: 'Khaterine',
+          portraitKey: 'portrait_khaterine',
+          text: '«No temas a su magia temporal, Thomas. Tu alma no la forja tu estirpe, sino tu elección. ¡Quebrantemos sus decretos!»'
         }
       ];
     } else {
       return [
         {
           speaker: 'Khaterine',
-          text: '«La Catedral Invertida... Las leyes de la tierra ya no rigen aquí. Astaroth está consumiendo las almas de todo el reino.»'
+          portraitKey: 'portrait_khaterine',
+          text: '«La Catedral Invertida... Las leyes del cielo y la tierra se han quebrado. Las almas de mis hermanas del Sauce Negro siguen atrapadas en los muros.»'
         },
         {
           speaker: 'Thomas',
-          text: '«Llegó el momento de empuñar Alba Gris. Ni la luz dorada corrupta ni la oscuridad sin control... solo la que elija amar.»'
+          portraitKey: 'portrait_thomas',
+          text: '«Es hora de empuñar Alba Gris. Fuego negro y la Gota de Luz Divina de Elowen unidos... Solo la Oscuridad que elija amar será la Luz en las Tinieblas.»'
+        },
+        {
+          speaker: 'Shalem',
+          portraitKey: 'portrait_shalem',
+          text: '«Quemé mi contrato demoníaco, idiota. No pienso dejarte solo frente a Astaroth. ¡Ha sido un honor luchar a tu lado, saco de carne!»'
         }
       ];
     }
@@ -47,27 +64,28 @@ export class DialogueRepository implements IDialoguePort {
       {
         speaker: 'Elowen',
         portraitKey: 'portrait_elowen',
-        text: '«¡Thomas, has vuelto! Las campanas han estado tañendo sin descanso... Madre Morwenna dice que la noche exige una ofrenda para purificar el alba.»'
+        text: '«Thomas... ¿recuerdas cuando éramos niños y subíamos a la colina del viejo roble antes del amanecer? Me preguntaste qué haríamos si algún día la luz no llegaba. Te prometí que la encontraríamos juntos.»'
       },
       {
         speaker: 'Thomas',
         portraitKey: 'portrait_thomas',
-        text: '«No te acerques a la pira, Elowen. No hay salvación en ese fuego, solo ceniza y dogma. Khaterine y yo detendremos a la inquisición.»'
+        text: '«Lo recuerdo cada día, Elowen. No permitiré que Morwenna ni la Inquisición te sigan castigando sobre sal gruesa por una profecía que jamás fue tu culpa.»'
       },
       {
         speaker: 'Elowen',
         portraitKey: 'portrait_elowen',
-        text: '«Que la bendición de los antiguos te guarde... Toma este ungüento de mirra. Ten cuidado: los acechadores rondan por el sendero este.»'
+        text: '«Toma mi bendición... No dejes que la oscuridad te consuma. El Padre Cedric tenía razón: tus manos siguen siendo las del buen muchacho que cuidaba a los enfermos.»'
       }
     ];
   }
 
   public getShalemSarcasm(): string {
     const list = [
-      '«¡Usa tus combos, Thomas! ¡El botón [J] no muerde!»',
-      '«Si te desarman con un golpe pesado, ¡corre a buscar tu espada con [E] o golpéalos a puños!»',
-      '«Puedes lanzar tu arma con [T] para aturdir a ese grandullón y luego robarle la suya.»',
-      '«¿Ves esa barrita de Level Up? ¡Llénala y ven a jugar conmigo para darte armas de verdad!»'
+      '«¡Usa tus combos, muchacho! ¡El botón [J] no muerde!»',
+      '«Si te desarman de un golpe pesado, ¡corre con [E] a recoger tu arma o pelea a puñetazos!»',
+      '«Puedes lanzar tu espada con [T] para aturdir a ese grandullón y luego robarle su maza.»',
+      '«¿Ves esa barrita de Level Up? ¡Llénala y ven a charlar conmigo con [M] para otorgarte dones abismales!»',
+      '«Dieciocho años de humillación viviendo como gato... ¡exijo que saquemos la bodega real de sardinas tras salvar el reino!»'
     ];
     return list[Math.floor(Math.random() * list.length)];
   }
@@ -78,25 +96,47 @@ export class DialogueRepository implements IDialoguePort {
         return [
           {
             speaker: 'Rex Malphas',
-            text: '«Dieciocho años preguntándome a qué rincón del mundo habías arrastrado mi carne, mi pequeña Khaterine... Y resulta que lo criaste de rodillas frente a un altar.»'
+            portraitKey: 'portrait_malphas',
+            text: '«Dieciocho años escondido bajo los hábitos de una novicia... y finalmente vienes a conocer a tu padre. Mírate, muchacho: llevas mis mismos ojos grises.»'
           },
           {
-            speaker: 'Khaterine',
-            text: '«Míralo bien, Alaric. Porque no tiene nada tuyo.»'
+            speaker: 'Thomas',
+            portraitKey: 'portrait_thomas',
+            text: '«No eres mi padre. Eres el traidor que vendió a su propio aquelarre por una corona marchita.»'
+          },
+          {
+            speaker: 'Rex Malphas',
+            portraitKey: 'portrait_malphas',
+            text: '«No tuve que obligar al reino a odiarte, hijo mío. Solo tuve que enseñarles a temerte. El resto lo hicieron ellos solos.»'
           }
         ];
       } else if (phase === 'PHASE_3_UNBEATABLE') {
         return [
           {
             speaker: 'Rex Malphas',
-            text: '«¿Creías que habías ganado? ¿Que unas barras de vida mortal deciden el destino de un Soberano del Deseo?»'
+            portraitKey: 'portrait_malphas',
+            text: '«¿Creías que habías ganado? ¿Que unas barras de vida mortal deciden el destino del Monarca de los Deseos?»'
           },
           {
             speaker: 'Rex Malphas',
-            text: '«¡DECRETO REAL: LEY DEL DESEO! ¡El juego se termina cuando yo lo diga! ¡SOBREVIVE SI PUEDES!»'
+            portraitKey: 'portrait_malphas',
+            text: '«¡DECRETO REAL: LEY DEL DESEO! ¡El tiempo retrocede y las leyes de la realidad se doblegan a mi antojo! ¡SOBREVIVE SI PUEDES!»'
           }
         ];
       }
+    } else if (bossId === 'morwenna' || bossId === 'boss_morwenna') {
+      return [
+        {
+          speaker: 'Madre Morwenna',
+          portraitKey: 'portrait_morwenna',
+          text: '«¡Almas impuras! ¿Creíais que esconder el fruto de la Noche de la Luna Roja en Oakhaven bastaría? ¡El Cáliz Solar reclama a la elegida para su pira sagrada!»'
+        },
+        {
+          speaker: 'Khaterine',
+          portraitKey: 'portrait_khaterine',
+          text: '«¡Tus hogueras no purifican nada, Morwenna! Solo alimentan al demonio Astaroth con la sangre de inocentes. ¡Oakhaven termina aquí su pesadilla!»'
+        }
+      ];
     }
     return [];
   }
