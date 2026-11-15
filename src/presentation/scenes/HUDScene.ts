@@ -1,8 +1,7 @@
 import Phaser from 'phaser';
 import { Character } from '../../domain/character/Character';
-import { Boss } from '../../domain/boss/Boss';
+import { Boss, BossPhaseType, BossPhaseChangedEvent } from '../../domain/boss/Boss';
 import { EventBus } from '../../domain/shared/DomainEvent';
-import { BossUiShatteredEvent } from '../../domain/boss/Boss';
 import { FinisherStyle, FinisherTriggeredEvent } from '../../domain/combat/CombatTypes';
 import { WebAudioSoundAdapter } from '../../infrastructure/audio/WebAudioSoundAdapter';
 import { StoryProgress } from '../../domain/story/StoryProgress';
@@ -34,7 +33,6 @@ export class HUDScene extends Phaser.Scene {
   private bossHealthFill!: Phaser.GameObjects.Rectangle;
   private bossTitleText!: Phaser.GameObjects.Text;
   private bossHealthText!: Phaser.GameObjects.Text;
-  private isBossUiShattered: boolean = false;
 
   // Dual Character & Interaction UI
   private characterSwapText!: Phaser.GameObjects.Text;
@@ -276,8 +274,10 @@ export class HUDScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(49);
 
     // Listen to Domain Events
-    EventBus.getInstance().subscribe<BossUiShatteredEvent>('BossUiShattered', event => {
-      this.shatterBossUi(event.decreeTitle);
+    EventBus.getInstance().subscribe<BossPhaseChangedEvent>('BossPhaseChanged', event => {
+      this.cameras.main.flash(300, 200, 100, 255);
+      this.bossTitleText.setText(`⚠ ${event.uiMessage.toUpperCase()} ⚠`);
+      this.bossTitleText.setColor('#ff77ff');
     });
 
     EventBus.getInstance().subscribe<FinisherTriggeredEvent>('FinisherTriggered', event => {
@@ -357,35 +357,19 @@ export class HUDScene extends Phaser.Scene {
     // Boss Bar
     if (currentBoss && currentBoss.health > 0) {
       this.bossContainer.setVisible(true);
-      if (!this.isBossUiShattered) {
-        const bossRatio = Math.max(0, currentBoss.health / currentBoss.maxHealth);
-        this.bossHealthFill.setSize(Math.max(1, 160 * bossRatio), 12);
+      const bossRatio = Math.max(0, currentBoss.health / currentBoss.maxHealth);
+      this.bossHealthFill.setSize(Math.max(1, 160 * bossRatio), 12);
+      if (currentBoss.phase === BossPhaseType.PHASE_2) {
+        this.bossHealthFill.setFillStyle(0x9933ff);
+        this.bossTitleText.setText(`${currentBoss.name.toUpperCase()} (FASE 2)`);
+      } else {
+        this.bossHealthFill.setFillStyle(0xd4af37);
         this.bossTitleText.setText(currentBoss.name.toUpperCase());
-        this.bossHealthText.setText(`${currentBoss.health} / ${currentBoss.maxHealth} HP`);
       }
-    } else if (!this.isBossUiShattered) {
+      this.bossHealthText.setText(`${currentBoss.health} / ${currentBoss.maxHealth} HP`);
+    } else {
       this.bossContainer.setVisible(false);
     }
-  }
-
-  private shatterBossUi(decreeTitle: string): void {
-    this.isBossUiShattered = true;
-    this.cameras.main.shake(600, 0.025);
-
-    // Shatter into golden infinite bar
-    this.bossHealthFill.setFillStyle(0xffd700);
-    this.bossHealthFill.setSize(160, 12);
-    this.bossTitleText.setText(`⚠ ${decreeTitle} ⚠`);
-    this.bossTitleText.setColor('#ffe066');
-    this.bossHealthText.setText('∞ / ∞ (VIDA INFINITA)');
-
-    this.tweens.add({
-      targets: this.bossHealthFill,
-      alpha: 0.6,
-      duration: 300,
-      yoyo: true,
-      repeat: -1
-    });
   }
 
   private triggerCinematicFinisherEffect(): void {

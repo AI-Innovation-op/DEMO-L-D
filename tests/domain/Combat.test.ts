@@ -96,8 +96,8 @@ describe('Domain: Combat, Combos & Finishers', () => {
   });
 });
 
-describe('Domain: Boss Mechanics & Rex Malphas UI Shatter', () => {
-  it('Rex Malphas transitions to Phase 2 at 50% HP and Phase 3 Unbeatable at 0% HP', () => {
+describe('Domain: Boss Mechanics & Rex Malphas Combat', () => {
+  it('Rex Malphas transitions to Phase 2 at 50% HP and is defeated at 0% HP', () => {
     const malphas = Boss.createRexMalphas();
     expect(malphas.phase).toBe(BossPhaseType.PHASE_1);
 
@@ -105,10 +105,9 @@ describe('Domain: Boss Mechanics & Rex Malphas UI Shatter', () => {
     malphas.takeDamage(260);
     expect(malphas.phase).toBe(BossPhaseType.PHASE_2);
 
-    // Hit remaining HP to 0% -> Triggers Unbeatable Phase 3
-    malphas.takeDamage(300);
-    expect(malphas.phase).toBe(BossPhaseType.PHASE_3_UNBEATABLE);
-    expect(malphas.isUiBroken).toBe(true);
-    expect(malphas.isInvulnerable).toBe(true);
+    // Hit remaining HP to 0% -> Defeated
+    const res = malphas.takeDamage(300);
+    expect(malphas.health).toBe(0);
+    expect(res.actualDamage).toBe(300);
   });
 });

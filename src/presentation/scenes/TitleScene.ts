@@ -23,16 +23,19 @@ export class TitleScene extends Phaser.Scene {
     action: () => void;
   }[] = [];
 
+  private shouldOpenCharacterSelect: boolean = false;
+
   constructor() {
     super('TitleScene');
   }
 
-  public init(): void {
+  public init(data?: { openCharacterSelect?: boolean }): void {
     this.audio = WebAudioSoundAdapter.getInstance();
     this.isMenuOpen = false;
     this.currentMenuIndex = 0;
     this.menuButtons = [];
     this.activeModalContainer = undefined;
+    this.shouldOpenCharacterSelect = data?.openCharacterSelect || false;
   }
 
   public create(): void {
@@ -88,6 +91,14 @@ export class TitleScene extends Phaser.Scene {
 
     // 3. Right-Side Gothic Menu Panel (Exactly as Reference Image!)
     this.createMenuPanel();
+
+    if (this.shouldOpenCharacterSelect) {
+      this.startPromptContainer.setVisible(false);
+      this.time.delayedCall(120, () => {
+        this.openMenu();
+        this.showCharacterSelectModal();
+      });
+    }
 
     // 4. Input Handlers
     this.input.on('pointerdown', () => {
@@ -222,7 +233,21 @@ export class TitleScene extends Phaser.Scene {
     const items = [
       {
         label: 'Nueva partida',
-        action: () => this.showCharacterSelectModal()
+        action: () => {
+          this.audio.playSfx('menu_select');
+          this.cameras.main.fade(300, 0, 0, 0);
+          this.time.delayedCall(320, () => {
+            this.scene.start('LoadingScene', {
+              targetScene: 'TitleScene',
+              targetData: { openCharacterSelect: true },
+              imageKey: 'loading_concept_art',
+              chapterTitle: 'PRÓLOGO — EL REINO QUE OLVIDÓ LA LUZ',
+              storyText: '«Durante generaciones, Albion vivió sumido en una oscuridad perpetua bajo el dogma del Cáliz Solar. Nueve brujas sacrificadas en la Noche de la Luna Roja otorgaron libre albedrío al recién nacido Thomas, salvado del fuego por Khaterine mientras Elowen cargó involuntariamente con la sospecha del reino.»',
+              tipText: '«Shalem: Despierta, mortal. El reino de Albion aguarda tus elecciones...»',
+              minDurationMs: 2000
+            });
+          });
+        }
       },
       {
         label: 'Opciones',
@@ -742,15 +767,7 @@ export class TitleScene extends Phaser.Scene {
     this.audio.playSfx('dodge');
     this.cameras.main.fade(320, 0, 0, 0);
     this.time.delayedCall(340, () => {
-      this.scene.start('LoadingScene', {
-        targetScene: 'StoryIntroScene',
-        targetData: { characterId: this.selectedCharacter },
-        imageKey: 'loading_concept_art',
-        chapterTitle: 'PRÓLOGO — EL REINO QUE OLVIDÓ LA LUZ',
-        storyText: '«Durante generaciones, Albion vivió sumido en una oscuridad perpetua bajo el dogma del Cáliz Solar. Nueve brujas sacrificadas en la Noche de la Luna Roja otorgaron libre albedrío al recién nacido Thomas, salvado del fuego por Khaterine mientras Elowen cargó involuntariamente con la sospecha del reino.»',
-        tipText: '«Shalem: Despierta, mortal. El reino de Albion aguarda tus elecciones...»',
-        minDurationMs: 2200
-      });
+      this.scene.start('StoryIntroScene', { characterId: this.selectedCharacter });
     });
   }
 }

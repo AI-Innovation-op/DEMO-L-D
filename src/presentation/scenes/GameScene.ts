@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { Character } from '../../domain/character/Character';
 import { CharacterId, CharacterState } from '../../domain/character/CharacterEnums';
 import { Enemy } from '../../domain/enemy/Enemy';
-import { Boss, BossPhaseType, BossUiShatteredEvent } from '../../domain/boss/Boss';
+import { Boss } from '../../domain/boss/Boss';
 import { ShalemCompanion } from '../../domain/companion/ShalemCompanion';
 import { Vector2 } from '../../domain/shared/Vector2';
 import { CombatUseCases } from '../../application/usecases/CombatUseCases';
@@ -12,7 +12,6 @@ import { HUDScene } from './HUDScene';
 import { StoryProgress } from '../../domain/story/StoryProgress';
 import { ProphecyRepository } from '../../domain/mission/Mission';
 import { Weapon } from '../../domain/weapon/Weapon';
-import { EventBus } from '../../domain/shared/DomainEvent';
 
 export class GameScene extends Phaser.Scene {
   // Dual Characters (Thomas & Khaterine)
@@ -70,10 +69,11 @@ export class GameScene extends Phaser.Scene {
   public prophecy: ProphecyRepository = new ProphecyRepository();
   public unlockedWeaponIds: string[] = ['short_sword'];
 
-  // Meta Rex Malphas Phase
-  private isMalphasMetaActive: boolean = false;
-  private malphasMetaTimer: number = 0;
-  private malphasCountdownText?: Phaser.GameObjects.Text;
+  // Game Over Modal State
+  private isGameOverModalOpen: boolean = false;
+  private gameOverContainer?: Phaser.GameObjects.Container;
+  private gameOverFocusIndex: number = 0;
+  private gameOverButtons: { bg: Phaser.GameObjects.Rectangle; text: Phaser.GameObjects.Text; action: () => void }[] = [];
 
   // Proximity Interaction
   private activeInteractionTarget?: string;
@@ -170,7 +170,8 @@ export class GameScene extends Phaser.Scene {
     this.victoryBannerTitle = undefined;
     this.victoryBannerPrompt = undefined;
     this.floatingPromptBadge = undefined;
-    this.isMalphasMetaActive = false;
+    this.isGameOverModalOpen = false;
+    this.gameOverContainer = undefined;
   }
 
   public create(): void {
@@ -302,6 +303,13 @@ export class GameScene extends Phaser.Scene {
 
   public update(_time: number, delta: number): void {
     if (this.isTransitioningAct || this.player.state === CharacterState.DEAD) {
+      if (this.player.state === CharacterState.DEAD) {
+        if (!this.isGameOverModalOpen) {
+          this.triggerGameOver();
+        } else {
+          this.handleGameOverInput();
+        }
+      }
       return;
     }
 
@@ -317,17 +325,6 @@ export class GameScene extends Phaser.Scene {
     this.updateBoss(delta);
     this.updateDroppedWeapons();
     this.updateProximityInteractions();
-
-    if (this.isMalphasMetaActive) {
-      this.malphasMetaTimer -= delta / 1000;
-      if (this.malphasCountdownText) {
-        const sec = Math.max(0, Math.ceil(this.malphasMetaTimer));
-        this.malphasCountdownText.setText(`⚠ ¡DECRETO REAL: LEY DEL DESEO! — SOBREVIVE: ${sec}s ⚠`);
-      }
-      if (this.malphasMetaTimer <= 0) {
-        this.resolveMalphasMetaPhase();
-      }
-    }
 
     // Proximity next-level auto-transition when walking to the right screen boundary of a cleared act!
     if (this.isActCleared && !this.isTransitioningAct && this.player.position.x >= 595) {
@@ -926,16 +923,6 @@ export class GameScene extends Phaser.Scene {
       const effectiveReachY = reachY + 16;
 
       if (bdx > 0 && bdx <= effectiveReachX && bdy <= effectiveReachY) {
-        if (this.isMalphasMetaActive) {
-          // Clock rewind! Time reverses on Malphas's wounds!
-          this.audio.playClockRewind();
-          this.bossSprite.setTint(0xdd66ff);
-          this.time.delayedCall(140, () => this.bossSprite?.clearTint());
-          this.spawnDamageNumber(this.currentBoss.position.x, this.currentBoss.position.y - 50, 0, false, '#ffd700');
-          this.triggerShalemBalloon("Shalem: «¡El tiempo retrocede sobre sus heridas! ¡Esquiva y SOBREVIVE al decreto!»", 2500);
-          return;
-        }
-
         const res = CombatUseCases.executeAttackOnBoss(this.player, this.currentBoss);
 
         this.cameras.main.shake(isHeavy ? 200 : 140, isHeavy ? 0.016 : 0.01);
@@ -954,11 +941,7 @@ export class GameScene extends Phaser.Scene {
         this.time.delayedCall(120, () => this.bossSprite?.clearTint());
 
         if (res.targetKilled) {
-          if (this.currentBoss.id === 'rex_malphas' && !this.isMalphasMetaActive) {
-            this.triggerMalphasMetaPhase();
-          } else {
-            this.handleBossDefeated();
-          }
+          this.handleBossDefeated();
         }
       } else if (bdx > effectiveReachX && this.enemies.filter(e => e.isAlive()).length === 0) {
         this.triggerShalemBalloon("Shalem: «¡Estás demasiado lejos! ¡Acércate más a la Madre Morwenna para alcanzarla con tu arma!»", 2800);
@@ -1214,109 +1197,154 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private triggerMalphasMetaPhase(): void {
-    if (!this.currentBoss) return;
-    this.isMalphasMetaActive = true;
-    this.malphasMetaTimer = 20;
+  private triggerGameOver(): void {
+    if (this.isGameOverModalOpen) return;
+    this.isGameOverModalOpen = true;
 
-    this.currentBoss.phase = BossPhaseType.PHASE_3_UNBEATABLE;
-    this.currentBoss.isInvulnerable = true;
-    this.currentBoss.health = this.currentBoss.maxHealth;
+    this.audio.playSfx('glass_shatter');
+    this.cameras.main.flash(450, 160, 20, 20);
+    this.cameras.main.shake(300, 0.02);
 
-    // Publish event so HUD changes to Infinite Gold
-    EventBus.getInstance().publish(
-      new BossUiShatteredEvent('rex_malphas', 'DECRETO REAL: LEY DEL DESEO')
-    );
+    this.playerSprite.setTint(0x3a1a1a);
+    if (this.playerSprite.anims.isPlaying) {
+      this.playerSprite.stop();
+    }
 
-    // 1. Victory Banner appears as a dramatic fakeout
-    const fakeBannerBg = this.add.rectangle(320, 160, 420, 75, 0x11081f, 0.94)
-      .setStrokeStyle(2, 0xffd700)
-      .setDepth(360);
+    this.gameOverContainer = this.add.container(320, 180).setDepth(450);
 
-    const fakeBannerTitle = this.add.text(320, 150, '★ ¡ENEMIGO DERROTADO! ★', {
+    const dimBg = this.add.rectangle(0, 0, 640, 360, 0x05020a, 0.88).setInteractive();
+    dimBg.on('pointerdown', (p: Phaser.Input.Pointer) => p.event.stopPropagation());
+
+    const frameW = 440;
+    const frameH = 220;
+    const winBg = this.add.rectangle(0, 0, frameW, frameH, 0x0e0614, 0.97)
+      .setStrokeStyle(2, 0xd4af37);
+    const winInner = this.add.rectangle(0, 0, frameW - 8, frameH - 8)
+      .setStrokeStyle(1, 0x6e2222);
+
+    const titleText = this.add.text(0, -68, '☠ HAS SUCUMBIDO A LA OSCURIDAD ☠', {
       fontFamily: 'Cinzel, Georgia, serif',
-      fontSize: '15px',
-      color: '#ffd700',
-      stroke: '#000',
+      fontSize: '14px',
+      color: '#ff4444',
+      stroke: '#000000',
       strokeThickness: 3,
       fontStyle: 'bold'
-    }).setOrigin(0.5).setDepth(361);
+    }).setOrigin(0.5);
 
-    // 2. After 1.4s, Malphas shatters the UI!
-    this.time.delayedCall(1400, () => {
-      this.audio.playGlassShatter();
-      this.cameras.main.shake(700, 0.035);
-      this.cameras.main.flash(400, 255, 230, 255);
+    const subtitle = this.add.text(0, -38, `«La sangre de ${this.player.name} se apaga en las cenizas de Albion...\nPero la profecía de la Luna Roja aún aguarda tu regreso.»`, {
+      fontFamily: 'serif',
+      fontSize: '9.5px',
+      color: '#d4c2e6',
+      align: 'center',
+      fontStyle: 'italic',
+      lineSpacing: 3
+    }).setOrigin(0.5);
 
-      // Shatter shards
-      for (let i = 0; i < 18; i++) {
-        const shard = this.add.polygon(
-          320 + Phaser.Math.Between(-150, 150),
-          160 + Phaser.Math.Between(-30, 30),
-          [0, 0, Phaser.Math.Between(8, 20), Phaser.Math.Between(-10, 10), Phaser.Math.Between(-5, 15), Phaser.Math.Between(10, 25)],
-          0xffd700,
-          0.85
-        ).setDepth(365);
+    const sep = this.add.rectangle(0, -12, 340, 1, 0xd4af37, 0.6);
 
-        this.tweens.add({
-          targets: shard,
-          x: shard.x + Phaser.Math.Between(-250, 250),
-          y: shard.y + Phaser.Math.Between(-180, 220),
-          rotation: Phaser.Math.FloatBetween(-3, 3),
-          alpha: 0,
-          duration: Phaser.Math.Between(600, 1100),
-          onComplete: () => shard.destroy()
-        });
+    this.gameOverButtons = [];
+    this.gameOverFocusIndex = 0;
+
+    const btnRetryBg = this.add.rectangle(0, 18, 260, 28, 0x3a1448, 0.98)
+      .setStrokeStyle(1.5, 0xffd700)
+      .setInteractive({ useHandCursor: true });
+    const btnRetryText = this.add.text(0, 18, '⚔ REINTENTAR ESCENARIO ⚔', {
+      fontFamily: 'Cinzel, monospace',
+      fontSize: '10px',
+      color: '#ffffff',
+      fontStyle: 'bold'
+    }).setOrigin(0.5);
+
+    const btnMenuBg = this.add.rectangle(0, 56, 260, 28, 0x140a1c, 0.92)
+      .setStrokeStyle(1, 0x5a2d6b)
+      .setInteractive({ useHandCursor: true });
+    const btnMenuText = this.add.text(0, 56, '⮌ VOLVER AL MENÚ PRINCIPAL', {
+      fontFamily: 'Cinzel, monospace',
+      fontSize: '10px',
+      color: '#cbb6de'
+    }).setOrigin(0.5);
+
+    const retryAction = () => {
+      this.closeGameOverModal();
+      this.transitionToActWithLoading(this.currentScenario);
+    };
+
+    const menuAction = () => {
+      this.closeGameOverModal();
+      if (this.scene.isActive('HUDScene')) {
+        this.scene.stop('HUDScene');
       }
+      this.cameras.main.fade(300, 0, 0, 0);
+      this.time.delayedCall(320, () => {
+        this.scene.start('TitleScene');
+      });
+    };
 
-      fakeBannerBg.destroy();
-      fakeBannerTitle.destroy();
+    btnRetryBg.on('pointerdown', retryAction);
+    btnMenuBg.on('pointerdown', menuAction);
 
-      // Malphas dialogue
-      this.triggerShalemBalloon(
-        "Rex Malphas: «No tuve que obligarlos a odiarte, hijo mío. Solo tuve que enseñarles a temerte. ¡DECRETO REAL: LEY DEL DESEO!»",
-        6500
-      );
+    btnRetryBg.on('pointerover', () => this.setGameOverFocus(0));
+    btnMenuBg.on('pointerover', () => this.setGameOverFocus(1));
 
-      // Countdown UI Banner
-      this.malphasCountdownText = this.add.text(320, 95, '⚠ ¡DECRETO REAL: LEY DEL DESEO! — SOBREVIVE: 20s ⚠', {
-        fontFamily: 'monospace',
-        fontSize: '11px',
-        color: '#ff4444',
-        backgroundColor: '#200808',
-        padding: { x: 8, y: 4 },
-        fontStyle: 'bold'
-      }).setOrigin(0.5).setDepth(360);
+    this.gameOverButtons.push(
+      { bg: btnRetryBg, text: btnRetryText, action: retryAction },
+      { bg: btnMenuBg, text: btnMenuText, action: menuAction }
+    );
+
+    const helperText = this.add.text(0, 90, 'Usa [W] / [S] o Flechas para elegir · [ENTER] o [ESPACIO] para confirmar', {
+      fontFamily: 'monospace',
+      fontSize: '8px',
+      color: '#8e79a8'
+    }).setOrigin(0.5);
+
+    this.gameOverContainer.add([dimBg, winBg, winInner, titleText, subtitle, sep, btnRetryBg, btnRetryText, btnMenuBg, btnMenuText, helperText]);
+  }
+
+  private handleGameOverInput(): void {
+    if (
+      (this.keyW && Phaser.Input.Keyboard.JustDown(this.keyW)) ||
+      (this.cursors && Phaser.Input.Keyboard.JustDown(this.cursors.up))
+    ) {
+      this.setGameOverFocus(0);
+    }
+    if (
+      (this.keyS && Phaser.Input.Keyboard.JustDown(this.keyS)) ||
+      (this.cursors && Phaser.Input.Keyboard.JustDown(this.cursors.down))
+    ) {
+      this.setGameOverFocus(1);
+    }
+    if (
+      (this.keyEnter && Phaser.Input.Keyboard.JustDown(this.keyEnter)) ||
+      (this.keySpace && Phaser.Input.Keyboard.JustDown(this.keySpace))
+    ) {
+      if (this.gameOverButtons[this.gameOverFocusIndex]) {
+        this.gameOverButtons[this.gameOverFocusIndex].action();
+      }
+    }
+  }
+
+  private setGameOverFocus(idx: number): void {
+    this.gameOverFocusIndex = idx;
+    this.audio.playSfx('menu_select');
+    this.gameOverButtons.forEach((btn, i) => {
+      if (i === idx) {
+        btn.bg.setFillStyle(0x3a1448, 0.98);
+        btn.bg.setStrokeStyle(1.5, 0xffd700);
+        btn.text.setColor('#ffffff');
+      } else {
+        btn.bg.setFillStyle(0x140a1c, 0.92);
+        btn.bg.setStrokeStyle(1, 0x5a2d6b);
+        btn.text.setColor('#cbb6de');
+      }
     });
   }
 
-  private resolveMalphasMetaPhase(): void {
-    this.isMalphasMetaActive = false;
-    this.malphasCountdownText?.destroy();
-    this.malphasCountdownText = undefined;
-
-    // Cinematic beam: Luz de Alba
-    this.cameras.main.flash(900, 255, 255, 255);
-    this.audio.playFinisherSound(true);
-
-    // Beam of light graphics
-    const beam = this.add.rectangle(320, 260, 640, 20, 0xffffff, 0.95).setDepth(370);
-    this.tweens.add({
-      targets: beam,
-      alpha: 0,
-      scaleY: 3,
-      duration: 800,
-      onComplete: () => beam.destroy()
-    });
-
-    this.triggerShalemBalloon(
-      "Elowen: «¡No voy a volver a huir, Thomas! ¡No hago esto por vuestra profecía, sino porque no voy a dejar que tú decidas quiénes somos!»",
-      7000
-    );
-
-    this.time.delayedCall(2200, () => {
-      this.handleBossDefeated();
-    });
+  private closeGameOverModal(): void {
+    if (this.gameOverContainer) {
+      this.gameOverContainer.destroy();
+      this.gameOverContainer = undefined;
+    }
+    this.isGameOverModalOpen = false;
   }
 
   private clearActExit(): void {
@@ -1736,12 +1764,9 @@ export class GameScene extends Phaser.Scene {
       this.droppedCenserTween = undefined;
     }
 
-    // Clear Meta Rex Malphas UI
-    if (this.malphasCountdownText) {
-      this.malphasCountdownText.destroy();
-      this.malphasCountdownText = undefined;
-    }
-    this.isMalphasMetaActive = false;
+    this.closeGameOverModal();
+    this.isGameOverModalOpen = false;
+    this.gameOverContainer = undefined;
 
     const introLines = this.dialogues.getScenarioIntro(this.currentScenario);
 

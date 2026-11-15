@@ -98,18 +98,7 @@ export class Boss {
         this.phase = BossPhaseType.PHASE_2;
         phaseChanged = true;
         EventBus.getInstance().publish(
-          new BossPhaseChangedEvent(this.id, this.phase, 'FASE 2: LA SANGRE DEL MAESTRO')
-        );
-      } else if (this.phase === BossPhaseType.PHASE_2 && this.health <= 0) {
-        // Trigger the famous UNBEATABLE Phase 3: Rex Malphas shatters the UI!
-        this.phase = BossPhaseType.PHASE_3_UNBEATABLE;
-        this.isInvulnerable = true;
-        this.isUiBroken = true;
-        this.health = this.maxHealth; // Infinite gold life
-        phaseChanged = true;
-
-        EventBus.getInstance().publish(
-          new BossUiShatteredEvent(this.id, 'DECRETO REAL: LEY DEL DESEO — SOBREVIVE')
+          new BossPhaseChangedEvent(this.id, this.phase, 'FASE 2: DECRETO REAL — LEY DEL DESEO')
         );
       }
     } else if (this.id === 'madre_morwenna') {
