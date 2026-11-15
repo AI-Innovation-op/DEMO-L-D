@@ -661,20 +661,47 @@ export class GameScene extends Phaser.Scene {
       this.hasTalkedToElowen = true;
       this.player.heal(35);
       this.player.stats.restorePosture(this.player.stats.maxPosture);
-      this.storyProgress.completeMilestone('act1_dialogue');
       this.storyProgress.addProgress(15);
       this.spawnDamageNumber(this.playerSprite.x, this.playerSprite.y - 45, 35, false, '#88ff88');
 
-      // Pause GameScene and open canonical Elowen dialogue overlay
-      this.scene.pause('GameScene');
-      this.scene.launch('CharacterDialogueScene', {
-        player: this.player,
-        scenarioIndex: 1,
-        audio: this.audio,
-        dialogueType: 'elowen'
-      });
+      if (this.currentScenario === 1) {
+        this.storyProgress.completeMilestone('act1_dialogue');
+        // Pause GameScene and open canonical Elowen dialogue overlay
+        this.scene.pause('GameScene');
+        this.scene.launch('CharacterDialogueScene', {
+          player: this.player,
+          scenarioIndex: 1,
+          audio: this.audio,
+          dialogueType: 'elowen'
+        });
+      } else if (this.currentScenario === 2) {
+        this.storyProgress.completeMilestone('act2_elowen');
+        this.scene.pause('GameScene');
+        this.scene.launch('CharacterDialogueScene', {
+          player: this.player,
+          scenarioIndex: 2,
+          audio: this.audio,
+          dialogueType: 'elowen_londinium'
+        });
+      } else {
+        this.storyProgress.completeMilestone('act3_elowen');
+        this.scene.pause('GameScene');
+        this.scene.launch('CharacterDialogueScene', {
+          player: this.player,
+          scenarioIndex: 3,
+          audio: this.audio,
+          dialogueType: 'elowen_cathedral'
+        });
+      }
     } else {
-      this.triggerShalemBalloon("Elowen: «Que la verdadera luz guarde tus pasos, Thomas...»", 5000);
+      // Repeat dialogue varies by scenario
+      if (this.currentScenario === 1) {
+        this.triggerShalemBalloon("Elowen: «Que la verdadera luz guarde tus pasos, Thomas...»", 5000);
+      } else if (this.currentScenario === 2) {
+        this.triggerShalemBalloon("Elowen: «No desperdicies tiempo conmigo... Derrota al rey y libera a Albion.»", 5000);
+      } else {
+        this.triggerShalemBalloon("Elowen: «Mi luz ya está en tu espada, Thomas. Termina lo que empezamos juntos...»", 5000);
+      }
     }
   }
 
@@ -761,8 +788,8 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // 1. Check Elowen (Scenario 1)
-    if (this.currentScenario === 1 && this.elowenSprite) {
+    // 1. Check Elowen (all scenarios)
+    if (this.elowenSprite) {
       const dist = Math.hypot(px - this.elowenSprite.x, py - this.elowenSprite.y);
       if (dist < 48 && dist < closestDist) {
         closestDist = dist;
@@ -1266,11 +1293,13 @@ export class GameScene extends Phaser.Scene {
 
     const retryAction = () => {
       this.closeGameOverModal();
+      this.saveCheckpoint();
       this.transitionToActWithLoading(this.currentScenario);
     };
 
     const menuAction = () => {
       this.closeGameOverModal();
+      this.saveCheckpoint();
       if (this.scene.isActive('HUDScene')) {
         this.scene.stop('HUDScene');
       }
@@ -1345,6 +1374,18 @@ export class GameScene extends Phaser.Scene {
       this.gameOverContainer = undefined;
     }
     this.isGameOverModalOpen = false;
+  }
+
+  /** Persist lightweight checkpoint to localStorage so "Continuar partida" works. */
+  private saveCheckpoint(): void {
+    try {
+      const checkpoint = {
+        characterId: this.player.id,
+        scenarioIndex: this.currentScenario,
+        timestamp: Date.now()
+      };
+      localStorage.setItem('litd_checkpoint', JSON.stringify(checkpoint));
+    } catch { /* quota / private browsing – silently ignore */ }
   }
 
   private clearActExit(): void {
@@ -1710,6 +1751,8 @@ export class GameScene extends Phaser.Scene {
     this.clearActExit();
     this.currentScenario = scenarioIndex;
     this.storyProgress.setAct(scenarioIndex);
+    this.hasTalkedToElowen = false; // Reset per-scenario Elowen interaction
+    this.saveCheckpoint();
 
     // Clear existing enemies, shadows & boss
     this.enemies.forEach(e => {
@@ -1845,6 +1888,20 @@ export class GameScene extends Phaser.Scene {
 
       const introText = introLines[0] ? `${introLines[0].speaker}: ${introLines[0].text}` : "Shalem: «Escenario 2: Londinium»";
       this.triggerShalemBalloon(introText, 4500);
+
+      // Spawn Elowen NPC — imprisoned near the dungeon gate in Londinium
+      this.elowenShadow = this.add.ellipse(185, 268, 22, 6, 0x000000, 0.4).setDepth(267);
+      this.elowenSprite = this.add.image(185, 268, 'elowen_npc').setOrigin(0.5, 1).setDepth(268).setTint(0x9988aa);
+
+      this.tweens.add({
+        targets: this.elowenSprite,
+        scaleY: 1.02,
+        alpha: 0.85,
+        duration: 1600,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+      });
     } else {
       // Catedral Invertida
       this.bgImage.setTexture('bg_cathedral');
@@ -1870,6 +1927,20 @@ export class GameScene extends Phaser.Scene {
 
       const introText = introLines[0] ? `${introLines[0].speaker}: ${introLines[0].text}` : "Shalem: «Escenario 3: La Catedral Invertida»";
       this.triggerShalemBalloon(introText, 4500);
+
+      // Spawn Elowen NPC — weakened, offering her Gota de Luz Divina to forge Alba Gris
+      this.elowenShadow = this.add.ellipse(150, 265, 22, 6, 0x000000, 0.35).setDepth(264);
+      this.elowenSprite = this.add.image(150, 265, 'elowen_npc').setOrigin(0.5, 1).setDepth(265).setAlpha(0.9);
+
+      this.tweens.add({
+        targets: this.elowenSprite,
+        alpha: 0.6,
+        scaleY: 0.97,
+        duration: 2000,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+      });
     }
   }
 }

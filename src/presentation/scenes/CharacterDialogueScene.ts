@@ -41,6 +41,10 @@ export class CharacterDialogueScene extends Phaser.Scene {
     const type = data.dialogueType || 'party';
     if (type === 'elowen') {
       this.dialogueBeats = this.generateElowenDialogue();
+    } else if (type === 'elowen_londinium') {
+      this.dialogueBeats = this.generateElowenLondiniumDialogue();
+    } else if (type === 'elowen_cathedral') {
+      this.dialogueBeats = this.generateElowenCathedralDialogue();
     } else if (type === 'cedric') {
       this.dialogueBeats = this.generateCedricDialogue();
     } else {
@@ -102,6 +106,78 @@ export class CharacterDialogueScene extends Phaser.Scene {
         portraitKey: 'portrait_shalem',
         portraitSide: 'left',
         text: '«Qué conmovedor... casi se me cae un bigote de la emoción. Menos sentimentalismo y más estar alerta, Thomas: ¡esos Acechadores de Ceniza tienen colmillos muy reales!»'
+      }
+    ];
+  }
+
+  /** Act II – Elowen is chained in the dungeons of Londinium. */
+  private generateElowenLondiniumDialogue(): DialogueBeat[] {
+    return [
+      {
+        speaker: 'Elowen',
+        portraitKey: 'portrait_elowen',
+        portraitSide: 'right',
+        text: '«Thomas... Viniste. Me arrastraron desde Oakhaven encadenada a un carro de sal. Los guardias dorados dicen que soy la ofrenda del Cáliz Solar... que mi sangre sellará el pacto del Rey con el Abismo.»'
+      },
+      {
+        speaker: 'Thomas',
+        portraitKey: 'portrait_thomas',
+        portraitSide: 'left',
+        text: '«Nadie más va a arrodillarte sobre sal gruesa, Elowen. He cruzado Oakhaven entera para encontrarte. Romperé estas cadenas y luego le arrancaré la corona al falso rey.»'
+      },
+      {
+        speaker: 'Elowen',
+        portraitKey: 'portrait_elowen',
+        portraitSide: 'right',
+        text: '«Ten cuidado... Malphas no es solo un tirano. Es Alaric, el antiguo maestro de Khaterine. Vendió a su propia familia en la Noche de la Luna Roja por el poder de torcer la realidad. No le subestimes.»'
+      },
+      {
+        speaker: 'Elowen',
+        portraitKey: 'portrait_elowen',
+        portraitSide: 'right',
+        text: '«Toma mi bendición una vez más... Es lo único que estos muros no pudieron quitarme. Que sane tus heridas y te recuerde por qué luchas.»'
+      },
+      {
+        speaker: 'Shalem',
+        portraitKey: 'portrait_shalem',
+        portraitSide: 'left',
+        text: '«Bueno, bueno... una reunión entrañable en las mazmorras más pestilentes del reino. ¡Rompe esos grilletes de una vez y vamos por el impostor de la corona, muchacho!»'
+      }
+    ];
+  }
+
+  /** Act III – Elowen sacrifices her Gota de Luz Divina to forge Alba Gris. */
+  private generateElowenCathedralDialogue(): DialogueBeat[] {
+    return [
+      {
+        speaker: 'Elowen',
+        portraitKey: 'portrait_elowen',
+        portraitSide: 'right',
+        text: '«Las leyes del mundo se han roto, Thomas... Siento cómo la catedral nos empuja hacia el vacío. Pero hay algo que aún puedo hacer.»'
+      },
+      {
+        speaker: 'Thomas',
+        portraitKey: 'portrait_thomas',
+        portraitSide: 'left',
+        text: '«Elowen, no... Veo lo que pretendes. Si entregas tu Gota de Luz Divina morirás. ¡Tiene que haber otra manera!»'
+      },
+      {
+        speaker: 'Elowen',
+        portraitKey: 'portrait_elowen',
+        portraitSide: 'right',
+        text: '«No voy a morir, Thomas. Voy a convertirme en parte de tu espada. Mi luz unida a tu fuego negro forjará Alba Gris: la hoja que no pertenece ni al Cielo ni al Abismo. Es la única arma que puede herir a Astaroth.»'
+      },
+      {
+        speaker: 'Elowen',
+        portraitKey: 'portrait_elowen',
+        portraitSide: 'right',
+        text: '«¿Recuerdas la colina del viejo roble? Prometí que encontraríamos la luz juntos. Esta es mi forma de cumplir esa promesa... para siempre.»'
+      },
+      {
+        speaker: 'Shalem',
+        portraitKey: 'portrait_shalem',
+        portraitSide: 'left',
+        text: '«...Maldita sea. Es la primera vez en tres mil años que un humano me deja sin palabras. Toma esa espada, Thomas, y hazle justicia a lo que ella te ha dado. ¡Terminemos con esto!»'
       }
     ];
   }

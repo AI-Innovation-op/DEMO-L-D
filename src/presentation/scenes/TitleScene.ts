@@ -216,16 +216,62 @@ export class TitleScene extends Phaser.Scene {
 
     this.menuContainer.add([bgOuter, bgInner, titleText, divider]);
 
-    // 1. Button "Continuar · sin partida" (Disabled)
-    const btnContinueBg = this.add.rectangle(0, -70, boxW - 20, 24, 0x0f0b1a, 0.8)
-      .setStrokeStyle(1, 0x2b2238);
+    // 1. Button "Continuar partida" — enabled when a checkpoint exists in localStorage
+    const checkpoint = this.loadCheckpoint();
+    const hasSave = !!checkpoint;
 
-    const btnContinueText = this.add.text(0, -70, 'Continuar · sin partida', {
-      fontFamily: 'sans-serif',
+    const btnContinueBg = this.add.rectangle(0, -70, boxW - 20, 24,
+      hasSave ? 0x1a1030 : 0x0f0b1a, hasSave ? 0.95 : 0.8
+    )
+      .setStrokeStyle(1, hasSave ? 0xd4af37 : 0x2b2238);
+
+    const actNames: Record<number, string> = { 1: 'Oakhaven', 2: 'Londinium', 3: 'Catedral Invertida' };
+    const continueLabel = hasSave
+      ? `Continuar · ${actNames[checkpoint!.scenarioIndex] || 'Acto ' + checkpoint!.scenarioIndex}`
+      : 'Continuar · sin partida';
+
+    const btnContinueText = this.add.text(0, -70, continueLabel, {
+      fontFamily: hasSave ? 'Cinzel, sans-serif' : 'sans-serif',
       fontSize: '9px',
-      color: '#5e5570',
-      fontStyle: 'italic'
+      color: hasSave ? '#e8d8ff' : '#5e5570',
+      fontStyle: hasSave ? 'bold' : 'italic'
     }).setOrigin(0.5);
+
+    if (hasSave) {
+      btnContinueBg.setInteractive({ useHandCursor: true });
+      btnContinueBg.on('pointerover', () => {
+        btnContinueBg.setFillStyle(0x2a1440, 0.98);
+        btnContinueBg.setStrokeStyle(1.5, 0xffd700);
+        btnContinueText.setColor('#ffffff');
+      });
+      btnContinueBg.on('pointerout', () => {
+        btnContinueBg.setFillStyle(0x1a1030, 0.95);
+        btnContinueBg.setStrokeStyle(1, 0xd4af37);
+        btnContinueText.setColor('#e8d8ff');
+      });
+      btnContinueBg.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+        pointer.event.stopPropagation();
+        if (!this.activeModalContainer) {
+          this.audio.playSfx('menu_select');
+          this.cameras.main.fade(300, 0, 0, 0);
+          this.time.delayedCall(320, () => {
+            const cfg = this.getContinueLoadingConfig(checkpoint!.scenarioIndex);
+            this.scene.start('LoadingScene', {
+              targetScene: 'GameScene',
+              targetData: {
+                characterId: checkpoint!.characterId,
+                scenarioIndex: checkpoint!.scenarioIndex
+              },
+              imageKey: cfg.image,
+              chapterTitle: cfg.title,
+              storyText: cfg.story,
+              tipText: cfg.tip,
+              minDurationMs: 1800
+            });
+          });
+        }
+      });
+    }
 
     this.menuContainer.add([btnContinueBg, btnContinueText]);
 
@@ -769,5 +815,41 @@ export class TitleScene extends Phaser.Scene {
     this.time.delayedCall(340, () => {
       this.scene.start('StoryIntroScene', { characterId: this.selectedCharacter });
     });
+  }
+
+  /** Read the lightweight checkpoint from localStorage. Returns null if none. */
+  private loadCheckpoint(): { characterId: string; scenarioIndex: number; timestamp: number } | null {
+    try {
+      const raw = localStorage.getItem('litd_checkpoint');
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      if (data && data.characterId && data.scenarioIndex) return data;
+    } catch { /* corrupted or private browsing */ }
+    return null;
+  }
+
+  /** Loading-screen config for resuming from a checkpoint. */
+  private getContinueLoadingConfig(scenarioIndex: number): { image: string; title: string; story: string; tip: string } {
+    const configs: Record<number, { image: string; title: string; story: string; tip: string }> = {
+      1: {
+        image: 'loading_pyre_remains',
+        title: 'ACTO I — OAKHAVEN: LAS HOGUERAS DE LA INQUISICIÓN',
+        story: '«Retomarás la lucha en las calles de Oakhaven. Los Acechadores de Ceniza y la Madre Morwenna siguen amenazando la aldea. Elowen te espera cerca del jardín.»',
+        tip: '«Shalem: Habla con Elowen [E] para recibir su bendición y con el Padre Cedric para obtener el Rosario de Madera.»'
+      },
+      2: {
+        image: 'loading_londinium_gate',
+        title: 'ACTO II — LONDINIUM: LA CIUDADELA DORADA',
+        story: '«Retomarás el asalto a la Ciudadela Dorada. Elowen permanece encadenada en las mazmorras de Londinium. El Rex Malphas aguarda en su trono astral.»',
+        tip: '«Shalem: Busca a Elowen en las mazmorras [E] antes de enfrentar al falso rey. ¡Su bendición te dará fuerzas!»'
+      },
+      3: {
+        image: 'loading_shalem_wall',
+        title: 'ACTO III — LA CATEDRAL INVERTIDA: EL ABISMO',
+        story: '«Retomarás la batalla en la Catedral Invertida. Elowen ha sacrificado su Gota de Luz Divina para forjar Alba Gris. El demonio Astaroth te espera.»',
+        tip: '«Shalem: Habla con Elowen [E] antes del combate final. Su última bendición puede ser la diferencia entre la victoria y la ruina.»'
+      }
+    };
+    return configs[scenarioIndex] || configs[1];
   }
 }
