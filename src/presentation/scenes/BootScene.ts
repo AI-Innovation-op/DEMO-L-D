@@ -13,6 +13,26 @@ export class BootScene extends Phaser.Scene {
     this.load.image('thomas_disarmed', '/assets/characters/thomas_disarmed.png');
     this.load.image('portrait_thomas', '/assets/characters/portrait_thomas.png');
 
+    this.load.image('khaterine_idle', '/assets/characters/khaterine_idle.png');
+    this.load.image('khaterine_attack', '/assets/characters/khaterine_attack.png');
+    this.load.image('portrait_khaterine', '/assets/characters/portrait_khaterine.png');
+
+    this.load.image('shalem_cat', '/assets/characters/shalem_cat.png');
+    this.load.image('portrait_shalem', '/assets/characters/portrait_shalem.png');
+
+    this.load.image('elowen_npc', '/assets/characters/elowen_npc.png');
+    this.load.image('elowen_idle', '/assets/characters/elowen_idle.png');
+    this.load.image('portrait_elowen', '/assets/characters/portrait_elowen.png');
+
+    this.load.image('ash_prowler', '/assets/characters/ash_prowler.png');
+    this.load.image('ash_prowler_attack', '/assets/characters/ash_prowler_attack.png');
+
+    this.load.image('boss_morwenna', '/assets/characters/boss_morwenna.png');
+    this.load.image('portrait_morwenna', '/assets/characters/portrait_morwenna.png');
+
+    this.load.image('boss_malphas', '/assets/characters/boss_malphas.png');
+    this.load.image('portrait_malphas', '/assets/characters/portrait_malphas.png');
+
     // 2. Load the official artwork images from the public folder
     this.load.image('loading_shalem_wall', '/assets/loading/loading_shalem_wall.jpg');
     this.load.image('loading_bridge_journey', '/assets/loading/loading_bridge_journey.jpg');

@@ -44,8 +44,8 @@ export class CharacterDialogueScene extends Phaser.Scene {
     const isThomas = this.player.id === 'thomas';
     const mainProtagonist = isThomas ? 'Thomas' : 'Khaterine';
     const allyName = isThomas ? 'Khaterine' : 'Thomas';
-    const mainPortrait = isThomas ? 'portrait_thomas' : 'khaterine_idle';
-    const allyPortrait = isThomas ? 'khaterine_idle' : 'portrait_thomas';
+    const mainPortrait = isThomas ? 'portrait_thomas' : 'portrait_khaterine';
+    const allyPortrait = isThomas ? 'portrait_khaterine' : 'portrait_thomas';
 
     if (scenario === 1) {
       return [

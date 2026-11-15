@@ -1018,6 +1018,13 @@ export class GameScene extends Phaser.Scene {
         if (shadow) shadow.setPosition(newX, newY).setDepth(newY - 1);
       } else if (dist <= 38 && this.enemyAttackTimer >= 1400) {
         // Enemy attacks player: guardia/shield absorbs first!
+        if (enemy.id.startsWith('ash')) {
+          sprite.setTexture('ash_prowler_attack');
+          this.time.delayedCall(320, () => {
+            if (enemy.isAlive()) sprite.setTexture('ash_prowler');
+          });
+        }
+
         const hitRes = CombatUseCases.executeEnemyAttack(enemy, this.player, false);
         this.timeSinceLastHit = 0;
 

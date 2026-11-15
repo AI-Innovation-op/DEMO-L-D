@@ -63,12 +63,13 @@ export class StoryIntroScene extends Phaser.Scene {
 
     // 2. Center Stage: Shalem on Ancient Pedestal
     this.add.rectangle(320, 160, 100, 35, 0x1b1429).setStrokeStyle(1, 0x7a5a3a);
-    const shalemSprite = this.add.image(320, 142, 'shalem_cat').setScale(2.8);
+    const shalemSprite = this.add.image(320, 142, 'shalem_cat').setOrigin(0.5, 1).setScale(2.2);
 
-    // Floating idle animation for Shalem
+    // Subtle breathing animation for Shalem
     this.tweens.add({
       targets: shalemSprite,
-      y: 138,
+      scaleY: 2.26,
+      y: 142,
       duration: 1500,
       yoyo: true,
       repeat: -1,
