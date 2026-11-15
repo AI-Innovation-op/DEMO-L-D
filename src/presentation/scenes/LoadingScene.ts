@@ -86,12 +86,17 @@ export class LoadingScene extends Phaser.Scene {
     const activeKey = this.textures.exists(this.imageKey) ? this.imageKey : 'bg_oakhaven';
     this.bgImage = this.add.image(320, 180, activeKey).setDisplaySize(640, 360).setOrigin(0.5).setDepth(0);
 
-    // Subtle Ken Burns slow zoom animation
+    const baseScaleX = this.bgImage.scaleX;
+    const baseScaleY = this.bgImage.scaleY;
+
+    // Smooth Ken Burns breathing animation: Zooms in gently (1.06x), then zooms out back to exact console size (1.00x)!
     this.tweens.add({
       targets: this.bgImage,
-      scaleX: 1.04,
-      scaleY: 1.04,
-      duration: 8000,
+      scaleX: baseScaleX * 1.065,
+      scaleY: baseScaleY * 1.065,
+      duration: 1600,
+      yoyo: true,
+      repeat: -1,
       ease: 'Sine.easeInOut'
     });
 

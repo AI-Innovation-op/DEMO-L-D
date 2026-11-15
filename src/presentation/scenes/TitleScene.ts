@@ -507,55 +507,142 @@ export class TitleScene extends Phaser.Scene {
   }
 
   // ==========================================
-  // MODAL 3: INSTRUCCIONES
+  // ==========================================
+  // MODAL 3: INSTRUCCIONES Y CÓDICE DE COMBATE
   // ==========================================
   private showInstructionsModal(): void {
     this.closeModal();
 
     this.activeModalContainer = this.add.container(320, 180).setDepth(50);
 
-    const dimBg = this.add.rectangle(0, 0, 640, 360, 0x040208, 0.8).setInteractive();
+    // Dim background covering entire canvas
+    const dimBg = this.add.rectangle(0, 0, 640, 360, 0x040208, 0.85).setInteractive();
     dimBg.on('pointerdown', (p: Phaser.Input.Pointer) => p.event.stopPropagation());
 
-    const winBg = this.add.rectangle(0, 0, 480, 260, 0x0c0817, 0.97)
+    // Window frame
+    const frameW = 540;
+    const frameH = 296;
+    const winBg = this.add.rectangle(0, 0, frameW, frameH, 0x090614, 0.98)
       .setStrokeStyle(2, 0xd4af37);
 
-    const title = this.add.text(0, -110, '✦ CÓDICE DE COMBATE Y CONTROLES ✦', {
+    const winInner = this.add.rectangle(0, 0, frameW - 8, frameH - 8)
+      .setStrokeStyle(1, 0x472e5a);
+
+    const title = this.add.text(0, -126, '✦ CÓDICE DE COMBATE, MANDOS Y CONTROLES ✦', {
       fontFamily: 'Cinzel, Georgia, serif',
-      fontSize: '11px',
+      fontSize: '11.5px',
       color: '#ffd700',
+      stroke: '#000000',
+      strokeThickness: 2,
       fontStyle: 'bold'
     }).setOrigin(0.5);
 
-    const controls = [
-      '• [W, A, S, D] o Flechas: Movimiento fluido en 2.5D (profundidad en el escenario)',
-      '• [J]: Ataque Ligero con Espada / Magia rúnica',
-      '• [K]: Golpe Pesado / Absorción de Guardia',
-      '• [L]: Postura de Guardia táctica',
-      '• [ESPACIO]: Esquivar rodando con invulnerabilidad temporal',
-      '• [TAB]: Alternar al instante entre Thomas y Khaterine',
-      '• [T / Q]: Lanzar el arma para aturdir enemigos',
-      '• [E]: Recoger armas caídas / Charlar con Elowen para curarte',
-      '• [C]: Charlar entre el grupo y escuchar a Shalem',
-      '• [M]: Desbloquear Minijuegos de Shalem al subir de nivel',
-      '• [P]: Menú de pausa y arsenal'
+    const sub = this.add.text(0, -110, 'Domina a Thomas y Khaterine en la lucha por Albion contra la oscuridad', {
+      fontFamily: 'serif',
+      fontSize: '8.5px',
+      color: '#c5b4db',
+      fontStyle: 'italic'
+    }).setOrigin(0.5);
+
+    const dividerTop = this.add.rectangle(0, -98, frameW - 32, 1, 0x735591);
+
+    // IMPORTANT: Add backgrounds and header FIRST so they stay behind all text!
+    this.activeModalContainer.add([dimBg, winBg, winInner, title, sub, dividerTop]);
+
+    // Columna 1: Combate & Movimiento 2.5D (X = -250)
+    const col1X = -250;
+    const headerCol1 = this.add.text(col1X, -90, '⚔ MOVIMIENTO Y COMBATE 2.5D', {
+      fontFamily: 'Cinzel, Georgia, serif',
+      fontSize: '9px',
+      color: '#ffd700',
+      fontStyle: 'bold'
+    });
+    this.activeModalContainer.add(headerCol1);
+
+    const col1Items = [
+      { key: '[W, A, S, D] / Flechas', desc: 'Movimiento fluido en 8 direcciones y profundidad 2.5D en el escenario.' },
+      { key: '[J]', desc: 'Ataque Ligero: Combo rápido de espada o proyectiles de magia rúnica.' },
+      { key: '[K]', desc: 'Ataque Pesado: Quiebra posturas enemigas y absorbe su guardia.' },
+      { key: '[L]', desc: 'Guardia táctica: Reduce un 80% del daño a costa de tu barra azul.' },
+      { key: '[ESPACIO]', desc: 'Esquivar rodando: Otorga invulnerabilidad temporal y reposicionamiento.' },
+      { key: '[T / Q]', desc: 'Lanzar arma: Aturde enemigos a distancia; luego lucha a puñetazos.' }
     ];
 
-    controls.forEach((line, idx) => {
-      const lineTxt = this.add.text(-220, -82 + idx * 16, line, {
+    col1Items.forEach((item, idx) => {
+      const y = -72 + idx * 25;
+      const keyText = this.add.text(col1X, y, item.key, {
         fontFamily: 'monospace',
         fontSize: '8px',
-        color: '#e4d6f5'
+        color: '#ffdd6b',
+        fontStyle: 'bold'
       });
-      this.activeModalContainer?.add(lineTxt);
+      const descText = this.add.text(col1X, y + 10, item.desc, {
+        fontFamily: 'sans-serif',
+        fontSize: '7.5px',
+        color: '#d5c7e8',
+        wordWrap: { width: 235 }
+      });
+      this.activeModalContainer?.add([keyText, descText]);
     });
 
-    const closeBtn = this.add.text(0, 108, '[ VOLVER AL MENÚ ]', {
+    // Columna 2: Táctica, Arsenal y Magia (X = +15)
+    const col2X = 15;
+    const headerCol2 = this.add.text(col2X, -90, '📜 TÁCTICA, DIÁLOGOS Y ARSENAL', {
+      fontFamily: 'Cinzel, Georgia, serif',
+      fontSize: '9px',
+      color: '#ffd700',
+      fontStyle: 'bold'
+    });
+    this.activeModalContainer.add(headerCol2);
+
+    const col2Items = [
+      { key: '[TAB]', desc: 'Alternar al instante el héroe activo entre Thomas y Khaterine.' },
+      { key: '[E]', desc: 'Interactuar: Habla con Elowen o Cedric, y recoge armas caídas o reliquias.' },
+      { key: '[I]', desc: 'Inventario de Reliquias: Ver arsenal, tablillas proféticas y mejoras.' },
+      { key: '[C]', desc: 'Diálogo de grupo: Consulta las impresiones tácticas de Khaterine y Shalem.' },
+      { key: '[M]', desc: 'Minijuegos de Shalem: Desafíos del gato persa para regenerar maná.' },
+      { key: '[P] / [ESC]', desc: 'Pausar la partida para contemplar el códice o ajustar sonido.' }
+    ];
+
+    col2Items.forEach((item, idx) => {
+      const y = -72 + idx * 25;
+      const keyText = this.add.text(col2X, y, item.key, {
+        fontFamily: 'monospace',
+        fontSize: '8px',
+        color: '#ffdd6b',
+        fontStyle: 'bold'
+      });
+      const descText = this.add.text(col2X, y + 10, item.desc, {
+        fontFamily: 'sans-serif',
+        fontSize: '7.5px',
+        color: '#d5c7e8',
+        wordWrap: { width: 235 }
+      });
+      this.activeModalContainer?.add([keyText, descText]);
+    });
+
+    // Separador central vertical
+    const colSeparator = this.add.rectangle(0, 5, 1, 160, 0x3d2754);
+    this.activeModalContainer.add(colSeparator);
+
+    // Cuadro de consejo de Shalem al fondo
+    const tipBg = this.add.rectangle(0, 92, frameW - 32, 22, 0x140e21, 0.92)
+      .setStrokeStyle(1, 0x5a3e75);
+    const tipText = this.add.text(0, 92, '💡 CONSEJO DE SHALEM: La barra azul de Guardia se regenera sola tras 2s sin recibir golpes.', {
+      fontFamily: 'sans-serif',
+      fontSize: '8px',
+      color: '#98f5c4',
+      fontStyle: 'italic'
+    }).setOrigin(0.5);
+    this.activeModalContainer.add([tipBg, tipText]);
+
+    // Botón para volver
+    const closeBtn = this.add.text(0, 126, '[ VOLVER AL MENÚ ]', {
       fontFamily: 'monospace',
       fontSize: '9px',
       color: '#bba8d4',
       backgroundColor: '#1b1226',
-      padding: { x: 8, y: 4 }
+      padding: { x: 10, y: 4 }
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
     closeBtn.on('pointerover', () => closeBtn.setColor('#ffd700'));
@@ -565,7 +652,7 @@ export class TitleScene extends Phaser.Scene {
       this.closeModal();
     });
 
-    this.activeModalContainer.add([dimBg, winBg, title, closeBtn]);
+    this.activeModalContainer.add(closeBtn);
   }
 
   // ==========================================
@@ -576,18 +663,30 @@ export class TitleScene extends Phaser.Scene {
 
     this.activeModalContainer = this.add.container(320, 180).setDepth(50);
 
-    const dimBg = this.add.rectangle(0, 0, 640, 360, 0x040208, 0.8).setInteractive();
+    const dimBg = this.add.rectangle(0, 0, 640, 360, 0x040208, 0.85).setInteractive();
     dimBg.on('pointerdown', (p: Phaser.Input.Pointer) => p.event.stopPropagation());
 
-    const winBg = this.add.rectangle(0, 0, 420, 230, 0x0c0817, 0.97)
+    const frameW = 440;
+    const frameH = 240;
+    const winBg = this.add.rectangle(0, 0, frameW, frameH, 0x0c0817, 0.98)
       .setStrokeStyle(2, 0xd4af37);
 
-    const title = this.add.text(0, -90, '✦ THE LIGHT IN THE DARKNESS ✦', {
+    const winInner = this.add.rectangle(0, 0, frameW - 8, frameH - 8)
+      .setStrokeStyle(1, 0x472e5a);
+
+    const title = this.add.text(0, -92, '✦ THE LIGHT IN THE DARKNESS ✦', {
       fontFamily: 'Cinzel, Georgia, serif',
       fontSize: '12px',
       color: '#ffd700',
+      stroke: '#000000',
+      strokeThickness: 2,
       fontStyle: 'bold'
     }).setOrigin(0.5);
+
+    const dividerTop = this.add.rectangle(0, -78, frameW - 40, 1, 0x735591);
+
+    // IMPORTANT: Add backgrounds and header FIRST so they stay behind all text!
+    this.activeModalContainer.add([dimBg, winBg, winInner, title, dividerTop]);
 
     const creditsLines = [
       'Dirección Creativa, Concepto & Sprites Originales: Kevin',
@@ -600,8 +699,8 @@ export class TitleScene extends Phaser.Scene {
 
     creditsLines.forEach((line, idx) => {
       const isQuote = idx === 5;
-      const t = this.add.text(0, -55 + idx * 22, line, {
-        fontFamily: isQuote ? 'serif' : 'sans-serif',
+      const t = this.add.text(0, -50 + idx * 22, line, {
+        fontFamily: isQuote ? 'Cinzel, Georgia, serif' : 'sans-serif',
         fontSize: isQuote ? '9.5px' : '8.5px',
         color: isQuote ? '#ffd700' : '#d2c5e3',
         fontStyle: isQuote ? 'italic' : 'normal',
@@ -610,12 +709,12 @@ export class TitleScene extends Phaser.Scene {
       this.activeModalContainer?.add(t);
     });
 
-    const closeBtn = this.add.text(0, 85, '[ VOLVER AL MENÚ ]', {
+    const closeBtn = this.add.text(0, 92, '[ VOLVER AL MENÚ ]', {
       fontFamily: 'monospace',
       fontSize: '9px',
       color: '#bba8d4',
       backgroundColor: '#1b1226',
-      padding: { x: 8, y: 4 }
+      padding: { x: 10, y: 4 }
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
     closeBtn.on('pointerover', () => closeBtn.setColor('#ffd700'));
@@ -625,7 +724,7 @@ export class TitleScene extends Phaser.Scene {
       this.closeModal();
     });
 
-    this.activeModalContainer.add([dimBg, winBg, title, closeBtn]);
+    this.activeModalContainer.add(closeBtn);
   }
 
   private closeModal(): void {
