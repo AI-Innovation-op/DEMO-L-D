@@ -69,6 +69,10 @@ export class GameScene extends Phaser.Scene {
   public prophecy: ProphecyRepository = new ProphecyRepository();
   public unlockedWeaponIds: string[] = ['short_sword'];
 
+  // Combat Mastery: Perfect Parry & Alba Gris
+  private lastGuardPressTime: number = 0;
+  private hasAlbaGrisAwakened: boolean = false;
+
   // Game Over Modal State
   private isGameOverModalOpen: boolean = false;
   private gameOverContainer?: Phaser.GameObjects.Container;
@@ -172,6 +176,8 @@ export class GameScene extends Phaser.Scene {
     this.floatingPromptBadge = undefined;
     this.isGameOverModalOpen = false;
     this.gameOverContainer = undefined;
+    this.lastGuardPressTime = 0;
+    this.hasAlbaGrisAwakened = false;
   }
 
   public create(): void {
@@ -477,6 +483,9 @@ export class GameScene extends Phaser.Scene {
 
     // Block [L] (Held)
     if (this.keyL.isDown) {
+      if (Phaser.Input.Keyboard.JustDown(this.keyL)) {
+        this.lastGuardPressTime = this.time.now;
+      }
       this.player.startBlock();
       this.playerSprite.setTint(0x77aaff);
     } else if (this.player.state === CharacterState.BLOCKING) {
@@ -685,6 +694,7 @@ export class GameScene extends Phaser.Scene {
         });
       } else {
         this.storyProgress.completeMilestone('act3_elowen');
+        this.awakenAlbaGris();
         this.scene.pause('GameScene');
         this.scene.launch('CharacterDialogueScene', {
           player: this.player,
@@ -851,6 +861,13 @@ export class GameScene extends Phaser.Scene {
       this.playerSprite.stop();
     }
     const isDisarmed = this.player.disarmManager.isPlayerDisarmed();
+
+    // Khaterine: Ranged Abyssal Spellcasting
+    if (this.player.id === 'khaterine' && !isDisarmed) {
+      this.castKhaterineSpell(isHeavy);
+      return;
+    }
+
     const attackTex = isDisarmed
       ? 'thomas_disarmed'
       : (this.player.id === 'thomas' ? 'thomas_attack' : 'khaterine_attack');
@@ -880,13 +897,19 @@ export class GameScene extends Phaser.Scene {
 
     // Visual Slash Arc Effect
     if (!isDisarmed) {
+      const curWpn = this.player.disarmManager.getCurrentWeapon();
+      const isAlbaGris = curWpn.id === 'alba_gris' || this.hasAlbaGrisAwakened;
+
       const arcKey = isHeavy ? 'particle_slash_heavy' : 'particle_slash_arc';
       const slash = this.add.image(playerX + facing * (isHeavy ? 30 : 25), playerY - 25, arcKey)
         .setScale(facing > 0 ? (isHeavy ? 1.2 : 1) : (isHeavy ? -1.2 : -1), isHeavy ? 1.2 : 1)
         .setAlpha(0.9)
         .setDepth(playerY + 2);
 
-      if (this.player.id !== 'thomas') {
+      if (isAlbaGris) {
+        slash.setTint(0xfffae0); // Sacred gold-white
+        this.castAlbaGrisWave(playerX, playerY, facing, isHeavy);
+      } else if (this.player.id !== 'thomas') {
         slash.setTint(0xba68c8); // Khaterine's abyssal magic purple
       }
 
@@ -1018,6 +1041,311 @@ export class GameScene extends Phaser.Scene {
       this.playerSprite.setTexture(idleTex);
       this.player.finishAttack();
     });
+  }
+
+  /** Khaterine casts a ranged Abyssal Energy Bolt with impact explosion. */
+  private castKhaterineSpell(isHeavy: boolean): void {
+    this.playerSprite.setTexture('khaterine_attack');
+    this.audio.playSfx('dodge');
+
+    const px = this.playerSprite.x;
+    const py = this.playerSprite.y;
+    const facing = this.player.facingDirection;
+
+    // Fluid forward micro-step during cast
+    const stepDist = isHeavy ? 8 : 4;
+    const nextPlayerX = Phaser.Math.Clamp(px + facing * stepDist, 35, 605);
+    this.tweens.add({
+      targets: this.playerSprite,
+      x: nextPlayerX,
+      duration: 90,
+      ease: 'Quad.easeOut'
+    });
+    this.player.position = new Vector2(nextPlayerX, py);
+
+    // Abyssal Orb Projectile
+    const projectile = this.add.circle(px + facing * 20, py - 30, isHeavy ? 10 : 7, 0xba68c8, 0.95)
+      .setDepth(py + 2);
+    const innerCore = this.add.circle(px + facing * 20, py - 30, isHeavy ? 5 : 3, 0xffffff, 1)
+      .setDepth(py + 3);
+
+    const travelDist = isHeavy ? 320 : 250;
+    const targetX = Phaser.Math.Clamp(px + facing * travelDist, 25, 615);
+    const speed = 440; // px/sec
+    const duration = Math.abs(targetX - px) / speed * 1000;
+
+    let hasHit = false;
+
+    this.tweens.add({
+      targets: [projectile, innerCore],
+      x: targetX,
+      duration,
+      ease: 'Linear',
+      onUpdate: () => {
+        if (hasHit) return;
+
+        const currentX = projectile.x;
+        const currentY = projectile.y;
+
+        // Check collision with alive enemies
+        for (const enemy of this.enemies) {
+          if (!enemy.isAlive()) continue;
+          const edist = Math.hypot(enemy.position.x - currentX, enemy.position.y - currentY);
+          if (edist < 35) {
+            hasHit = true;
+            this.explodeAbyssalOrb(currentX, currentY, isHeavy, enemy);
+            projectile.destroy();
+            innerCore.destroy();
+            return;
+          }
+        }
+
+        // Check collision with boss
+        if (this.currentBoss && this.currentBoss.health > 0 && this.bossSprite) {
+          const bdist = Math.hypot(this.currentBoss.position.x - currentX, this.currentBoss.position.y - currentY);
+          if (bdist < 45) {
+            hasHit = true;
+            this.explodeAbyssalOrb(currentX, currentY, isHeavy, undefined, true);
+            projectile.destroy();
+            innerCore.destroy();
+            return;
+          }
+        }
+      },
+      onComplete: () => {
+        if (!hasHit) {
+          projectile.destroy();
+          innerCore.destroy();
+        }
+      }
+    });
+
+    // Reset texture after casting frame
+    this.time.delayedCall(isHeavy ? 260 : 170, () => {
+      this.playerSprite.setTexture('khaterine_idle');
+      this.player.finishAttack();
+    });
+  }
+
+  private explodeAbyssalOrb(x: number, y: number, isHeavy: boolean, targetEnemy?: Enemy, isBoss: boolean = false): void {
+    this.audio.playCombatHit(isHeavy);
+    this.cameras.main.shake(isHeavy ? 160 : 90, isHeavy ? 0.012 : 0.006);
+
+    // Detonation Blast
+    const blast = this.add.circle(x, y, isHeavy ? 28 : 18, 0x8e24aa, 0.75).setDepth(y + 5);
+    this.tweens.add({
+      targets: blast,
+      scaleX: 1.8,
+      scaleY: 1.8,
+      alpha: 0,
+      duration: 180,
+      ease: 'Quad.easeOut',
+      onComplete: () => blast.destroy()
+    });
+
+    const damage = isHeavy ? 55 : 32;
+
+    if (isBoss && this.currentBoss && this.bossSprite) {
+      const res = CombatUseCases.executeAttackOnBoss(this.player, this.currentBoss);
+      const finalDmg = Math.round(damage * (isHeavy ? 1.4 : 1.0));
+      this.spawnDamageNumber(this.currentBoss.position.x, this.currentBoss.position.y - 50, finalDmg, isHeavy, '#d477ff');
+      this.bossSprite.setTint(0xba68c8);
+      this.time.delayedCall(120, () => this.bossSprite?.clearTint());
+      if (res.targetKilled || this.currentBoss.health <= 0) {
+        this.handleBossDefeated();
+      }
+    } else if (targetEnemy) {
+      const res = CombatUseCases.executeAttackOnEnemy(this.player, targetEnemy);
+      const finalDmg = Math.round(damage * (isHeavy ? 1.4 : 1.0));
+      this.spawnDamageNumber(targetEnemy.position.x, targetEnemy.position.y - 35, finalDmg, isHeavy, '#d477ff');
+      const sprite = this.enemySprites.get(targetEnemy.id);
+      if (sprite) {
+        sprite.setTint(0xba68c8);
+        this.time.delayedCall(120, () => sprite.clearTint());
+
+        if (res.targetKilled || targetEnemy.health <= 0) {
+          this.tweens.add({
+            targets: sprite,
+            alpha: 0,
+            y: sprite.y - 15,
+            duration: 250,
+            onComplete: () => {
+              sprite.destroy();
+              this.enemyShadows.get(targetEnemy.id)?.destroy();
+              this.enemyShadows.delete(targetEnemy.id);
+            }
+          });
+          const remainingEnemies = this.enemies.filter(e => e.isAlive());
+          if (remainingEnemies.length === 0) {
+            this.storyProgress.completeMilestone('act1_monks');
+            this.storyProgress.completeMilestone('act1_beast');
+            this.storyProgress.addProgress(25);
+            this.triggerShalemBalloon("Shalem: «¡El orbe abisal de Khaterine los ha pulverizado! ¡Avanza hacia la derecha!»", 5000);
+          }
+        } else {
+          // Knockback
+          const facing = this.player.facingDirection;
+          const knockX = Phaser.Math.Clamp(targetEnemy.position.x + facing * (isHeavy ? 16 : 10), 35, 605);
+          targetEnemy.position = new Vector2(knockX, targetEnemy.position.y);
+          this.tweens.add({ targets: sprite, x: knockX, duration: 110, ease: 'Cubic.easeOut' });
+        }
+      }
+    }
+  }
+
+  /** Thomas swings Alba Gris with a piercing wave of holy and dark light. */
+  private castAlbaGrisWave(px: number, py: number, facing: number, isHeavy: boolean): void {
+    this.audio.playHealingEmber();
+
+    // Sacred Wave of Light and Shadow
+    const wave = this.add.image(px + facing * 25, py - 25, 'particle_slash_heavy')
+      .setScale(facing > 0 ? 1.4 : -1.4, 1.4)
+      .setTint(0xfff8d6)
+      .setAlpha(0.95)
+      .setDepth(py + 3);
+
+    const targetX = Phaser.Math.Clamp(px + facing * 260, 20, 620);
+    this.tweens.add({
+      targets: wave,
+      x: targetX,
+      alpha: 0,
+      scaleY: 1.8,
+      duration: 320,
+      ease: 'Quad.easeOut',
+      onComplete: () => wave.destroy()
+    });
+
+    // Pierces all enemies in path
+    const bonusHolyDmg = isHeavy ? 45 : 28;
+    for (const enemy of this.enemies) {
+      if (!enemy.isAlive()) continue;
+      const dx = (enemy.position.x - px) * facing;
+      const dy = Math.abs(enemy.position.y - py);
+      if (dx > 0 && dx <= 260 && dy <= 45) {
+        enemy.health = Math.max(0, enemy.health - bonusHolyDmg);
+        this.spawnDamageNumber(enemy.position.x, enemy.position.y - 35, bonusHolyDmg, true, '#fff59d');
+        const sprite = this.enemySprites.get(enemy.id);
+        if (sprite) {
+          sprite.setTint(0xfff0aa);
+          this.time.delayedCall(120, () => sprite.clearTint());
+        }
+      }
+    }
+
+    if (this.currentBoss && this.currentBoss.health > 0 && this.bossSprite) {
+      const bdx = (this.currentBoss.position.x - px) * facing;
+      const bdy = Math.abs(this.currentBoss.position.y - py);
+      if (bdx > 0 && bdx <= 270 && bdy <= 55) {
+        const extraBossDmg = isHeavy ? 60 : 38;
+        this.currentBoss.health = Math.max(0, this.currentBoss.health - extraBossDmg);
+        this.spawnDamageNumber(this.currentBoss.position.x, this.currentBoss.position.y - 50, extraBossDmg, true, '#fff59d');
+        this.bossSprite.setTint(0xfff0aa);
+        this.time.delayedCall(120, () => this.bossSprite?.clearTint());
+        if (this.currentBoss.health <= 0) {
+          this.handleBossDefeated();
+        }
+      }
+    }
+  }
+
+  /** Forges and equips Alba Gris in Act III after speaking with Elowen. */
+  private awakenAlbaGris(): void {
+    this.hasAlbaGrisAwakened = true;
+    if (!this.unlockedWeaponIds.includes('alba_gris')) {
+      this.unlockedWeaponIds.push('alba_gris');
+    }
+    const albaGris = Weapon.createAlbaGris();
+    this.player.disarmManager.setEquippedPrimary(albaGris);
+    this.audio.playHealingEmber();
+
+    const banner = this.add.text(320, 95, '✦ ¡ESPADA SAGRADA ALBA GRIS FORJADA! ✦\n«Fuego Negro y Gota de Luz Divina Unidos»', {
+      fontFamily: 'Cinzel, Georgia, serif',
+      fontSize: '11px',
+      color: '#ffd700',
+      backgroundColor: '#1b0e2b',
+      padding: { x: 8, y: 5 },
+      stroke: '#000000',
+      strokeThickness: 2,
+      align: 'center',
+      fontStyle: 'bold'
+    }).setOrigin(0.5).setDepth(450);
+
+    this.tweens.add({
+      targets: banner,
+      y: 75,
+      alpha: 0,
+      duration: 3500,
+      ease: 'Sine.easeOut',
+      onComplete: () => banner.destroy()
+    });
+  }
+
+  /** Triggers a Perfect Parry when blocking within 280ms of an incoming attack. */
+  private triggerPerfectParry(sourceX: number, sourceY: number, isBoss: boolean, enemy?: Enemy): void {
+    this.audio.playSfx('block');
+    this.audio.playFinisherSound(false);
+
+    // Screen Flash & Camera Shake
+    this.cameras.main.flash(200, 255, 240, 160);
+    this.cameras.main.shake(140, 0.015);
+
+    // Floating Golden Banner
+    const parryBanner = this.add.text(this.playerSprite.x, this.playerSprite.y - 60, '★ ¡PARRY PERFECTO! ★', {
+      fontFamily: 'Cinzel, Georgia, serif',
+      fontSize: '11px',
+      color: '#ffd700',
+      stroke: '#000000',
+      strokeThickness: 3,
+      fontStyle: 'bold'
+    }).setOrigin(0.5).setDepth(400);
+
+    this.tweens.add({
+      targets: parryBanner,
+      y: parryBanner.y - 25,
+      alpha: 0,
+      duration: 750,
+      ease: 'Cubic.easeOut',
+      onComplete: () => parryBanner.destroy()
+    });
+
+    // Ripple shockwave
+    const ripple = this.add.circle(this.playerSprite.x, this.playerSprite.y - 25, 10, 0xffd700, 0.8)
+      .setDepth(this.playerSprite.y + 1);
+    this.tweens.add({
+      targets: ripple,
+      radius: 50,
+      alpha: 0,
+      duration: 250,
+      ease: 'Quad.easeOut',
+      onComplete: () => ripple.destroy()
+    });
+
+    // Deal massive posture break and counter-damage
+    const counterDamage = isBoss ? 55 : 45;
+    const facing = this.player.facingDirection;
+
+    if (isBoss && this.currentBoss && this.bossSprite) {
+      this.currentBoss.posture = Math.max(0, this.currentBoss.posture - 45);
+      this.currentBoss.health = Math.max(0, this.currentBoss.health - counterDamage);
+      this.spawnDamageNumber(sourceX, sourceY - 45, counterDamage, true, '#ffd700');
+      this.bossSprite.setTint(0xffeedd);
+      this.time.delayedCall(160, () => this.bossSprite?.clearTint());
+      if (this.currentBoss.health <= 0) {
+        this.handleBossDefeated();
+      }
+    } else if (enemy) {
+      enemy.posture = Math.max(0, enemy.posture - 50);
+      enemy.health = Math.max(0, enemy.health - counterDamage);
+      this.spawnDamageNumber(sourceX, sourceY - 45, counterDamage, true, '#ffd700');
+      const sprite = this.enemySprites.get(enemy.id);
+      if (sprite) {
+        sprite.setTint(0xffeedd);
+        this.time.delayedCall(160, () => sprite.clearTint());
+        const knockX = Phaser.Math.Clamp(enemy.position.x + facing * 25, 35, 605);
+        enemy.position = new Vector2(knockX, enemy.position.y);
+        this.tweens.add({ targets: sprite, x: knockX, duration: 120, ease: 'Cubic.easeOut' });
+      }
+    }
   }
 
   private spawnDamageNumber(x: number, y: number, amount: number, isCritical: boolean, customColor?: string): void {
@@ -1688,6 +2016,14 @@ export class GameScene extends Phaser.Scene {
           });
         }
 
+        // Check for Perfect Parry!
+        const isParry = this.player.state === CharacterState.BLOCKING && (this.time.now - this.lastGuardPressTime) <= 280;
+        if (isParry) {
+          this.triggerPerfectParry(enemy.position.x, enemy.position.y, false, enemy);
+          this.enemyAttackTimer = 0;
+          return;
+        }
+
         const hitRes = CombatUseCases.executeEnemyAttack(enemy, this.player, false);
         this.timeSinceLastHit = 0;
 
@@ -1740,6 +2076,14 @@ export class GameScene extends Phaser.Scene {
     if (this.bossAttackTimer >= 2200) {
       this.bossAttackTimer = 0;
       if (dist < 80) {
+        // Check for Perfect Parry against Boss!
+        const isParry = this.player.state === CharacterState.BLOCKING && (this.time.now - this.lastGuardPressTime) <= 280;
+        if (isParry) {
+          this.triggerPerfectParry(this.bossSprite.x, this.bossSprite.y, true);
+          this.bossAttackTimer = 0;
+          return;
+        }
+
         const hitRes = CombatUseCases.executeEnemyAttack(
           { attackPower: this.currentBoss.attackPower, isAlive: () => true } as unknown as Enemy,
           this.player,
@@ -1885,6 +2229,8 @@ export class GameScene extends Phaser.Scene {
     this.closeGameOverModal();
     this.isGameOverModalOpen = false;
     this.gameOverContainer = undefined;
+    this.lastGuardPressTime = 0;
+    this.hasAlbaGrisAwakened = false;
 
     const introLines = this.dialogues.getScenarioIntro(this.currentScenario);
 

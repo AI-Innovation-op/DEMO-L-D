@@ -267,7 +267,7 @@ export class HUDScene extends Phaser.Scene {
     this.add.rectangle(320, 351, 640, 18, 0x07040d, 0.96)
       .setDepth(48)
       .setStrokeStyle(1, 0x3d2852);
-    this.add.text(320, 351, 'WASD: 2.5D | J: Ligero | K: Fuerte | L: Guardia | Espacio: Esquivar | Tab: Cambiar | E: Hablar/Recoger | I: Arsenal/Profecía', {
+    this.add.text(320, 351, 'WASD: 2.5D | J: Ataque/Magia | K: Fuerte | L: Guardia/Parry | Espacio: Esquivar | Tab: Cambiar | E: Hablar/Recoger | P: Códice & Menú', {
       fontFamily: 'monospace',
       fontSize: '7.5px',
       color: '#d6c5eb'
