@@ -204,7 +204,7 @@ export class CharacterDialogueScene extends Phaser.Scene {
     // Left Portrait Box
     this.leftPortrait = this.add.image(65, 275, 'portrait_thomas').setDisplaySize(68, 68);
     // Right Portrait Box
-    this.rightPortrait = this.add.image(575, 275, 'khaterine_idle').setDisplaySize(68, 68).setVisible(false);
+    this.rightPortrait = this.add.image(575, 275, 'portrait_khaterine').setDisplaySize(68, 68).setVisible(false);
 
     // Speaker Name Banner
     this.speakerNameText = this.add.text(115, 225, 'THOMAS', {

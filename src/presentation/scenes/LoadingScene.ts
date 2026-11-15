@@ -69,19 +69,19 @@ export class LoadingScene extends Phaser.Scene {
   public preload(): void {
     // Ensure all 5 high-resolution artwork images are cached
     if (!this.textures.exists('loading_shalem_wall')) {
-      this.load.image('loading_shalem_wall', '/assets/loading/loading_shalem_wall.jpg');
+      this.load.image('loading_shalem_wall', '/assets/loading/shalem-opening.png');
     }
     if (!this.textures.exists('loading_bridge_journey')) {
-      this.load.image('loading_bridge_journey', '/assets/loading/loading_bridge_journey.jpg');
+      this.load.image('loading_bridge_journey', '/assets/loading/road-to-londinium.png');
     }
     if (!this.textures.exists('loading_londinium_gate')) {
-      this.load.image('loading_londinium_gate', '/assets/loading/loading_londinium_gate.jpg');
+      this.load.image('loading_londinium_gate', '/assets/loading/londinium-gates.png');
     }
     if (!this.textures.exists('loading_pyre_remains')) {
-      this.load.image('loading_pyre_remains', '/assets/loading/loading_pyre_remains.jpg');
+      this.load.image('loading_pyre_remains', '/assets/loading/oakhaven-aftermath.png');
     }
     if (!this.textures.exists('loading_concept_art')) {
-      this.load.image('loading_concept_art', '/assets/loading/loading_concept_art.jpg');
+      this.load.image('loading_concept_art', '/assets/loading/shalem-opening.png');
     }
   }
 

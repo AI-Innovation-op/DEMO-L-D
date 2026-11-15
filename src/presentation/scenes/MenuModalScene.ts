@@ -177,8 +177,8 @@ export class MenuModalScene extends Phaser.Scene {
 
     // Left Column: Character Card
     const cardBg = this.add.rectangle(-160, 10, 180, 200, 0x1d142e).setStrokeStyle(1, 0x6e4b8a);
-    const portraitKey = isThomas ? 'portrait_thomas' : 'khaterine_idle';
-    const portrait = this.add.image(-160, -40, portraitKey).setScale(2.0);
+    const portraitKey = isThomas ? 'portrait_thomas' : 'portrait_khaterine';
+    const portrait = this.add.image(-160, -40, portraitKey).setDisplaySize(72, 72);
 
     const nameText = this.add.text(-160, 5, isThomas ? 'THOMAS' : 'KHATERINE', {
       fontFamily: 'Cinzel, Georgia, serif',

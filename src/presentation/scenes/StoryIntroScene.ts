@@ -101,7 +101,7 @@ export class StoryIntroScene extends Phaser.Scene {
     this.add.rectangle(320, 280, 572, 112, 0x000000, 0).setStrokeStyle(1, 0x5a3e75);
 
     // Shalem Portrait inside Dialog Box
-    this.add.image(62, 275, 'portrait_shalem').setScale(2.0);
+    this.add.image(62, 275, 'portrait_shalem').setDisplaySize(72, 72);
 
     // Speaker Name Banner
     this.add.text(105, 230, 'SHALEM — GRAN MARQUÉS DE LAS BRASAS', {

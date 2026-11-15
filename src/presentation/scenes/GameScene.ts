@@ -25,9 +25,9 @@ export class GameScene extends Phaser.Scene {
 
   // Visual Sprites & Ground Shadows
   private bgImage!: Phaser.GameObjects.Image;
-  private playerSprite!: Phaser.GameObjects.Image;
+  private playerSprite!: Phaser.GameObjects.Sprite;
   private playerShadow!: Phaser.GameObjects.Ellipse;
-  private allySprite!: Phaser.GameObjects.Image;
+  private allySprite!: Phaser.GameObjects.Sprite;
   private allyShadow!: Phaser.GameObjects.Ellipse;
   private shalemSprite!: Phaser.GameObjects.Image;
   private shalemShadow!: Phaser.GameObjects.Ellipse;
@@ -178,6 +178,16 @@ export class GameScene extends Phaser.Scene {
     // 4.1 Atmospheric Vignette
     this.add.image(320, 180, 'fx_vignette').setDisplaySize(640, 360).setDepth(350).setAlpha(0.6);
 
+    // 4.2 Walking Animations
+    if (!this.anims.exists('thomas_walk_anim')) {
+      this.anims.create({
+        key: 'thomas_walk_anim',
+        frames: this.anims.generateFrameNumbers('thomas_walk', { start: 0, end: 3 }),
+        frameRate: 7,
+        repeat: -1
+      });
+    }
+
     // 5. Player & Shadows (2.5D Depth Arena)
     const initX = 110;
     const initY = 260;
@@ -185,7 +195,8 @@ export class GameScene extends Phaser.Scene {
 
     this.playerShadow = this.add.ellipse(initX, initY, 26, 8, 0x000000, 0.45).setDepth(initY - 1);
     const playerTex = this.player.id === 'thomas' ? 'thomas_idle' : 'khaterine_idle';
-    this.playerSprite = this.add.image(initX, initY, playerTex).setOrigin(0.5, 1).setDepth(initY);
+    const playerOriginY = this.player.id === 'thomas' ? 0.9 : 1.0;
+    this.playerSprite = this.add.sprite(initX, initY, playerTex).setOrigin(0.5, playerOriginY).setDepth(initY);
 
     // 6. Ally Companion (Walking alongside in 2.5D)
     const allyInitX = 65;
@@ -193,7 +204,8 @@ export class GameScene extends Phaser.Scene {
     this.allyChar.position = new Vector2(allyInitX, allyInitY);
     this.allyShadow = this.add.ellipse(allyInitX, allyInitY, 24, 7, 0x000000, 0.4).setDepth(allyInitY - 1);
     const allyTex = this.allyChar.id === 'thomas' ? 'thomas_idle' : 'khaterine_idle';
-    this.allySprite = this.add.image(allyInitX, allyInitY, allyTex).setOrigin(0.5, 1).setAlpha(0.92).setDepth(allyInitY);
+    const allyOriginY = this.allyChar.id === 'thomas' ? 0.9 : 1.0;
+    this.allySprite = this.add.sprite(allyInitX, allyInitY, allyTex).setOrigin(0.5, allyOriginY).setAlpha(0.92).setDepth(allyInitY);
 
     // 7. Shalem Sprite (Cat Companion in 2.5D)
     const catInitX = 85;
@@ -406,7 +418,7 @@ export class GameScene extends Phaser.Scene {
 
         // Spawn afterimage ghost
         const ghost = this.add.image(this.playerSprite.x, this.playerSprite.y, this.playerSprite.texture.key)
-          .setOrigin(0.5, 1)
+          .setOrigin(0.5, this.playerSprite.originY)
           .setAlpha(0.6)
           .setScale(this.playerSprite.scaleX, this.playerSprite.scaleY)
           .setTint(0x9933ff)
@@ -498,6 +510,13 @@ export class GameScene extends Phaser.Scene {
       }
       this.player.move(moveX, moveY);
 
+      // Play walk animation if player is Thomas and not disarmed
+      if (this.player.id === 'thomas' && !this.player.disarmManager.isPlayerDisarmed()) {
+        if (!this.playerSprite.anims.isPlaying || this.playerSprite.anims.currentAnim?.key !== 'thomas_walk_anim') {
+          this.playerSprite.play('thomas_walk_anim');
+        }
+      }
+
       // 2.5D Perspective Scaling (scale smoothly between 0.88 and 1.10)
       const scale = 0.88 + ((nextY - 205) / 110) * 0.22;
       this.playerSprite.setScale(this.player.facingDirection > 0 ? scale : -scale, scale);
@@ -507,12 +526,31 @@ export class GameScene extends Phaser.Scene {
       this.playerShadow.setPosition(nextX, nextY).setDepth(nextY - 1).setScale(scale);
     } else {
       this.player.move(0, 0);
+      if (this.player.id === 'thomas' &&
+          this.player.state !== CharacterState.ATTACKING &&
+          this.player.state !== CharacterState.DODGING) {
+        if (this.playerSprite.anims.isPlaying) {
+          this.playerSprite.stop();
+        }
+        const isDisarmed = this.player.disarmManager.isPlayerDisarmed();
+        const idleTex = isDisarmed ? 'thomas_disarmed' : 'thomas_idle';
+        if (this.playerSprite.texture.key !== idleTex) {
+          this.playerSprite.setTexture(idleTex);
+        }
+      }
     }
   }
 
   private swapActiveCharacter(): void {
     this.audio.playSfx('dodge');
     this.cameras.main.flash(200, 160, 80, 240);
+
+    if (this.playerSprite.anims.isPlaying) {
+      this.playerSprite.stop();
+    }
+    if (this.allySprite.anims.isPlaying) {
+      this.allySprite.stop();
+    }
 
     // Swap characters
     const temp = this.player;
@@ -528,12 +566,15 @@ export class GameScene extends Phaser.Scene {
     this.player.position = new Vector2(this.playerSprite.x, this.playerSprite.y);
     this.allyChar.position = new Vector2(this.allySprite.x, this.allySprite.y);
 
-    // Swap textures
+    // Swap textures and origins
     const playerTex = this.player.id === 'thomas' ? 'thomas_idle' : 'khaterine_idle';
     const allyTex = this.allyChar.id === 'thomas' ? 'thomas_idle' : 'khaterine_idle';
 
     this.playerSprite.setTexture(playerTex);
     this.allySprite.setTexture(allyTex);
+
+    this.playerSprite.setOrigin(0.5, this.player.id === 'thomas' ? 0.9 : 1.0);
+    this.allySprite.setOrigin(0.5, this.allyChar.id === 'thomas' ? 0.9 : 1.0);
 
     this.triggerShalemBalloon(
       `Shalem: «¡Ahora juegas como ${this.player.name}! ${this.player.id === 'khaterine' ? '¡Purifica las sombras con tus rezos!' : '¡Avanza con tu espada y tus puños!' }»`,
@@ -751,6 +792,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   private executeAttack(isHeavy: boolean): void {
+    if (this.playerSprite.anims.isPlaying) {
+      this.playerSprite.stop();
+    }
     const isDisarmed = this.player.disarmManager.isPlayerDisarmed();
     const attackTex = isDisarmed
       ? 'thomas_disarmed'
@@ -1386,11 +1430,25 @@ export class GameScene extends Phaser.Scene {
     // Ally follows smoothly in 2.5D
     const allyTargetX = px - 45 * facing;
     const allyTargetY = py - 4;
+    const allyDist = Math.hypot(allyTargetX - this.allySprite.x, allyTargetY - this.allySprite.y);
     this.allySprite.x = Phaser.Math.Linear(this.allySprite.x, allyTargetX, 0.08);
     this.allySprite.y = Phaser.Math.Linear(this.allySprite.y, allyTargetY, 0.08);
     this.allySprite.setFlipX(facing < 0);
     this.allySprite.setDepth(this.allySprite.y);
     this.allyShadow.setPosition(this.allySprite.x, this.allySprite.y).setDepth(this.allySprite.y - 1);
+
+    if (this.allyChar.id === 'thomas') {
+      if (allyDist > 3.0) {
+        if (!this.allySprite.anims.isPlaying || this.allySprite.anims.currentAnim?.key !== 'thomas_walk_anim') {
+          this.allySprite.play('thomas_walk_anim');
+        }
+      } else {
+        if (this.allySprite.anims.isPlaying) {
+          this.allySprite.stop();
+          this.allySprite.setTexture('thomas_idle');
+        }
+      }
+    }
 
     // Shalem Cat follows smoothly in 2.5D
     const catTargetX = px - 22 * facing;

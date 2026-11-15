@@ -9,6 +9,10 @@ export class BootScene extends Phaser.Scene {
   public preload(): void {
     // 1. Custom character sprites from public/assets/characters/
     this.load.image('thomas_idle', '/assets/characters/thomas_idle.png');
+    this.load.spritesheet('thomas_walk', '/assets/characters/thomas_walk.png', {
+      frameWidth: 96,
+      frameHeight: 80
+    });
     this.load.image('thomas_attack', '/assets/characters/thomas_attack.png');
     this.load.image('thomas_disarmed', '/assets/characters/thomas_disarmed.png');
     this.load.image('portrait_thomas', '/assets/characters/portrait_thomas.png');
@@ -39,13 +43,13 @@ export class BootScene extends Phaser.Scene {
     this.load.image('boss_astaroth', '/assets/characters/boss_astaroth.png');
     this.load.image('portrait_astaroth', '/assets/characters/portrait_astaroth.png');
 
-    // 2. Load the official artwork images from the public folder
-    this.load.image('title_cover', '/assets/title_cover.jpg');
-    this.load.image('loading_shalem_wall', '/assets/loading/loading_shalem_wall.jpg');
-    this.load.image('loading_bridge_journey', '/assets/loading/loading_bridge_journey.jpg');
-    this.load.image('loading_londinium_gate', '/assets/loading/loading_londinium_gate.jpg');
-    this.load.image('loading_pyre_remains', '/assets/loading/loading_pyre_remains.jpg');
-    this.load.image('loading_concept_art', '/assets/loading/loading_concept_art.jpg');
+    // 2. Load the pristine artwork images from the public folder
+    this.load.image('title_cover', '/assets/title_cover.png');
+    this.load.image('loading_shalem_wall', '/assets/loading/shalem-opening.png');
+    this.load.image('loading_bridge_journey', '/assets/loading/road-to-londinium.png');
+    this.load.image('loading_londinium_gate', '/assets/loading/londinium-gates.png');
+    this.load.image('loading_pyre_remains', '/assets/loading/oakhaven-aftermath.png');
+    this.load.image('loading_concept_art', '/assets/loading/shalem-opening.png');
   }
 
   public create(): void {
