@@ -853,7 +853,7 @@ export class GameScene extends Phaser.Scene {
     const isDisarmed = this.player.disarmManager.isPlayerDisarmed();
     const attackTex = isDisarmed
       ? 'thomas_disarmed'
-      : (this.player.id === 'thomas' ? 'thomas_attack' : 'khaterine_idle');
+      : (this.player.id === 'thomas' ? 'thomas_attack' : 'khaterine_attack');
 
     this.playerSprite.setTexture(attackTex);
     this.audio.playCombatHit(isHeavy);
@@ -867,6 +867,17 @@ export class GameScene extends Phaser.Scene {
     const facing = this.player.facingDirection;
     const attackRange = this.player.disarmManager.getCurrentWeapon().range;
 
+    // Fluid forward micro-step during attack
+    const stepDist = isHeavy ? 10 : 6;
+    const nextPlayerX = Phaser.Math.Clamp(playerX + facing * stepDist, 35, 605);
+    this.tweens.add({
+      targets: this.playerSprite,
+      x: nextPlayerX,
+      duration: 90,
+      ease: 'Quad.easeOut'
+    });
+    this.player.position = new Vector2(nextPlayerX, this.player.position.y);
+
     // Visual Slash Arc Effect
     if (!isDisarmed) {
       const arcKey = isHeavy ? 'particle_slash_heavy' : 'particle_slash_arc';
@@ -874,6 +885,10 @@ export class GameScene extends Phaser.Scene {
         .setScale(facing > 0 ? (isHeavy ? 1.2 : 1) : (isHeavy ? -1.2 : -1), isHeavy ? 1.2 : 1)
         .setAlpha(0.9)
         .setDepth(playerY + 2);
+
+      if (this.player.id !== 'thomas') {
+        slash.setTint(0xba68c8); // Khaterine's abyssal magic purple
+      }
 
       this.tweens.add({
         targets: slash,
@@ -935,6 +950,26 @@ export class GameScene extends Phaser.Scene {
               this.triggerShalemBalloon("Shalem: «¡Los acechadores han caído! ¡Ahora avanza hacia la derecha y destruye a la Madre Morwenna junto a la pira!»", 5000);
             } else {
               this.storyProgress.addProgress(25);
+            }
+          } else {
+            // Fluid hit-reaction and knockback
+            const knockDist = isHeavy ? 14 : 8;
+            const knockX = Phaser.Math.Clamp(enemy.position.x + facing * knockDist, 35, 605);
+            enemy.position = new Vector2(knockX, enemy.position.y);
+            this.tweens.add({
+              targets: sprite,
+              x: knockX,
+              duration: 110,
+              ease: 'Cubic.easeOut'
+            });
+            const shadow = this.enemyShadows.get(enemy.id);
+            if (shadow) {
+              this.tweens.add({
+                targets: shadow,
+                x: knockX,
+                duration: 110,
+                ease: 'Cubic.easeOut'
+              });
             }
           }
         }

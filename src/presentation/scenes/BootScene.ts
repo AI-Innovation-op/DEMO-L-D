@@ -26,12 +26,14 @@ export class BootScene extends Phaser.Scene {
 
     this.load.image('elowen_npc', '/assets/characters/elowen_npc.png');
     this.load.image('elowen_idle', '/assets/characters/elowen_idle.png');
+    this.load.image('elowen_campanario', '/assets/characters/elowen_campanario.png');
     this.load.image('portrait_elowen', '/assets/characters/portrait_elowen.png');
 
     this.load.image('ash_prowler', '/assets/characters/ash_prowler.png');
     this.load.image('ash_prowler_attack', '/assets/characters/ash_prowler_attack.png');
 
     this.load.image('boss_morwenna', '/assets/characters/boss_morwenna.png');
+    this.load.image('morwenna_crucible', '/assets/characters/morwenna_crucible.png');
     this.load.image('portrait_morwenna', '/assets/characters/portrait_morwenna.png');
 
     this.load.image('boss_malphas', '/assets/characters/boss_malphas.png');
