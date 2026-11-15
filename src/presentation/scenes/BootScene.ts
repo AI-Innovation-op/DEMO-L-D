@@ -55,8 +55,9 @@ export class BootScene extends Phaser.Scene {
     // Start with the artwork loading screen before entering TitleScene
     this.scene.start('LoadingScene', {
       targetScene: 'TitleScene',
-      imageKey: 'loading_shalem_wall',
-      chapterTitle: 'THE LIGHT IN THE DARKNESS',
+      imageKey: 'loading_concept_art',
+      chapterTitle: 'PRÓLOGO — EL REINO QUE OLVIDÓ LA LUZ',
+      storyText: '«Durante generaciones, Albion vivió sumido en una oscuridad perpetua bajo el dogma del Cáliz Solar. Nueve brujas sacrificadas en la Noche de la Luna Roja otorgaron libre albedrío al recién nacido Thomas, salvado del fuego por Khaterine mientras Elowen cargó involuntariamente con la sospecha del reino.»',
       tipText: '«Shalem: Despierta, mortal. El reino de Albion aguarda tus elecciones...»',
       minDurationMs: 2200
     });

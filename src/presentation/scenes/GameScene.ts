@@ -111,6 +111,17 @@ export class GameScene extends Phaser.Scene {
   private key1!: Phaser.Input.Keyboard.Key;
   private key2!: Phaser.Input.Keyboard.Key;
   private key3!: Phaser.Input.Keyboard.Key;
+  private keyEnter!: Phaser.Input.Keyboard.Key;
+
+  // Act Transition and Exit Portal state
+  private isActCleared: boolean = false;
+  private isTransitioningAct: boolean = false;
+  private exitPortalMarker?: Phaser.GameObjects.Text;
+  private exitPortalZone?: Phaser.GameObjects.Ellipse;
+  private exitPortalTween?: Phaser.Tweens.Tween;
+  private victoryBannerBg?: Phaser.GameObjects.Rectangle;
+  private victoryBannerTitle?: Phaser.GameObjects.Text;
+  private victoryBannerPrompt?: Phaser.GameObjects.Text;
 
   // Combat Timers
   private attackCooldown: number = 0;
@@ -234,6 +245,7 @@ export class GameScene extends Phaser.Scene {
       this.key1 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ONE);
       this.key2 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TWO);
       this.key3 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.THREE);
+      this.keyEnter = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
     }
 
     // 11. Launch HUDScene if not already running
@@ -246,7 +258,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   public update(_time: number, delta: number): void {
-    if (this.player.state === CharacterState.DEAD) {
+    if (this.isTransitioningAct || this.player.state === CharacterState.DEAD) {
       return;
     }
 
@@ -274,9 +286,17 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
+    // Proximity next-level auto-transition when walking to the right screen boundary of a cleared act!
+    if (this.isActCleared && !this.isTransitioningAct && this.player.position.x >= 595) {
+      const nextAct = this.currentScenario === 1 ? 2 : (this.currentScenario === 2 ? 3 : 1);
+      this.clearActExit();
+      this.transitionToActWithLoading(nextAct);
+      return;
+    }
+
     // Sync HUD with active character & dynamic interaction target
     const hud = this.scene.get('HUDScene') as HUDScene;
-    if (hud) {
+    if (hud && this.scene.isActive('HUDScene')) {
       hud.updateHUD(
         this.player,
         this.currentBoss,
@@ -292,10 +312,41 @@ export class GameScene extends Phaser.Scene {
       this.attackCooldown -= delta;
     }
 
-    // Switch Scenario keys
-    if (Phaser.Input.Keyboard.JustDown(this.key1)) this.loadScenario(1);
-    if (Phaser.Input.Keyboard.JustDown(this.key2)) this.loadScenario(2);
-    if (Phaser.Input.Keyboard.JustDown(this.key3)) this.loadScenario(3);
+    // Quick Next-Level actions when Act is cleared
+    if (this.isActCleared && !this.isTransitioningAct) {
+      if (
+        (this.keyEnter && Phaser.Input.Keyboard.JustDown(this.keyEnter)) ||
+        (this.keySpace && Phaser.Input.Keyboard.JustDown(this.keySpace))
+      ) {
+        const nextAct = this.currentScenario === 1 ? 2 : (this.currentScenario === 2 ? 3 : 1);
+        this.clearActExit();
+        this.transitionToActWithLoading(nextAct);
+        return;
+      }
+      if (this.keyE && Phaser.Input.Keyboard.JustDown(this.keyE) && this.player.position.x > 500) {
+        const nextAct = this.currentScenario === 1 ? 2 : (this.currentScenario === 2 ? 3 : 1);
+        this.clearActExit();
+        this.transitionToActWithLoading(nextAct);
+        return;
+      }
+    }
+
+    // Switch Scenario keys (now route cleanly through transitionToActWithLoading!)
+    if (Phaser.Input.Keyboard.JustDown(this.key1)) {
+      this.clearActExit();
+      this.transitionToActWithLoading(1);
+      return;
+    }
+    if (Phaser.Input.Keyboard.JustDown(this.key2)) {
+      this.clearActExit();
+      this.transitionToActWithLoading(2);
+      return;
+    }
+    if (Phaser.Input.Keyboard.JustDown(this.key3)) {
+      this.clearActExit();
+      this.transitionToActWithLoading(3);
+      return;
+    }
 
     // Swap Character with [TAB]
     if (Phaser.Input.Keyboard.JustDown(this.keyTab)) {
@@ -902,7 +953,9 @@ export class GameScene extends Phaser.Scene {
       });
     }
 
-    // Advance story progress to 100%
+    // Advance story progress to 100% and enable Next-Level transition
+    this.isActCleared = true;
+
     if (this.currentScenario === 1) {
       this.storyProgress.completeMilestone('act1_boss');
       this.storyProgress.scenarioProgress = 100;
@@ -929,16 +982,38 @@ export class GameScene extends Phaser.Scene {
       });
 
       this.triggerShalemBalloon(
-        "Shalem: «¡La Madre Morwenna ha caído y su incensario ha caído al suelo! ¡Recógelo con [E] para empuñar el Lamento de Oakhaven!»",
+        "Shalem: «¡Madre Morwenna ha caído! ¡Recoge el Lamento de Oakhaven y viaja hacia Londinium por el sendero derecho!»",
         7000
       );
 
+      // Interactive Exit Portal / Road to Londinium on right screen edge
+      this.exitPortalZone = this.add.ellipse(605, 250, 48, 16, 0xb8923b, 0.55).setDepth(220);
+      this.exitPortalMarker = this.add.text(585, 205, '▶ CAMINO A LONDINIUM ▶\n[E] o Avanza para partir', {
+        fontFamily: 'Cinzel, monospace',
+        fontSize: '8px',
+        color: '#ffd700',
+        backgroundColor: '#160b26',
+        padding: { x: 6, y: 4 },
+        align: 'center',
+        fontStyle: 'bold'
+      }).setOrigin(0.5).setDepth(340);
+
+      this.exitPortalTween = this.tweens.add({
+        targets: [this.exitPortalMarker, this.exitPortalZone],
+        scaleX: 1.05,
+        scaleY: 1.05,
+        duration: 800,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+      });
+
       // Grand Victory Banner in Center
-      const bannerBg = this.add.rectangle(320, 160, 420, 75, 0x11081f, 0.94)
+      this.victoryBannerBg = this.add.rectangle(320, 160, 440, 78, 0x11081f, 0.95)
         .setStrokeStyle(2, 0xffd700)
         .setDepth(360);
 
-      const bannerTitle = this.add.text(320, 145, '★ ¡ACTO I COMPLETADO AL 100%! ★', {
+      this.victoryBannerTitle = this.add.text(320, 142, '★ ¡ACTO I: OAKHAVEN COMPLETADO! ★', {
         fontFamily: 'Cinzel, Georgia, serif',
         fontSize: '13px',
         color: '#ffd700',
@@ -947,18 +1022,17 @@ export class GameScene extends Phaser.Scene {
         fontStyle: 'bold'
       }).setOrigin(0.5).setDepth(361);
 
-      const bannerPrompt = this.add.text(320, 172, 'PULSA [2] O HAZ CLIC AQUÍ PARA VIAJAR A LONDINIUM ▶', {
+      this.victoryBannerPrompt = this.add.text(320, 172, 'PULSA [ENTER], [E] O CAMINA A LA DERECHA PARA LONDINIUM ▶', {
         fontFamily: 'monospace',
-        fontSize: '9px',
+        fontSize: '8.5px',
         color: '#ffffff',
         backgroundColor: '#3d1f5e',
-        padding: { x: 8, y: 4 }
+        padding: { x: 8, y: 4 },
+        fontStyle: 'bold'
       }).setOrigin(0.5).setDepth(361).setInteractive({ useHandCursor: true });
 
-      bannerPrompt.on('pointerdown', () => {
-        bannerBg.destroy();
-        bannerTitle.destroy();
-        bannerPrompt.destroy();
+      this.victoryBannerPrompt.on('pointerdown', () => {
+        this.clearActExit();
         this.transitionToActWithLoading(2);
       });
     } else if (this.currentScenario === 2) {
@@ -966,16 +1040,38 @@ export class GameScene extends Phaser.Scene {
       this.storyProgress.scenarioProgress = 100;
 
       this.triggerShalemBalloon(
-        "Shalem: «¡El Rex Malphas y su decreto han sido quebrantados! ¡Pulsa [3] para descender a la Catedral Invertida!»",
+        "Shalem: «¡El Rex Malphas ha sido quebrado! ¡Avanza a la sima derecha o pulsa [ENTER] para descender a la Catedral Invertida!»",
         7000
       );
 
+      // Interactive Abyssal Descent Portal on right edge
+      this.exitPortalZone = this.add.ellipse(605, 250, 48, 16, 0x8a2be2, 0.65).setDepth(220);
+      this.exitPortalMarker = this.add.text(585, 205, '▼ CATEDRAL INVERTIDA ▼\n[E] o Avanza para descender', {
+        fontFamily: 'Cinzel, monospace',
+        fontSize: '8px',
+        color: '#e699ff',
+        backgroundColor: '#18082a',
+        padding: { x: 6, y: 4 },
+        align: 'center',
+        fontStyle: 'bold'
+      }).setOrigin(0.5).setDepth(340);
+
+      this.exitPortalTween = this.tweens.add({
+        targets: [this.exitPortalMarker, this.exitPortalZone],
+        scaleX: 1.05,
+        scaleY: 1.05,
+        duration: 800,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+      });
+
       // Victory Banner for Act II
-      const bannerBg = this.add.rectangle(320, 160, 420, 75, 0x11081f, 0.94)
+      this.victoryBannerBg = this.add.rectangle(320, 160, 440, 78, 0x11081f, 0.95)
         .setStrokeStyle(2, 0xffd700)
         .setDepth(360);
 
-      const bannerTitle = this.add.text(320, 145, '★ ¡ACTO II COMPLETADO AL 100%! ★', {
+      this.victoryBannerTitle = this.add.text(320, 142, '★ ¡ACTO II: LONDINIUM COMPLETADO! ★', {
         fontFamily: 'Cinzel, Georgia, serif',
         fontSize: '13px',
         color: '#ffd700',
@@ -984,18 +1080,17 @@ export class GameScene extends Phaser.Scene {
         fontStyle: 'bold'
       }).setOrigin(0.5).setDepth(361);
 
-      const bannerPrompt = this.add.text(320, 172, 'PULSA [3] O HAZ CLIC AQUÍ PARA LA CATEDRAL INVERTIDA ▶', {
+      this.victoryBannerPrompt = this.add.text(320, 172, 'PULSA [ENTER], [E] O CAMINA A LA DERECHA PARA DESCENDER ▶', {
         fontFamily: 'monospace',
-        fontSize: '9px',
+        fontSize: '8.5px',
         color: '#ffffff',
         backgroundColor: '#3d1f5e',
-        padding: { x: 8, y: 4 }
+        padding: { x: 8, y: 4 },
+        fontStyle: 'bold'
       }).setOrigin(0.5).setDepth(361).setInteractive({ useHandCursor: true });
 
-      bannerPrompt.on('pointerdown', () => {
-        bannerBg.destroy();
-        bannerTitle.destroy();
-        bannerPrompt.destroy();
+      this.victoryBannerPrompt.on('pointerdown', () => {
+        this.clearActExit();
         this.transitionToActWithLoading(3);
       });
     } else {
@@ -1008,11 +1103,11 @@ export class GameScene extends Phaser.Scene {
       );
 
       // Grand Game Cleared Banner
-      this.add.rectangle(320, 160, 440, 85, 0x11081f, 0.96)
+      this.victoryBannerBg = this.add.rectangle(320, 160, 440, 85, 0x11081f, 0.96)
         .setStrokeStyle(3, 0xffd700)
         .setDepth(360);
 
-      this.add.text(320, 140, '👑 ¡THE LIGHT IN THE DARKNESS: VICTORIA TOTAL! 👑', {
+      this.victoryBannerTitle = this.add.text(320, 140, '👑 ¡THE LIGHT IN THE DARKNESS: VICTORIA TOTAL! 👑', {
         fontFamily: 'Cinzel, Georgia, serif',
         fontSize: '13px',
         color: '#ffd700',
@@ -1021,21 +1116,24 @@ export class GameScene extends Phaser.Scene {
         fontStyle: 'bold'
       }).setOrigin(0.5).setDepth(361);
 
-      this.add.text(320, 165, 'Albion ha sido liberada del dogma. ¡Gracias por jugar la Demo!', {
+      const victorySub = this.add.text(320, 160, 'Albion ha sido liberada del dogma. ¡Gracias por jugar la Demo!', {
         fontFamily: 'Cinzel, serif',
-        fontSize: '9.5px',
+        fontSize: '9px',
         color: '#e699ff'
       }).setOrigin(0.5).setDepth(361);
 
-      const replayBtn = this.add.text(320, 188, 'REINICIAR VIAJE DESDE EL ACTO I [1]', {
+      this.victoryBannerPrompt = this.add.text(320, 182, 'PULSA [ENTER] O HAZ CLIC AQUÍ PARA REINICIAR EL VIAJE [1] ▶', {
         fontFamily: 'monospace',
-        fontSize: '9px',
+        fontSize: '8.5px',
         color: '#ffffff',
         backgroundColor: '#3d1f5e',
-        padding: { x: 8, y: 4 }
+        padding: { x: 8, y: 4 },
+        fontStyle: 'bold'
       }).setOrigin(0.5).setDepth(361).setInteractive({ useHandCursor: true });
 
-      replayBtn.on('pointerdown', () => {
+      this.victoryBannerPrompt.on('pointerdown', () => {
+        victorySub.destroy();
+        this.clearActExit();
         this.transitionToActWithLoading(1);
       });
     }
@@ -1146,26 +1244,56 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private transitionToActWithLoading(targetAct: number): void {
-    if (this.scene.isActive('HUDScene')) {
-      this.scene.stop('HUDScene');
+  private clearActExit(): void {
+    if (this.exitPortalTween) {
+      this.exitPortalTween.stop();
+      this.exitPortalTween = undefined;
     }
+    if (this.exitPortalZone) {
+      this.exitPortalZone.destroy();
+      this.exitPortalZone = undefined;
+    }
+    if (this.exitPortalMarker) {
+      this.exitPortalMarker.destroy();
+      this.exitPortalMarker = undefined;
+    }
+    if (this.victoryBannerBg) {
+      this.victoryBannerBg.destroy();
+      this.victoryBannerBg = undefined;
+    }
+    if (this.victoryBannerTitle) {
+      this.victoryBannerTitle.destroy();
+      this.victoryBannerTitle = undefined;
+    }
+    if (this.victoryBannerPrompt) {
+      this.victoryBannerPrompt.destroy();
+      this.victoryBannerPrompt = undefined;
+    }
+    this.isActCleared = false;
+  }
 
-    const configs: Record<number, { image: string; title: string; tip: string }> = {
+  private transitionToActWithLoading(targetAct: number): void {
+    if (this.isTransitioningAct) return;
+    this.isTransitioningAct = true;
+
+    const configs: Record<number, { image: string; title: string; story: string; tip: string }> = {
       1: {
         image: 'loading_pyre_remains',
         title: 'ACTO I — OAKHAVEN: LAS HOGUERAS DE LA INQUISICIÓN',
-        tip: '«Códice de Albion: En las afueras de Oakhaven, la niebla oculta inquisidores y secretos olvidados.»'
+        story: '«Al cumplir dieciocho años, la Inquisición marchó sobre la aldea de Oakhaven para arrebatar a Elowen creyéndola el fruto maldito. Thomas despertó el fuego negro en su espada para salvarla, amparado por el Padre Cedric y Khaterine frente a la Abadesa Morwenna.»',
+        tip: '«Consejo de Shalem: El Padre Cedric te entregará el Rosario de Madera y la Tablilla I de la profecía si hablas con él con [E].»'
       },
       2: {
         image: 'loading_londinium_gate',
         title: 'ACTO II — LONDINIUM: LA CIUDADELA DORADA',
-        tip: '«Códice de Albion: El Rex Malphas domina Londinium con mano de hierro y decretos solares tiránicos.»'
+        story: '«Morwenna ha caído en Oakhaven, pero Elowen fue trasladada a las mazmorras de Londinium. Cruzando caminos custodiados por caballeros dorados, Thomas descubre que el Rex Malphas vendió su corona al Abismo y falseó la profecía para purgar a los inocentes.»',
+        tip: '«Táctica de Combate: Los guardias dorados tienen escudos pesados. ¡Usa el ataque pesado [K] para quebrar su postura!»'
       },
       3: {
         image: 'loading_shalem_wall',
         title: 'ACTO III — LA CATEDRAL INVERTIDA: EL ABISMO',
-        tip: '«Shalem: La gravedad se quiebra en este lugar sacrílego. ¡Prepárate para enfrentar al demonio Astaroth!»'
+        story: '«El Rex Malphas ha sido quebrado y las leyes del mundo colapsan. Tras las murallas de Londinium se abre la sima hacia la Catedral Invertida: el templo sacrílego donde el demonio primordial Astaroth aguarda su manifestación definitiva.»',
+        tip: '«Shalem: La gravedad se invierte en este lugar sacrílego. Esquiva con [Espacio] y mantén la guardia alta frente a Astaroth.»'
       }
     };
 
@@ -1173,6 +1301,9 @@ export class GameScene extends Phaser.Scene {
 
     this.cameras.main.fade(300, 0, 0, 0);
     this.time.delayedCall(320, () => {
+      if (this.scene.isActive('HUDScene')) {
+        this.scene.stop('HUDScene');
+      }
       this.scene.start('LoadingScene', {
         targetScene: 'GameScene',
         targetData: {
@@ -1181,6 +1312,7 @@ export class GameScene extends Phaser.Scene {
         },
         imageKey: cfg.image,
         chapterTitle: cfg.title,
+        storyText: cfg.story,
         tipText: cfg.tip,
         minDurationMs: 2000
       });
@@ -1457,6 +1589,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   public loadScenario(scenarioIndex: number): void {
+    this.clearActExit();
     this.currentScenario = scenarioIndex;
     this.storyProgress.setAct(scenarioIndex);
 

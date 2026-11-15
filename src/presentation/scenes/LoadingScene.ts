@@ -6,6 +6,7 @@ export interface LoadingSceneConfig {
   targetData?: Record<string, unknown>;
   imageKey?: string;
   chapterTitle?: string;
+  storyText?: string;
   tipText?: string;
   minDurationMs?: number;
 }
@@ -15,6 +16,7 @@ export class LoadingScene extends Phaser.Scene {
   private targetData: Record<string, unknown> = {};
   private imageKey: string = 'loading_shalem_wall';
   private chapterTitle: string = 'ALBION — EDAD MEDIA OSCURA';
+  private storyText: string = '«Durante generaciones, Albion vivió sumido en una oscuridad perpetua bajo el dogma del Cáliz Solar. Nueve brujas dieron su vida en la Luna Roja para otorgar libre albedrío al recién nacido Thomas, salvado del fuego por Khaterine mientras Elowen cargó involuntariamente con la sospecha del reino.»';
   private tipText: string = '«Consejo de Shalem: Esquivar con [Espacio] te otorga invulnerabilidad breve. ¡Aprovéchala!»';
   private minDurationMs: number = 2000;
 
@@ -29,6 +31,7 @@ export class LoadingScene extends Phaser.Scene {
 
   private keyEnter!: Phaser.Input.Keyboard.Key;
   private keySpace!: Phaser.Input.Keyboard.Key;
+  private keyE!: Phaser.Input.Keyboard.Key;
 
   private tipsPool: string[] = [
     '«Consejo de Shalem: Tu barra azul de GUARDIA absorbe el daño antes que tu vida. ¡Espera 2 segundos sin golpes para que se regenere sola!»',
@@ -57,6 +60,7 @@ export class LoadingScene extends Phaser.Scene {
     if (data.targetData) this.targetData = data.targetData;
     if (data.imageKey) this.imageKey = data.imageKey;
     if (data.chapterTitle) this.chapterTitle = data.chapterTitle;
+    if (data.storyText) this.storyText = data.storyText;
     if (data.minDurationMs) this.minDurationMs = data.minDurationMs;
 
     this.tipText = data.tipText || this.tipsPool[Math.floor(Math.random() * this.tipsPool.length)];
@@ -117,12 +121,12 @@ export class LoadingScene extends Phaser.Scene {
 
     // 4. Elegant Bottom Narrative Card Frame
     const cardX = 320;
-    const cardY = 296;
-    const cardWidth = 590;
-    const cardHeight = 98;
+    const cardY = 282;
+    const cardWidth = 600;
+    const cardHeight = 138;
 
     // Outer Obsidian Glass Plate
-    this.add.rectangle(cardX, cardY, cardWidth, cardHeight, 0x07040e, 0.93)
+    this.add.rectangle(cardX, cardY, cardWidth, cardHeight, 0x07040e, 0.94)
       .setStrokeStyle(1.5, 0xb8923b)
       .setDepth(5);
 
@@ -132,7 +136,7 @@ export class LoadingScene extends Phaser.Scene {
       .setDepth(6);
 
     // Chapter / Act Title
-    this.add.text(cardX, cardY - 36, `✦ ${this.chapterTitle.toUpperCase()} ✦`, {
+    this.add.text(cardX, cardY - 52, `✦ ${this.chapterTitle.toUpperCase()} ✦`, {
       fontFamily: 'Cinzel, Georgia, serif',
       fontSize: '10px',
       color: '#ffd700',
@@ -141,44 +145,54 @@ export class LoadingScene extends Phaser.Scene {
       fontStyle: 'bold'
     }).setOrigin(0.5).setDepth(7);
 
-    // Lore / Tip Text with elegant word wrap
-    this.add.text(cardX, cardY - 14, this.tipText, {
+    // Canonical Story Chronicle Text
+    this.add.text(cardX, cardY - 26, this.storyText, {
       fontFamily: 'serif',
-      fontSize: '9px',
-      color: '#e7d8f5',
+      fontSize: '8.5px',
+      color: '#f5e9fc',
+      lineSpacing: 3,
+      align: 'center',
+      wordWrap: { width: 570 }
+    }).setOrigin(0.5).setDepth(7);
+
+    // Lore / Shalem Tip Text
+    this.add.text(cardX, cardY + 9, this.tipText, {
+      fontFamily: 'sans-serif',
+      fontSize: '7.5px',
+      color: '#ffde82',
       fontStyle: 'italic',
       align: 'center',
-      wordWrap: { width: 550 }
+      wordWrap: { width: 570 }
     }).setOrigin(0.5).setDepth(7);
 
     // 5. Progress Bar
-    const barWidth = 360;
+    const barWidth = 380;
     const barX = (640 - barWidth) / 2;
-    const barY = cardY + 14;
+    const barY = cardY + 28;
 
-    this.add.rectangle(320, barY, barWidth, 6, 0x140c24)
+    this.add.rectangle(320, barY, barWidth, 5, 0x140c24)
       .setStrokeStyle(1, 0x735591)
       .setDepth(7);
 
-    this.progressBarFill = this.add.rectangle(barX, barY, 0, 6, 0xffd700)
+    this.progressBarFill = this.add.rectangle(barX, barY, 0, 5, 0xffd700)
       .setOrigin(0, 0.5)
       .setDepth(8);
 
     // 6. Status Text (Visible while loading)
-    this.percentText = this.add.text(320, cardY + 34, 'INSCRIBIENDO RUNAS... 0%', {
+    this.percentText = this.add.text(320, cardY + 47, 'INSCRIBIENDO RUNAS SAGRADAS... 0%', {
       fontFamily: 'monospace',
       fontSize: '8px',
       color: '#bfa8d6'
     }).setOrigin(0.5).setDepth(9);
 
     // 7. Interactive Prompt Button Container (Visible only when 100% loaded!)
-    this.promptContainer = this.add.container(320, cardY + 34).setDepth(10).setVisible(false);
+    this.promptContainer = this.add.container(320, cardY + 47).setDepth(10).setVisible(false);
 
-    const btnBg = this.add.rectangle(0, 0, 320, 20, 0x241138, 0.96)
+    const btnBg = this.add.rectangle(0, 0, 360, 20, 0x241138, 0.96)
       .setStrokeStyle(1.5, 0xffd700)
       .setInteractive({ useHandCursor: true });
 
-    const btnText = this.add.text(0, 0, '⚔ PULSA ENTER O HAZ CLIC PARA ENTRAR ⚔', {
+    const btnText = this.add.text(0, 0, '⚔ PULSA ENTER, ESPACIO O CLIC PARA CONTINUAR ⚔', {
       fontFamily: 'Cinzel, Georgia, serif',
       fontSize: '8.5px',
       color: '#ffd700',
@@ -212,6 +226,7 @@ export class LoadingScene extends Phaser.Scene {
     if (this.input.keyboard) {
       this.keyEnter = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
       this.keySpace = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+      this.keyE = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
     }
 
     // 9. Smooth Progress Tween
@@ -257,7 +272,8 @@ export class LoadingScene extends Phaser.Scene {
     if (this.isLoaded && !this.isTransitioning) {
       if (
         (this.keyEnter && Phaser.Input.Keyboard.JustDown(this.keyEnter)) ||
-        (this.keySpace && Phaser.Input.Keyboard.JustDown(this.keySpace))
+        (this.keySpace && Phaser.Input.Keyboard.JustDown(this.keySpace)) ||
+        (this.keyE && Phaser.Input.Keyboard.JustDown(this.keyE))
       ) {
         this.proceedToTargetScene();
       }

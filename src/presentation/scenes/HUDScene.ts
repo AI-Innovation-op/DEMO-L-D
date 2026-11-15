@@ -294,6 +294,8 @@ export class HUDScene extends Phaser.Scene {
     interactionPrompt?: string,
     allyName?: string
   ): void {
+    if (!this.scene.isActive() || !this.playerHealthFill || !this.playerHealthFill.geom) return;
+
     // Active Dual Character
     if (this.characterSwapText) {
       const activeName = player.name.toUpperCase();

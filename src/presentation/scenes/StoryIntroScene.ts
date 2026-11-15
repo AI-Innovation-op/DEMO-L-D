@@ -206,9 +206,10 @@ export class StoryIntroScene extends Phaser.Scene {
     this.time.delayedCall(320, () => {
       this.scene.start('LoadingScene', {
         targetScene: 'GameScene',
-        targetData: { characterId: this.characterId },
+        targetData: { characterId: this.characterId, scenarioIndex: 1 },
         imageKey: 'loading_pyre_remains',
-        chapterTitle: 'ACTO I — LAS HOGUERAS DE OAKHAVEN',
+        chapterTitle: 'ACTO I — OAKHAVEN: LAS HOGUERAS DE LA INQUISICIÓN',
+        storyText: '«Al cumplir dieciocho años, la Inquisición marchó sobre la aldea de Oakhaven para arrebatar a Elowen creyéndola el fruto maldito. Thomas despertó el fuego negro en su espada para salvarla, amparado por el Padre Cedric y Khaterine frente a la Abadesa Morwenna.»',
         tipText: '«Khaterine: No te apartes del camino empedrado. Los acechadores vigilan la niebla.»',
         minDurationMs: 2000
       });
