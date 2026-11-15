@@ -36,6 +36,9 @@ export class TitleScene extends Phaser.Scene {
   }
 
   public create(): void {
+    this.cameras.main.resetFX();
+    this.cameras.main.fadeIn(300, 0, 0, 0);
+
     // 1. Full Cover Artwork (640x360 16:9)
     const coverKey = this.textures.exists('title_cover') ? 'title_cover' : 'bg_oakhaven';
     this.add.image(320, 180, coverKey).setDisplaySize(640, 360).setOrigin(0.5).setDepth(0);
@@ -739,7 +742,15 @@ export class TitleScene extends Phaser.Scene {
     this.audio.playSfx('dodge');
     this.cameras.main.fade(320, 0, 0, 0);
     this.time.delayedCall(340, () => {
-      this.scene.start('StoryIntroScene', { characterId: this.selectedCharacter });
+      this.scene.start('LoadingScene', {
+        targetScene: 'StoryIntroScene',
+        targetData: { characterId: this.selectedCharacter },
+        imageKey: 'loading_concept_art',
+        chapterTitle: 'PRÓLOGO — EL REINO QUE OLVIDÓ LA LUZ',
+        storyText: '«Durante generaciones, Albion vivió sumido en una oscuridad perpetua bajo el dogma del Cáliz Solar. Nueve brujas sacrificadas en la Noche de la Luna Roja otorgaron libre albedrío al recién nacido Thomas, salvado del fuego por Khaterine mientras Elowen cargó involuntariamente con la sospecha del reino.»',
+        tipText: '«Shalem: Despierta, mortal. El reino de Albion aguarda tus elecciones...»',
+        minDurationMs: 2200
+      });
     });
   }
 }

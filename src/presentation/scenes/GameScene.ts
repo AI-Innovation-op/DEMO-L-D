@@ -146,9 +146,40 @@ export class GameScene extends Phaser.Scene {
     this.shalem = new ShalemCompanion();
     this.audio = new WebAudioSoundAdapter();
     this.dialogues = new DialogueRepository();
+
+    // Reset scene lifecycle and transition state flags so new acts are fully playable!
+    this.isTransitioningAct = false;
+    this.isActCleared = false;
+    this.attackCooldown = 0;
+    this.enemyAttackTimer = 0;
+    this.bossAttackTimer = 0;
+    this.timeSinceLastHit = 0;
+    this.enemies = [];
+    this.enemySprites.clear();
+    this.enemyShadows.clear();
+    this.droppedWeaponSprites.clear();
+    this.currentBoss = undefined;
+    this.bossSprite = undefined;
+    this.bossShadow = undefined;
+    this.bossMarker = undefined;
+    this.bossMarkerTween = undefined;
+    this.exitPortalZone = undefined;
+    this.exitPortalMarker = undefined;
+    this.exitPortalTween = undefined;
+    this.victoryBannerBg = undefined;
+    this.victoryBannerTitle = undefined;
+    this.victoryBannerPrompt = undefined;
+    this.floatingPromptBadge = undefined;
+    this.isMalphasMetaActive = false;
   }
 
   public create(): void {
+    // 0. Reset camera and ensure act transition state is cleanly reset
+    this.cameras.main.resetFX();
+    this.cameras.main.fadeIn(300, 0, 0, 0);
+    this.isTransitioningAct = false;
+    this.isActCleared = false;
+
     // 1. Background image (640x360)
     this.bgImage = this.add.image(320, 180, 'bg_oakhaven').setDisplaySize(640, 360).setDepth(0);
 
@@ -1319,6 +1350,7 @@ export class GameScene extends Phaser.Scene {
   private transitionToActWithLoading(targetAct: number): void {
     if (this.isTransitioningAct) return;
     this.isTransitioningAct = true;
+    this.clearActExit();
 
     const configs: Record<number, { image: string; title: string; story: string; tip: string }> = {
       1: {
