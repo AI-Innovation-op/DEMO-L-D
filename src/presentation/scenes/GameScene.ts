@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { Character } from '../../domain/character/Character';
 import { CharacterId, CharacterState } from '../../domain/character/CharacterEnums';
 import { Enemy } from '../../domain/enemy/Enemy';
-import { Boss } from '../../domain/boss/Boss';
+import { Boss, BossPhaseType, BossUiShatteredEvent } from '../../domain/boss/Boss';
 import { ShalemCompanion } from '../../domain/companion/ShalemCompanion';
 import { Vector2 } from '../../domain/shared/Vector2';
 import { CombatUseCases } from '../../application/usecases/CombatUseCases';
@@ -10,6 +10,9 @@ import { WebAudioSoundAdapter } from '../../infrastructure/audio/WebAudioSoundAd
 import { DialogueRepository } from '../../infrastructure/dialogue/DialogueRepository';
 import { HUDScene } from './HUDScene';
 import { StoryProgress } from '../../domain/story/StoryProgress';
+import { ProphecyRepository } from '../../domain/mission/Mission';
+import { Weapon } from '../../domain/weapon/Weapon';
+import { EventBus } from '../../domain/shared/DomainEvent';
 
 export class GameScene extends Phaser.Scene {
   // Dual Characters (Thomas & Khaterine)
@@ -51,9 +54,30 @@ export class GameScene extends Phaser.Scene {
   private elowenBadge?: Phaser.GameObjects.Text;
   private hasTalkedToElowen: boolean = false;
 
+  // NPC: Padre Cedric
+  private cedricSprite?: Phaser.GameObjects.Image;
+  private cedricShadow?: Phaser.GameObjects.Ellipse;
+  private hasTalkedToCedric: boolean = false;
+  private hasRosarioCedric: boolean = false;
+
+  // Dropped Censer (Lamento de Oakhaven)
+  private droppedCenserSprite?: Phaser.GameObjects.Image;
+  private droppedCenserShadow?: Phaser.GameObjects.Ellipse;
+  private droppedCenserMarker?: Phaser.GameObjects.Text;
+  private droppedCenserTween?: Phaser.Tweens.Tween;
+
+  // Inventory & Prophecy State
+  public prophecy: ProphecyRepository = new ProphecyRepository();
+  public unlockedWeaponIds: string[] = ['short_sword'];
+
+  // Meta Rex Malphas Phase
+  private isMalphasMetaActive: boolean = false;
+  private malphasMetaTimer: number = 0;
+  private malphasCountdownText?: Phaser.GameObjects.Text;
+
   // Proximity Interaction
   private activeInteractionTarget?: string;
-  private activeInteractionType?: 'elowen' | 'shalem' | 'ally' | 'weapon';
+  private activeInteractionType?: 'elowen' | 'cedric' | 'censer' | 'shalem' | 'ally' | 'weapon';
   private floatingPromptBadge?: Phaser.GameObjects.Text;
 
   // Environment & Scenarios
@@ -81,6 +105,7 @@ export class GameScene extends Phaser.Scene {
   private keyE!: Phaser.Input.Keyboard.Key; // Interact / Talk / Pick up
   private keyM!: Phaser.Input.Keyboard.Key; // Shalem Minigame
   private keyP!: Phaser.Input.Keyboard.Key; // Menu Modal
+  private keyI!: Phaser.Input.Keyboard.Key; // Inventory & Prophecy
   private keyC!: Phaser.Input.Keyboard.Key; // Character Dialogue
   private keyN!: Phaser.Input.Keyboard.Key; // Mute Audio
   private key1!: Phaser.Input.Keyboard.Key;
@@ -203,6 +228,7 @@ export class GameScene extends Phaser.Scene {
       this.keyE = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
       this.keyM = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M);
       this.keyP = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.P);
+      this.keyI = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.I);
       this.keyC = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.C);
       this.keyN = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.N);
       this.key1 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ONE);
@@ -237,6 +263,17 @@ export class GameScene extends Phaser.Scene {
     this.updateDroppedWeapons();
     this.updateProximityInteractions();
 
+    if (this.isMalphasMetaActive) {
+      this.malphasMetaTimer -= delta / 1000;
+      if (this.malphasCountdownText) {
+        const sec = Math.max(0, Math.ceil(this.malphasMetaTimer));
+        this.malphasCountdownText.setText(`⚠ ¡DECRETO REAL: LEY DEL DESEO! — SOBREVIVE: ${sec}s ⚠`);
+      }
+      if (this.malphasMetaTimer <= 0) {
+        this.resolveMalphasMetaPhase();
+      }
+    }
+
     // Sync HUD with active character & dynamic interaction target
     const hud = this.scene.get('HUDScene') as HUDScene;
     if (hud) {
@@ -270,6 +307,12 @@ export class GameScene extends Phaser.Scene {
     if (Phaser.Input.Keyboard.JustDown(this.keyP)) {
       this.scene.pause('GameScene');
       this.scene.launch('MenuModalScene', { player: this.player, audio: this.audio });
+      return;
+    }
+
+    // Open Arsenal & Prophecy with [I]
+    if (this.keyI && Phaser.Input.Keyboard.JustDown(this.keyI)) {
+      this.openInventoryScene();
       return;
     }
 
@@ -447,9 +490,24 @@ export class GameScene extends Phaser.Scene {
     );
   }
 
+  private openInventoryScene(): void {
+    this.audio.playSfx('menu_select');
+    this.scene.pause('GameScene');
+    this.scene.launch('InventoryScene', {
+      player: this.player,
+      prophecy: this.prophecy,
+      unlockedWeaponIds: this.unlockedWeaponIds,
+      hasRosarioCedric: this.hasRosarioCedric
+    });
+  }
+
   private executeContextInteraction(): void {
     if (this.activeInteractionType === 'elowen') {
       this.interactWithElowen();
+    } else if (this.activeInteractionType === 'cedric') {
+      this.interactWithCedric();
+    } else if (this.activeInteractionType === 'censer') {
+      this.pickupLamentoOakhaven();
     } else if (this.activeInteractionType === 'weapon') {
       this.executeWeaponPickup();
     } else if (this.activeInteractionType === 'shalem') {
@@ -500,15 +558,88 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private interactWithCedric(): void {
+    this.audio.playSfx('menu_select');
+
+    if (!this.hasTalkedToCedric) {
+      this.hasTalkedToCedric = true;
+      this.hasRosarioCedric = true;
+      this.prophecy.unlockFragment(1);
+      this.player.gainExperience(35);
+      this.player.stats.restorePosture(this.player.stats.maxPosture);
+      this.storyProgress.addProgress(15);
+      this.spawnDamageNumber(this.playerSprite.x, this.playerSprite.y - 45, 20, false, '#ffd700');
+
+      this.scene.pause('GameScene');
+      this.scene.launch('CharacterDialogueScene', {
+        player: this.player,
+        scenarioIndex: 1,
+        audio: this.audio,
+        dialogueType: 'cedric'
+      });
+    } else {
+      this.triggerShalemBalloon("Padre Cedric: «Que la verdadera bondad guarde tu espada, Thomas...»", 4500);
+    }
+  }
+
+  private pickupLamentoOakhaven(): void {
+    if (this.droppedCenserSprite) {
+      this.audio.playCenserSwing();
+      if (!this.unlockedWeaponIds.includes('lamento_oakhaven')) {
+        this.unlockedWeaponIds.push('lamento_oakhaven');
+      }
+      this.player.disarmManager.setEquippedPrimary(Weapon.createLamentoOakhaven());
+
+      this.droppedCenserSprite.destroy();
+      this.droppedCenserSprite = undefined;
+      this.droppedCenserShadow?.destroy();
+      this.droppedCenserShadow = undefined;
+      this.droppedCenserMarker?.destroy();
+      this.droppedCenserMarker = undefined;
+      this.droppedCenserTween?.stop();
+      this.droppedCenserTween = undefined;
+
+      this.spawnDamageNumber(this.playerSprite.x, this.playerSprite.y - 45, 50, true, '#88ff88');
+      this.triggerShalemBalloon(
+        "★ ¡HAS OBTENIDO EL LAMENTO DE OAKHAVEN! ★ (Incensario equipado · «Cosecha de Culpa» cura +5 HP en combos)",
+        7000
+      );
+    }
+  }
+
   private updateProximityInteractions(): void {
     const px = this.playerSprite.x;
     const py = this.playerSprite.y;
 
     let closestDist = Infinity;
-    let targetType: 'elowen' | 'shalem' | 'ally' | 'weapon' | undefined = undefined;
+    let targetType: 'elowen' | 'cedric' | 'censer' | 'shalem' | 'ally' | 'weapon' | undefined = undefined;
     let targetLabel: string | undefined = undefined;
     let targetX = 0;
     let targetY = 0;
+
+    // 0. Check Dropped Censer (Lamento de Oakhaven)
+    if (this.droppedCenserSprite) {
+      const dist = Math.hypot(px - this.droppedCenserSprite.x, py - this.droppedCenserSprite.y);
+      if (dist < 46 && dist < closestDist) {
+        closestDist = dist;
+        targetType = 'censer';
+        targetLabel = 'Lamento de Oakhaven (Incensario)';
+        targetX = this.droppedCenserSprite.x;
+        targetY = this.droppedCenserSprite.y - 35;
+      }
+    }
+
+    // 0.5. Check Padre Cedric (Scenario 1)
+    if (this.currentScenario === 1 && this.cedricSprite) {
+      const dist = Math.hypot(px - this.cedricSprite.x, py - this.cedricSprite.y);
+      if (dist < 48 && dist < closestDist) {
+        closestDist = dist;
+        targetType = 'cedric';
+        targetLabel = 'Padre Cedric (Anciano Devoto)';
+        targetX = this.cedricSprite.x;
+        targetY = this.cedricSprite.y - 55;
+      }
+    }
 
     // 1. Check Elowen (Scenario 1)
     if (this.currentScenario === 1 && this.elowenSprite) {
@@ -558,9 +689,10 @@ export class GameScene extends Phaser.Scene {
     this.activeInteractionTarget = targetLabel;
 
     if (targetType && targetLabel && this.floatingPromptBadge) {
+      const verb = (targetType === 'weapon' || targetType === 'censer') ? 'RECOGER' : 'HABLAR';
       this.floatingPromptBadge
         .setPosition(targetX, targetY)
-        .setText(`[E] ${targetType === 'weapon' ? 'RECOGER' : 'HABLAR'}`)
+        .setText(`[E] ${verb}`)
         .setVisible(true);
     } else if (this.floatingPromptBadge) {
       this.floatingPromptBadge.setVisible(false);
@@ -619,6 +751,14 @@ export class GameScene extends Phaser.Scene {
         const finalDamage = isHeavy ? Math.round(res.damageDealt * 1.6) : res.damageDealt;
         this.spawnDamageNumber(enemy.position.x, enemy.position.y - 35, finalDamage, isHeavy);
 
+        // Passive Effect: Cosecha de Culpa (Lamento de Oakhaven heals on strike)
+        const curWpn = this.player.disarmManager.getCurrentWeapon();
+        if (curWpn.specialEffect === 'COSECHA_CULPA') {
+          this.player.heal(5);
+          this.audio.playHealingEmber();
+          this.spawnDamageNumber(this.playerSprite.x, this.playerSprite.y - 45, 5, false, '#88ffaa');
+        }
+
         const sprite = this.enemySprites.get(enemy.id);
         if (sprite) {
           sprite.setTint(0xff3333);
@@ -660,17 +800,39 @@ export class GameScene extends Phaser.Scene {
       const effectiveReachY = reachY + 16;
 
       if (bdx > 0 && bdx <= effectiveReachX && bdy <= effectiveReachY) {
+        if (this.isMalphasMetaActive) {
+          // Clock rewind! Time reverses on Malphas's wounds!
+          this.audio.playClockRewind();
+          this.bossSprite.setTint(0xdd66ff);
+          this.time.delayedCall(140, () => this.bossSprite?.clearTint());
+          this.spawnDamageNumber(this.currentBoss.position.x, this.currentBoss.position.y - 50, 0, false, '#ffd700');
+          this.triggerShalemBalloon("Shalem: «¡El tiempo retrocede sobre sus heridas! ¡Esquiva y SOBREVIVE al decreto!»", 2500);
+          return;
+        }
+
         const res = CombatUseCases.executeAttackOnBoss(this.player, this.currentBoss);
 
         this.cameras.main.shake(isHeavy ? 200 : 140, isHeavy ? 0.016 : 0.01);
         const finalDamage = isHeavy ? Math.round(res.damageDealt * 1.6) : res.damageDealt;
         this.spawnDamageNumber(this.currentBoss.position.x, this.currentBoss.position.y - 50, finalDamage, true);
 
+        // Passive Effect: Cosecha de Culpa
+        const curWpn = this.player.disarmManager.getCurrentWeapon();
+        if (curWpn.specialEffect === 'COSECHA_CULPA') {
+          this.player.heal(5);
+          this.audio.playHealingEmber();
+          this.spawnDamageNumber(this.playerSprite.x, this.playerSprite.y - 45, 5, false, '#88ffaa');
+        }
+
         this.bossSprite.setTint(0xff5555);
         this.time.delayedCall(120, () => this.bossSprite?.clearTint());
 
         if (res.targetKilled) {
-          this.handleBossDefeated();
+          if (this.currentBoss.id === 'rex_malphas' && !this.isMalphasMetaActive) {
+            this.triggerMalphasMetaPhase();
+          } else {
+            this.handleBossDefeated();
+          }
         }
       } else if (bdx > effectiveReachX && this.enemies.filter(e => e.isAlive()).length === 0) {
         this.triggerShalemBalloon("Shalem: «¡Estás demasiado lejos! ¡Acércate más a la Madre Morwenna para alcanzarla con tu arma!»", 2800);
@@ -745,8 +907,29 @@ export class GameScene extends Phaser.Scene {
       this.storyProgress.completeMilestone('act1_boss');
       this.storyProgress.scenarioProgress = 100;
 
+      // Spawn dropped Lamento de Oakhaven item
+      this.droppedCenserShadow = this.add.ellipse(520, 260, 24, 6, 0x000000, 0.5).setDepth(259);
+      this.droppedCenserSprite = this.add.image(520, 260, 'lamento_oakhaven').setOrigin(0.5, 1).setDepth(260);
+
+      this.droppedCenserMarker = this.add.text(520, 222, '▼ [E] RECOGER LAMENTO DE OAKHAVEN ▼', {
+        fontFamily: 'monospace',
+        fontSize: '8.5px',
+        color: '#88ffaa',
+        backgroundColor: '#0a2012',
+        padding: { x: 5, y: 2 }
+      }).setOrigin(0.5).setDepth(261);
+
+      this.droppedCenserTween = this.tweens.add({
+        targets: [this.droppedCenserSprite, this.droppedCenserMarker],
+        y: '-=5',
+        duration: 900,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+      });
+
       this.triggerShalemBalloon(
-        "Shalem: «¡La Madre Morwenna ha caído y su pira se extingue! ¡Oakhaven está libre! ¡Pulsa [2] para viajar a Londinium o habla con Khaterine con [C]!»",
+        "Shalem: «¡La Madre Morwenna ha caído y su incensario ha caído al suelo! ¡Recógelo con [E] para empuñar el Lamento de Oakhaven!»",
         7000
       );
 
@@ -856,6 +1039,111 @@ export class GameScene extends Phaser.Scene {
         this.transitionToActWithLoading(1);
       });
     }
+  }
+
+  private triggerMalphasMetaPhase(): void {
+    if (!this.currentBoss) return;
+    this.isMalphasMetaActive = true;
+    this.malphasMetaTimer = 20;
+
+    this.currentBoss.phase = BossPhaseType.PHASE_3_UNBEATABLE;
+    this.currentBoss.isInvulnerable = true;
+    this.currentBoss.health = this.currentBoss.maxHealth;
+
+    // Publish event so HUD changes to Infinite Gold
+    EventBus.getInstance().publish(
+      new BossUiShatteredEvent('rex_malphas', 'DECRETO REAL: LEY DEL DESEO')
+    );
+
+    // 1. Victory Banner appears as a dramatic fakeout
+    const fakeBannerBg = this.add.rectangle(320, 160, 420, 75, 0x11081f, 0.94)
+      .setStrokeStyle(2, 0xffd700)
+      .setDepth(360);
+
+    const fakeBannerTitle = this.add.text(320, 150, '★ ¡ENEMIGO DERROTADO! ★', {
+      fontFamily: 'Cinzel, Georgia, serif',
+      fontSize: '15px',
+      color: '#ffd700',
+      stroke: '#000',
+      strokeThickness: 3,
+      fontStyle: 'bold'
+    }).setOrigin(0.5).setDepth(361);
+
+    // 2. After 1.4s, Malphas shatters the UI!
+    this.time.delayedCall(1400, () => {
+      this.audio.playGlassShatter();
+      this.cameras.main.shake(700, 0.035);
+      this.cameras.main.flash(400, 255, 230, 255);
+
+      // Shatter shards
+      for (let i = 0; i < 18; i++) {
+        const shard = this.add.polygon(
+          320 + Phaser.Math.Between(-150, 150),
+          160 + Phaser.Math.Between(-30, 30),
+          [0, 0, Phaser.Math.Between(8, 20), Phaser.Math.Between(-10, 10), Phaser.Math.Between(-5, 15), Phaser.Math.Between(10, 25)],
+          0xffd700,
+          0.85
+        ).setDepth(365);
+
+        this.tweens.add({
+          targets: shard,
+          x: shard.x + Phaser.Math.Between(-250, 250),
+          y: shard.y + Phaser.Math.Between(-180, 220),
+          rotation: Phaser.Math.FloatBetween(-3, 3),
+          alpha: 0,
+          duration: Phaser.Math.Between(600, 1100),
+          onComplete: () => shard.destroy()
+        });
+      }
+
+      fakeBannerBg.destroy();
+      fakeBannerTitle.destroy();
+
+      // Malphas dialogue
+      this.triggerShalemBalloon(
+        "Rex Malphas: «No tuve que obligarlos a odiarte, hijo mío. Solo tuve que enseñarles a temerte. ¡DECRETO REAL: LEY DEL DESEO!»",
+        6500
+      );
+
+      // Countdown UI Banner
+      this.malphasCountdownText = this.add.text(320, 95, '⚠ ¡DECRETO REAL: LEY DEL DESEO! — SOBREVIVE: 20s ⚠', {
+        fontFamily: 'monospace',
+        fontSize: '11px',
+        color: '#ff4444',
+        backgroundColor: '#200808',
+        padding: { x: 8, y: 4 },
+        fontStyle: 'bold'
+      }).setOrigin(0.5).setDepth(360);
+    });
+  }
+
+  private resolveMalphasMetaPhase(): void {
+    this.isMalphasMetaActive = false;
+    this.malphasCountdownText?.destroy();
+    this.malphasCountdownText = undefined;
+
+    // Cinematic beam: Luz de Alba
+    this.cameras.main.flash(900, 255, 255, 255);
+    this.audio.playFinisherSound(true);
+
+    // Beam of light graphics
+    const beam = this.add.rectangle(320, 260, 640, 20, 0xffffff, 0.95).setDepth(370);
+    this.tweens.add({
+      targets: beam,
+      alpha: 0,
+      scaleY: 3,
+      duration: 800,
+      onComplete: () => beam.destroy()
+    });
+
+    this.triggerShalemBalloon(
+      "Elowen: «¡No voy a volver a huir, Thomas! ¡No hago esto por vuestra profecía, sino porque no voy a dejar que tú decidas quiénes somos!»",
+      7000
+    );
+
+    this.time.delayedCall(2200, () => {
+      this.handleBossDefeated();
+    });
   }
 
   private transitionToActWithLoading(targetAct: number): void {
@@ -1205,6 +1493,33 @@ export class GameScene extends Phaser.Scene {
       this.elowenBadge = undefined;
     }
 
+    // Clear Padre Cedric
+    if (this.cedricSprite) {
+      this.cedricSprite.destroy();
+      this.cedricSprite = undefined;
+      this.cedricShadow?.destroy();
+      this.cedricShadow = undefined;
+    }
+
+    // Clear Dropped Censer
+    if (this.droppedCenserSprite) {
+      this.droppedCenserSprite.destroy();
+      this.droppedCenserSprite = undefined;
+      this.droppedCenserShadow?.destroy();
+      this.droppedCenserShadow = undefined;
+      this.droppedCenserMarker?.destroy();
+      this.droppedCenserMarker = undefined;
+      this.droppedCenserTween?.stop();
+      this.droppedCenserTween = undefined;
+    }
+
+    // Clear Meta Rex Malphas UI
+    if (this.malphasCountdownText) {
+      this.malphasCountdownText.destroy();
+      this.malphasCountdownText = undefined;
+    }
+    this.isMalphasMetaActive = false;
+
     const introLines = this.dialogues.getScenarioIntro(this.currentScenario);
 
     if (scenarioIndex === 1) {
@@ -1222,6 +1537,19 @@ export class GameScene extends Phaser.Scene {
         targets: this.elowenSprite,
         scaleY: 1.025,
         duration: 1200,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+      });
+
+      // Spawn Padre Cedric NPC holding torch
+      this.cedricShadow = this.add.ellipse(160, 225, 24, 7, 0x000000, 0.45).setDepth(224);
+      this.cedricSprite = this.add.image(160, 225, 'padre_cedric').setOrigin(0.5, 1).setDepth(225);
+
+      this.tweens.add({
+        targets: this.cedricSprite,
+        scaleY: 1.02,
+        duration: 1300,
         yoyo: true,
         repeat: -1,
         ease: 'Sine.easeInOut'
@@ -1276,11 +1604,21 @@ export class GameScene extends Phaser.Scene {
       this.emberParticles.setPosition(320, 180);
       this.emberParticles.start();
 
-      // Boss Astaroth
+      // Boss Astaroth (Entidad Primordial del Abismo)
       this.currentBoss = Boss.createAstaroth();
-      this.bossShadow = this.add.ellipse(520, 260, 40, 10, 0x000000, 0.6).setDepth(259);
-      this.bossSprite = this.add.image(520, 260, 'boss_malphas').setOrigin(0.5, 1).setTint(0x220033).setScale(1.4).setDepth(260);
+      this.bossShadow = this.add.ellipse(520, 260, 48, 12, 0x000000, 0.6).setDepth(259);
+      this.bossSprite = this.add.image(520, 260, 'boss_astaroth').setOrigin(0.5, 1).setDepth(260);
       this.createBossMarker('Astaroth', 520, 260);
+
+      this.tweens.add({
+        targets: this.bossSprite,
+        scaleX: 1.03,
+        scaleY: 1.03,
+        duration: 1600,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+      });
 
       const introText = introLines[0] ? `${introLines[0].speaker}: ${introLines[0].text}` : "Shalem: «Escenario 3: La Catedral Invertida»";
       this.triggerShalemBalloon(introText, 4500);

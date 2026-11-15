@@ -257,4 +257,101 @@ export class WebAudioSoundAdapter implements IAudioPort {
       osc.stop(now + 0.51);
     } catch {}
   }
+
+  public playGlassShatter(): void {
+    if (this.isMuted) return;
+    try {
+      const ctx = this.initContext();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+
+      // Burst of high-frequency white noise / crashing squares
+      for (let i = 0; i < 4; i++) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(1200 + i * 400, now + i * 0.04);
+        osc.frequency.exponentialRampToValueAtTime(80, now + 0.35 + i * 0.04);
+
+        gain.gain.setValueAtTime(0.3, now + i * 0.04);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35 + i * 0.04);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + i * 0.04);
+        osc.stop(now + 0.36 + i * 0.04);
+      }
+    } catch {}
+  }
+
+  public playClockRewind(): void {
+    if (this.isMuted) return;
+    try {
+      const ctx = this.initContext();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+
+      // Rapid high-pitched backward tick-tock clicks
+      for (let i = 0; i < 3; i++) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(900 - i * 150, now + i * 0.05);
+
+        gain.gain.setValueAtTime(0.18, now + i * 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.05 + 0.03);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + i * 0.05);
+        osc.stop(now + i * 0.05 + 0.035);
+      }
+    } catch {}
+  }
+
+  public playHealingEmber(): void {
+    if (this.isMuted) return;
+    try {
+      const ctx = this.initContext();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(440, now);
+      osc.frequency.exponentialRampToValueAtTime(880, now + 0.25);
+
+      gain.gain.setValueAtTime(0.15, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.26);
+    } catch {}
+  }
+
+  public playCenserSwing(): void {
+    if (this.isMuted) return;
+    try {
+      const ctx = this.initContext();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(140, now);
+      osc.frequency.exponentialRampToValueAtTime(320, now + 0.15);
+
+      gain.gain.setValueAtTime(0.18, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.23);
+    } catch {}
+  }
 }

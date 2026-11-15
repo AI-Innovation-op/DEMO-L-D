@@ -79,6 +79,26 @@ export class DialogueRepository implements IDialoguePort {
     ];
   }
 
+  public getCedricDialogue(): DialogueLine[] {
+    return [
+      {
+        speaker: 'Padre Cedric',
+        portraitKey: 'portrait_cedric',
+        text: '«¡Thomas, hijo mío! Vi cómo te arrojaste contra esas bestias de ceniza para proteger a los niños... No sé de qué abismo proviene ese fuego negro que brota de tu espada... pero tus manos siguen siendo las del buen muchacho que cuidaba a los leprosos de Oakhaven.»'
+      },
+      {
+        speaker: 'Thomas',
+        portraitKey: 'portrait_thomas',
+        text: '«Padre Cedric, llevad a los niños a la cripta de piedra. Morwenna ha desatado a la inquisición en el bosque, pero yo detendré sus hogueras.»'
+      },
+      {
+        speaker: 'Padre Cedric',
+        portraitKey: 'portrait_cedric',
+        text: '«Toma este humilde rosario de madera... no tiene oro ni blasfemias, solo plegarias de paz. Y guarda esta tablilla de piedra negra que rescaté de la sacristía: contiene el primer fragmento de la Profecía Original. ¡Que Dios guíe tus pasos!»'
+      }
+    ];
+  }
+
   public getShalemSarcasm(): string {
     const list = [
       '«¡Usa tus combos, muchacho! ¡El botón [J] no muerde!»',
@@ -135,6 +155,24 @@ export class DialogueRepository implements IDialoguePort {
           speaker: 'Khaterine',
           portraitKey: 'portrait_khaterine',
           text: '«¡Tus hogueras no purifican nada, Morwenna! Solo alimentan al demonio Astaroth con la sangre de inocentes. ¡Oakhaven termina aquí su pesadilla!»'
+        }
+      ];
+    } else if (bossId === 'astaroth' || bossId === 'boss_astaroth') {
+      return [
+        {
+          speaker: 'Astaroth',
+          portraitKey: 'portrait_astaroth',
+          text: '«Mírala, hijo de mi ceniza... La única criatura que te amó agoniza en las losas de esta catedral. ¿Y por quién ha muerto? Por esos gusanos que te llamaron monstruo desde antes de que pudieras caminar.»'
+        },
+        {
+          speaker: 'Astaroth',
+          portraitKey: 'portrait_astaroth',
+          text: '«Tu espada aún toca el canal del Cáliz Solar. Tienes mi sangre primordial. Si cierras el puño y absorbes las almas de Albion... su luz cerrará la herida de Elowen. ¡Hazlo! ¡Elige a quien amas y condena a quienes te temen!»'
+        },
+        {
+          speaker: 'Thomas',
+          portraitKey: 'portrait_thomas',
+          text: '«Si los mato para salvarla... entonces tú ganas, Astaroth. Y todo lo que ella amó de mí habrá sido una mentira. ¡Solo la Oscuridad que elija amar será la única Luz en las Tinieblas!»'
         }
       ];
     }

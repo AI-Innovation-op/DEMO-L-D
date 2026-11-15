@@ -41,9 +41,40 @@ export class CharacterDialogueScene extends Phaser.Scene {
     const type = data.dialogueType || 'party';
     if (type === 'elowen') {
       this.dialogueBeats = this.generateElowenDialogue();
+    } else if (type === 'cedric') {
+      this.dialogueBeats = this.generateCedricDialogue();
     } else {
       this.dialogueBeats = this.generateDialogueForScenario(this.currentScenario);
     }
+  }
+
+  private generateCedricDialogue(): DialogueBeat[] {
+    return [
+      {
+        speaker: 'Padre Cedric',
+        portraitKey: 'portrait_cedric',
+        portraitSide: 'right',
+        text: '«¡Thomas, hijo mío! Vi cómo te arrojaste contra esas bestias de ceniza para proteger a los niños... No sé de qué abismo proviene ese fuego negro que arde en tu espada... pero tus manos siguen siendo las del buen muchacho que cuidaba a los leprosos de Oakhaven.»'
+      },
+      {
+        speaker: 'Thomas',
+        portraitKey: 'portrait_thomas',
+        portraitSide: 'left',
+        text: '«Padre Cedric, llevad a los niños a la cripta de piedra. Morwenna ha desatado el fuego en el bosque, pero yo extinguiré sus piras.»'
+      },
+      {
+        speaker: 'Padre Cedric',
+        portraitKey: 'portrait_cedric',
+        portraitSide: 'right',
+        text: '«Toma este humilde rosario de madera... te protegerá en el camino. Y guarda esta tablilla de piedra que rescaté de las cenizas: es el primer fragmento de la Profecía Original. ¡Que la bondad guíe tu corazón!»'
+      },
+      {
+        speaker: 'Shalem',
+        portraitKey: 'portrait_shalem',
+        portraitSide: 'left',
+        text: '«Un cura que no intenta quemarnos al vernos... Qué rareza tan refrescante. Guarda bien esa tablilla, Thomas: cada verso grabado en ella desarmará las mentiras del reino.»'
+      }
+    ];
   }
 
   private generateElowenDialogue(): DialogueBeat[] {

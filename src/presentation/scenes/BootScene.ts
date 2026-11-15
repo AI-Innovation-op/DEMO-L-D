@@ -33,6 +33,12 @@ export class BootScene extends Phaser.Scene {
     this.load.image('boss_malphas', '/assets/characters/boss_malphas.png');
     this.load.image('portrait_malphas', '/assets/characters/portrait_malphas.png');
 
+    this.load.image('padre_cedric', '/assets/characters/padre_cedric.png');
+    this.load.image('portrait_cedric', '/assets/characters/portrait_cedric.png');
+    this.load.image('lamento_oakhaven', '/assets/characters/lamento_oakhaven.png');
+    this.load.image('boss_astaroth', '/assets/characters/boss_astaroth.png');
+    this.load.image('portrait_astaroth', '/assets/characters/portrait_astaroth.png');
+
     // 2. Load the official artwork images from the public folder
     this.load.image('title_cover', '/assets/title_cover.jpg');
     this.load.image('loading_shalem_wall', '/assets/loading/loading_shalem_wall.jpg');
