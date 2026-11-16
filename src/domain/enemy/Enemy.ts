@@ -1,6 +1,6 @@
 import { Vector2 } from '../shared/Vector2';
 
-export type EnemyType = 'ash_prowler' | 'fanatic_monk' | 'golden_guard' | 'pyre_inquisitor';
+export type EnemyType = 'ash_prowler' | 'fanatic_monk' | 'golden_guard' | 'pyre_inquisitor' | 'inquisitor_torre' | 'shield_knight' | 'abyssal_shadow';
 
 export class Enemy {
   public posture: number;
@@ -33,6 +33,18 @@ export class Enemy {
 
   public static createGoldenGuard(id: string, pos: Vector2): Enemy {
     return new Enemy(id, 'Guardia Áureo de Londinium', 'golden_guard', 85, 85, 22, 85, pos, 80);
+  }
+
+  public static createInquisitorTorre(id: string, pos: Vector2): Enemy {
+    return new Enemy(id, 'Corista Inquisitorial', 'inquisitor_torre', 65, 65, 17, 75, pos, 55);
+  }
+
+  public static createShieldKnight(id: string, pos: Vector2): Enemy {
+    return new Enemy(id, 'Caballero de Escudo Pesado', 'shield_knight', 95, 95, 20, 70, pos, 90);
+  }
+
+  public static createAbyssalShadow(id: string, pos: Vector2): Enemy {
+    return new Enemy(id, 'Sombra Primordial del Vacío', 'abyssal_shadow', 75, 75, 24, 110, pos, 60);
   }
 
   public takeDamage(amount: number): number {

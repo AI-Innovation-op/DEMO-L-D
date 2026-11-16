@@ -572,6 +572,93 @@ export class ProceduralAssetGenerator {
       }
     }
 
+    if (!textures.exists('boss_guardian_crisol')) {
+      const c = textures.createCanvas('boss_guardian_crisol', 76, 82);
+      if (c) {
+        const ctx = c.getContext();
+        // Dark iron-chain habit
+        drawShadedRect(ctx, 22, 18, 32, 54, '#231e2b', '#3b334a', '#14101a');
+        drawShadedRect(ctx, 26, 6, 24, 18, '#3d3447', '#564b63', '#1e1924');
+        // Bronze crucible on his back / hip
+        drawShadedRect(ctx, 10, 36, 16, 20, '#b87333', '#d98c48', '#73441b');
+        ctx.fillStyle = '#66e0ff';
+        ctx.fillRect(12, 34, 12, 4); // Silver-cyan spiritual smoke
+        // Heavy iron mace
+        ctx.fillStyle = '#7a8288';
+        ctx.fillRect(56, 12, 6, 52);
+        drawShadedRect(ctx, 52, 10, 14, 14, '#4a5054', '#6a7278', '#2d3133');
+        c.refresh();
+      }
+    }
+
+    if (!textures.exists('boss_capitan_aureo')) {
+      const c = textures.createCanvas('boss_capitan_aureo', 80, 84);
+      if (c) {
+        const ctx = c.getContext();
+        // Golden plate armor
+        drawShadedRect(ctx, 26, 18, 30, 48, '#c49a31', '#f0c754', '#7a5a13');
+        drawShadedRect(ctx, 30, 6, 22, 16, '#dfb743', '#fae178', '#8a6b19');
+        // Red helmet crest
+        ctx.fillStyle = '#b82020';
+        ctx.fillRect(38, 2, 6, 8);
+        // Tower shield
+        drawShadedRect(ctx, 8, 22, 18, 46, '#d4af37', '#fae47d', '#6e5411');
+        ctx.fillStyle = '#fff2aa';
+        ctx.fillRect(14, 30, 6, 30);
+        // Golden lance
+        ctx.fillStyle = '#ffd700';
+        ctx.fillRect(58, 2, 4, 70);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(57, 0, 6, 8);
+        c.refresh();
+      }
+    }
+
+    if (!textures.exists('inquisitor_torre')) {
+      const c = textures.createCanvas('inquisitor_torre', 48, 58);
+      if (c) {
+        const ctx = c.getContext();
+        drawShadedRect(ctx, 16, 14, 20, 38, '#421f29', '#632e3d', '#240f16');
+        drawShadedRect(ctx, 18, 4, 16, 14, '#2e141c', '#4a1e2b', '#17080c');
+        ctx.fillStyle = '#e6c843'; // Sulphur flask
+        ctx.fillRect(8, 30, 8, 10);
+        ctx.fillStyle = '#fffa66';
+        ctx.fillRect(10, 27, 4, 4);
+        c.refresh();
+      }
+    }
+
+    if (!textures.exists('shield_knight')) {
+      const c = textures.createCanvas('shield_knight', 54, 62);
+      if (c) {
+        const ctx = c.getContext();
+        drawShadedRect(ctx, 18, 16, 24, 40, '#616770', '#88919e', '#3d4247');
+        drawShadedRect(ctx, 22, 6, 16, 14, '#757c87', '#9da6b5', '#454a52');
+        // Heavy shield
+        drawShadedRect(ctx, 4, 18, 16, 36, '#82652b', '#a88640', '#4a3712');
+        ctx.fillStyle = '#ffd700';
+        ctx.fillRect(8, 26, 8, 20);
+        c.refresh();
+      }
+    }
+
+    if (!textures.exists('abyssal_shadow')) {
+      const c = textures.createCanvas('abyssal_shadow', 52, 54);
+      if (c) {
+        const ctx = c.getContext();
+        const grad = ctx.createRadialGradient(26, 26, 4, 26, 26, 24);
+        grad.addColorStop(0, '#7b2bb5');
+        grad.addColorStop(0.5, '#2b0b47');
+        grad.addColorStop(1, 'rgba(10, 2, 20, 0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(2, 2, 48, 48);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(20, 20, 4, 3);
+        ctx.fillRect(28, 20, 4, 3);
+        c.refresh();
+      }
+    }
+
     // ==========================================
     // 7. BACKGROUNDS (640x360)
     // ==========================================
@@ -759,6 +846,207 @@ export class ProceduralAssetGenerator {
 
         ctx.fillStyle = '#140f21';
         ctx.fillRect(0, 260, 640, 100);
+        c.refresh();
+      }
+    }
+
+    if (!textures.exists('bg_belltower')) {
+      const c = textures.createCanvas('bg_belltower', 640, 360);
+      if (c) {
+        const ctx = c.getContext();
+        // Dark interior walls with stone masonry pattern
+        ctx.fillStyle = '#111019';
+        ctx.fillRect(0, 0, 640, 360);
+
+        // Stone blocks shading
+        ctx.strokeStyle = '#1d1929';
+        ctx.lineWidth = 1;
+        for (let y = 0; y < 260; y += 24) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(640, y);
+          ctx.stroke();
+          const offset = (y % 48 === 0) ? 0 : 30;
+          for (let x = offset; x < 640; x += 60) {
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(x, y + 24);
+            ctx.stroke();
+          }
+        }
+
+        // Heavy oak ceiling beams
+        ctx.fillStyle = '#261b16';
+        ctx.fillRect(0, 0, 640, 36);
+        ctx.fillRect(80, 0, 24, 260);
+        ctx.fillRect(360, 0, 24, 260);
+
+        // Center High Arched Window with Moonlight
+        const winX = 200;
+        const winY = 40;
+        const winW = 120;
+        const winH = 170;
+
+        const skyGlow = ctx.createLinearGradient(winX, winY, winX, winY + winH);
+        skyGlow.addColorStop(0, '#1c2538');
+        skyGlow.addColorStop(0.5, '#2e3a54');
+        skyGlow.addColorStop(1, '#182030');
+        ctx.fillStyle = skyGlow;
+        ctx.fillRect(winX, winY + 40, winW, winH - 40);
+        ctx.beginPath();
+        ctx.arc(winX + winW / 2, winY + 40, winW / 2, Math.PI, 0);
+        ctx.fill();
+
+        // Cold Moon visible through the window
+        ctx.fillStyle = '#f0f5fa';
+        ctx.beginPath();
+        ctx.arc(winX + 45, winY + 50, 16, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Iron Bars on window
+        ctx.strokeStyle = '#0d0d14';
+        ctx.lineWidth = 3;
+        for (let bx = winX + 20; bx < winX + winW; bx += 20) {
+          ctx.beginPath();
+          ctx.moveTo(bx, winY + 10);
+          ctx.lineTo(bx, winY + winH);
+          ctx.stroke();
+        }
+
+        // Window Frame
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = '#382f42';
+        ctx.strokeRect(winX, winY + 40, winW, winH - 40);
+        ctx.beginPath();
+        ctx.arc(winX + winW / 2, winY + 40, winW / 2, Math.PI, 0);
+        ctx.stroke();
+
+        // Moonlight shaft on the stone floor
+        const lightBeam = ctx.createLinearGradient(winX + winW / 2, winY + winH, winX + winW / 2, 340);
+        lightBeam.addColorStop(0, 'rgba(180, 210, 255, 0.22)');
+        lightBeam.addColorStop(1, 'rgba(180, 210, 255, 0.02)');
+        ctx.fillStyle = lightBeam;
+        ctx.beginPath();
+        ctx.moveTo(winX + 10, winY + winH);
+        ctx.lineTo(winX + winW - 10, winY + winH);
+        ctx.lineTo(winX + winW + 90, 320);
+        ctx.lineTo(winX - 50, 320);
+        ctx.fill();
+
+        // Torch Wall Sconces
+        const drawTorch = (tx: number, ty: number) => {
+          ctx.fillStyle = '#423326';
+          ctx.fillRect(tx, ty, 6, 26);
+          const tGlow = ctx.createRadialGradient(tx + 3, ty, 3, tx + 3, ty, 45);
+          tGlow.addColorStop(0, 'rgba(255, 170, 50, 0.7)');
+          tGlow.addColorStop(0.5, 'rgba(255, 90, 20, 0.25)');
+          tGlow.addColorStop(1, 'transparent');
+          ctx.fillStyle = tGlow;
+          ctx.fillRect(tx - 40, ty - 40, 86, 86);
+          ctx.fillStyle = '#ffbb33';
+          ctx.fillRect(tx + 1, ty - 6, 4, 8);
+        };
+        drawTorch(50, 130);
+        drawTorch(580, 130);
+
+        // Hay bales & salt bags
+        ctx.fillStyle = '#614d28';
+        ctx.fillRect(20, 230, 48, 30);
+        ctx.fillStyle = '#8a703b';
+        ctx.fillRect(24, 234, 40, 22);
+
+        // Stone Ground Floor
+        ctx.fillStyle = '#171521';
+        ctx.fillRect(0, 260, 640, 100);
+        c.refresh();
+      }
+    }
+
+    if (!textures.exists('bg_bridge')) {
+      const c = textures.createCanvas('bg_bridge', 640, 360);
+      if (c) {
+        const ctx = c.getContext();
+        // Night sky with heavy violet clouds
+        const sky = ctx.createLinearGradient(0, 0, 0, 260);
+        sky.addColorStop(0, '#0c0a17');
+        sky.addColorStop(0.5, '#1e1633');
+        sky.addColorStop(1, '#141224');
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, 640, 360);
+
+        // Distant Londinium Skyline (Spires, golden silhouettes, banners)
+        ctx.fillStyle = '#1c172e';
+        ctx.beginPath();
+        ctx.moveTo(420, 220);
+        ctx.lineTo(440, 90);
+        ctx.lineTo(460, 220);
+        ctx.lineTo(480, 70);
+        ctx.lineTo(500, 220);
+        ctx.lineTo(540, 110);
+        ctx.lineTo(570, 220);
+        ctx.lineTo(640, 140);
+        ctx.lineTo(640, 240);
+        ctx.lineTo(420, 240);
+        ctx.fill();
+
+        // Golden glow on Londinium horizon
+        const goldHalo = ctx.createRadialGradient(500, 120, 10, 500, 120, 100);
+        goldHalo.addColorStop(0, 'rgba(255, 215, 80, 0.4)');
+        goldHalo.addColorStop(1, 'transparent');
+        ctx.fillStyle = goldHalo;
+        ctx.fillRect(400, 40, 240, 180);
+
+        // Cold river chasm below bridge
+        ctx.fillStyle = '#06060d';
+        ctx.fillRect(0, 220, 640, 140);
+
+        // Massive Stone Arches
+        ctx.fillStyle = '#211d2d';
+        ctx.fillRect(0, 170, 640, 70);
+        ctx.fillStyle = '#06060d';
+        for (let ax = 60; ax < 640; ax += 180) {
+          ctx.beginPath();
+          ctx.arc(ax, 240, 50, Math.PI, 0);
+          ctx.fill();
+        }
+
+        // Bridge Roadway & Balustrade
+        ctx.fillStyle = '#312b42';
+        ctx.fillRect(0, 205, 640, 15);
+        ctx.fillStyle = '#423b59';
+        for (let px = 20; px < 640; px += 35) {
+          ctx.fillRect(px, 190, 8, 20);
+        }
+        ctx.fillRect(0, 188, 640, 6);
+
+        // Street Lanterns along the bridge
+        const drawLantern = (lx: number, ly: number) => {
+          ctx.fillStyle = '#1a1624';
+          ctx.fillRect(lx, ly, 4, 30);
+          ctx.fillRect(lx - 4, ly - 8, 12, 10);
+          const lGlow = ctx.createRadialGradient(lx + 2, ly - 3, 2, lx + 2, ly - 3, 30);
+          lGlow.addColorStop(0, 'rgba(255, 230, 120, 0.8)');
+          lGlow.addColorStop(0.5, 'rgba(255, 170, 40, 0.3)');
+          lGlow.addColorStop(1, 'transparent');
+          ctx.fillStyle = lGlow;
+          ctx.fillRect(lx - 25, ly - 30, 54, 54);
+          ctx.fillStyle = '#fff4a3';
+          ctx.fillRect(lx - 1, ly - 6, 6, 6);
+        };
+        drawLantern(70, 175);
+        drawLantern(250, 175);
+        drawLantern(430, 175);
+
+        // Cobblestone walking deck (2.5D floor)
+        ctx.fillStyle = '#1e1929';
+        ctx.fillRect(0, 240, 640, 120);
+
+        // River Mist swirling on bridge deck
+        const riverMist = ctx.createLinearGradient(0, 230, 0, 290);
+        riverMist.addColorStop(0, 'rgba(120, 140, 190, 0.35)');
+        riverMist.addColorStop(1, 'rgba(20, 15, 35, 0)');
+        ctx.fillStyle = riverMist;
+        ctx.fillRect(0, 230, 640, 60);
         c.refresh();
       }
     }

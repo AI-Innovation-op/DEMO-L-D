@@ -1,7 +1,7 @@
 import { Vector2 } from '../shared/Vector2';
 import { DomainEvent, EventBus } from '../shared/DomainEvent';
 
-export type BossId = 'madre_morwenna' | 'rex_malphas' | 'astaroth';
+export type BossId = 'madre_morwenna' | 'guardian_crisol' | 'capitan_aureo' | 'rex_malphas' | 'astaroth';
 
 export enum BossPhaseType {
   PHASE_1 = 'PHASE_1',
@@ -61,6 +61,30 @@ export class Boss {
     );
   }
 
+  public static createGuardianCrisol(): Boss {
+    return new Boss(
+      'guardian_crisol',
+      'Inquisidor Mayor (Crisol)',
+      'CUSTODIO DEL CAMPANARIO',
+      380,
+      380,
+      24,
+      new Vector2(510, 260)
+    );
+  }
+
+  public static createCapitanAureo(): Boss {
+    return new Boss(
+      'capitan_aureo',
+      'Capitán Áureo Vane',
+      'COMANDANTE DEL GRAN PUENTE',
+      440,
+      440,
+      26,
+      new Vector2(510, 260)
+    );
+  }
+
   public static createRexMalphas(): Boss {
     return new Boss(
       'rex_malphas',
@@ -107,6 +131,22 @@ export class Boss {
         phaseChanged = true;
         EventBus.getInstance().publish(
           new BossPhaseChangedEvent(this.id, this.phase, 'FASE 2: PIRA DEL ABISMO DESATADA')
+        );
+      }
+    } else if (this.id === 'guardian_crisol') {
+      if (this.phase === BossPhaseType.PHASE_1 && this.health <= this.maxHealth * 0.45) {
+        this.phase = BossPhaseType.PHASE_2;
+        phaseChanged = true;
+        EventBus.getInstance().publish(
+          new BossPhaseChangedEvent(this.id, this.phase, 'FASE 2: CRISOL DE BRONCE CALCINANTE')
+        );
+      }
+    } else if (this.id === 'capitan_aureo') {
+      if (this.phase === BossPhaseType.PHASE_1 && this.health <= this.maxHealth * 0.45) {
+        this.phase = BossPhaseType.PHASE_2;
+        phaseChanged = true;
+        EventBus.getInstance().publish(
+          new BossPhaseChangedEvent(this.id, this.phase, 'FASE 2: FORMACIÓN DE ESCUDO IMPENETRABLE')
         );
       }
     }

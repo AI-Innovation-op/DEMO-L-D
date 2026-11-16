@@ -28,26 +28,40 @@ export class StoryProgress {
   }
 
   private initMilestones(): void {
-    // Act 1: Oakhaven
+    // Act 1: Oakhaven (Caps I-VI)
     this.milestones.set(1, [
       { id: 'act1_monks', description: 'Purga la guardia de la pira', progressWeight: 25, isCompleted: false },
       { id: 'act1_beast', description: 'Elimina al Acechador de Ceniza', progressWeight: 25, isCompleted: false },
-      { id: 'act1_dialogue', description: 'Habla con Khaterine sobre la profecía', progressWeight: 20, isCompleted: false },
+      { id: 'act1_dialogue', description: 'Habla con el Padre Cedric y Khaterine', progressWeight: 20, isCompleted: false },
       { id: 'act1_boss', description: 'Vence a la Madre Morwenna en la hoguera', progressWeight: 30, isCompleted: false }
     ]);
 
-    // Act 2: Londinium
+    // Act 2: El Campanario y Granero del Sur (Caps VII-IX)
     this.milestones.set(2, [
-      { id: 'act2_guards', description: 'Infiltra los muros dorados de la capital', progressWeight: 30, isCompleted: false },
-      { id: 'act2_prophecy', description: 'Reconstruye los fragmentos de piedra', progressWeight: 30, isCompleted: false },
-      { id: 'act2_boss', description: 'Sobrevive a Rex Malphas y su Decreto Real', progressWeight: 40, isCompleted: false }
+      { id: 'act2_coristas', description: 'Neutraliza a las coristas de azufre', progressWeight: 30, isCompleted: false },
+      { id: 'act2_elowen', description: 'Habla con Elowen en la celda y recibe el pájaro de madera', progressWeight: 30, isCompleted: false },
+      { id: 'act2_boss', description: 'Vence al Guardián del Crisol de Bronce', progressWeight: 40, isCompleted: false }
     ]);
 
-    // Act 3: Catedral Invertida
+    // Act 3: El Gran Puente y Camino de los Herejes (Caps X-XIII)
     this.milestones.set(3, [
-      { id: 'act3_abyss', description: 'Atraviesa las ruinas flotantes del eclipse', progressWeight: 30, isCompleted: false },
-      { id: 'act3_weapon', description: 'Canaliza el fuego y la luz en Alba Gris', progressWeight: 30, isCompleted: false },
-      { id: 'act3_astaroth', description: 'Destruye a Astaroth y salva a Albion', progressWeight: 40, isCompleted: false }
+      { id: 'act3_vanguard', description: 'Quebranta la vanguardia de caballeros áureos', progressWeight: 30, isCompleted: false },
+      { id: 'act3_refugees', description: 'Habla con Elowen y resguarda a los refugiados', progressWeight: 30, isCompleted: false },
+      { id: 'act3_boss', description: 'Vence al Capitán Áureo Vane en las puertas', progressWeight: 40, isCompleted: false }
+    ]);
+
+    // Act 4: Londinium — La Ciudadela Dorada (Caps XIV-XVII)
+    this.milestones.set(4, [
+      { id: 'act4_guards', description: 'Infiltra los muros dorados y la guardia pretoriana', progressWeight: 30, isCompleted: false },
+      { id: 'act4_prophecy', description: 'Reúne las tablillas y revela la verdad de Alaric', progressWeight: 30, isCompleted: false },
+      { id: 'act4_boss', description: 'Sobrevive a Rex Malphas y derriba el salón astral', progressWeight: 40, isCompleted: false }
+    ]);
+
+    // Act 5: La Catedral Invertida — El Sol del Abismo (Caps XVIII-XX)
+    this.milestones.set(5, [
+      { id: 'act5_abyss', description: 'Atraviesa las ruinas flotantes de la sima cósmica', progressWeight: 30, isCompleted: false },
+      { id: 'act5_weapon', description: 'Canaliza la Gota de Luz de Elowen en Alba Gris', progressWeight: 30, isCompleted: false },
+      { id: 'act5_astaroth', description: 'Destruye a Astaroth y trae el Primer Amanecer', progressWeight: 40, isCompleted: false }
     ]);
   }
 
@@ -79,8 +93,10 @@ export class StoryProgress {
   public getScenarioName(): string {
     switch (this.currentAct) {
       case 1: return 'ACTO I — OAKHAVEN (ALDEA)';
-      case 2: return 'ACTO II — LONDINIUM (CIUDADELA)';
-      case 3: return 'ACTO III — CATEDRAL INVERTIDA';
+      case 2: return 'ACTO II — EL CAMPANARIO Y GRANERO';
+      case 3: return 'ACTO III — EL GRAN PUENTE DE PIEDRA';
+      case 4: return 'ACTO IV — LONDINIUM (CIUDADELA)';
+      case 5: return 'ACTO V — CATEDRAL INVERTIDA';
       default: return 'PRÓLOGO';
     }
   }
@@ -93,8 +109,8 @@ export class StoryProgress {
   }
 
   public getGlobalJourneyPercentage(): number {
-    const completedActs = (this.currentAct - 1) * 33.33;
-    const currentPart = (this.scenarioProgress / 100) * 33.33;
+    const completedActs = (this.currentAct - 1) * 20;
+    const currentPart = (this.scenarioProgress / 100) * 20;
     return Math.min(100, Math.round(completedActs + currentPart));
   }
 

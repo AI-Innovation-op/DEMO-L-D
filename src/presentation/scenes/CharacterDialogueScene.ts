@@ -41,6 +41,10 @@ export class CharacterDialogueScene extends Phaser.Scene {
     const type = data.dialogueType || 'party';
     if (type === 'elowen') {
       this.dialogueBeats = this.generateElowenDialogue();
+    } else if (type === 'elowen_belltower') {
+      this.dialogueBeats = this.generateElowenBelltowerDialogue();
+    } else if (type === 'elowen_bridge') {
+      this.dialogueBeats = this.generateElowenBridgeDialogue();
     } else if (type === 'elowen_londinium') {
       this.dialogueBeats = this.generateElowenLondiniumDialogue();
     } else if (type === 'elowen_cathedral') {
@@ -110,7 +114,67 @@ export class CharacterDialogueScene extends Phaser.Scene {
     ];
   }
 
-  /** Act II – Elowen is chained in the dungeons of Londinium. */
+  /** Act II – Elowen in the Belltower cell with the wooden bird & loose bars. */
+  private generateElowenBelltowerDialogue(): DialogueBeat[] {
+    return [
+      {
+        speaker: 'Elowen',
+        portraitKey: 'elowen_campanario',
+        portraitSide: 'right',
+        text: '«Thomas... ¡Llegaste a la torre! Morwenna me encerró aquí y vertió sal gruesa bajo mis rodillas para quebrar mi espíritu antes del traslado. Pero mi luz quebró su crisol de bronce.»'
+      },
+      {
+        speaker: 'Thomas',
+        portraitKey: 'portrait_thomas',
+        portraitSide: 'left',
+        text: '«Elowen, resiste. Khaterine recuperó sus hojas en el granero y yo rompí la guardia de la entrada. Esta reja está suelta; saldremos por el portillo del huerto.»'
+      },
+      {
+        speaker: 'Elowen',
+        portraitKey: 'elowen_campanario',
+        portraitSide: 'right',
+        text: '«Toma mi pájaro de madera... Atada a él va la tira de lino que escribí con carbón: "Londinium es sacrificio. Reja suelta." Llévalo contigo. Los guardias se preparan para mover el convoy hacia el río.»'
+      },
+      {
+        speaker: 'Shalem',
+        portraitKey: 'portrait_shalem',
+        portraitSide: 'left',
+        text: '«Una paloma mensajera de madera tosca... Quién diría que un trozo de pino tallado con un cuchillo viejo guardaría más lealtad que toda la corte imperial junta. ¡Vámonos antes de que el azufre nos ahogue!»'
+      }
+    ];
+  }
+
+  /** Act III – Elowen on the Great Stone Bridge guiding refugees. */
+  private generateElowenBridgeDialogue(): DialogueBeat[] {
+    return [
+      {
+        speaker: 'Elowen',
+        portraitKey: 'portrait_elowen',
+        portraitSide: 'right',
+        text: '«Martín y los aldeanos que huyeron de Oakhaven están cruzando el puente... pero los caballeros de la guardia áurea han cerrado el portón de hierro de Londinium. Si no quebramos al Capitán Vane, nos empujarán al río.»'
+      },
+      {
+        speaker: 'Thomas',
+        portraitKey: 'portrait_thomas',
+        portraitSide: 'left',
+        text: '«Mantened a los refugiados tras la balaustrada de piedra, Elowen. Esos caballeros confían demasiado en el grosor de sus escudos de torre... pero el fuego negro no conoce barreras.»'
+      },
+      {
+        speaker: 'Elowen',
+        portraitKey: 'portrait_elowen',
+        portraitSide: 'right',
+        text: '«Siente mi bendición en tu hoja, Thomas... Que la bondad de los que amamos sea tu armadura.»'
+      },
+      {
+        speaker: 'Shalem',
+        portraitKey: 'portrait_shalem',
+        portraitSide: 'left',
+        text: '«Ese Capitán Vane brilla como una moneda recién acuñada. ¡Enséñale que el oro falso se funde con un par de buenos tajos!»'
+      }
+    ];
+  }
+
+  /** Act IV – Elowen is chained in the dungeons of Londinium. */
   private generateElowenLondiniumDialogue(): DialogueBeat[] {
     return [
       {
@@ -206,8 +270,8 @@ export class CharacterDialogueScene extends Phaser.Scene {
         {
           speaker: 'Shalem',
           portraitKey: 'portrait_shalem',
-          portraitSide: 'left',
-          text: '«Dieciocho años viviendo como un felino bajo el cuidado de un monaguillo... Menos charlas morales y más afilar el acero, saco de carne. ¡Que esos Acechadores tienen dientes muy afilados!»'
+          text: '«Dieciocho años viviendo como un felino bajo el cuidado de un monaguillo... Menos charlas morales y más afilar el acero, saco de carne. ¡Que esos Acechadores tienen dientes muy afilados!»',
+          portraitSide: 'left'
         },
         {
           speaker: mainProtagonist,
@@ -223,6 +287,48 @@ export class CharacterDialogueScene extends Phaser.Scene {
         }
       ];
     } else if (scenario === 2) {
+      return [
+        {
+          speaker: mainProtagonist,
+          portraitKey: mainPortrait,
+          portraitSide: 'left',
+          text: '«Elowen soportó dieciocho inviernos de sal y sospechas sin guardar rencor. Rompió el crisol sagrado con su propia luz para enviarme su pájaro de madera...»'
+        },
+        {
+          speaker: allyName,
+          portraitKey: allyPortrait,
+          portraitSide: 'right',
+          text: '«En el granero recuperé el Colmillo del Sauce Negro bajo la losa de piedra. El chal de mi madre Lyra sigue oliendo a humo y lluvia... Estamos listos para quebrar la torre.»'
+        },
+        {
+          speaker: 'Shalem',
+          portraitKey: 'portrait_shalem',
+          portraitSide: 'left',
+          text: '«Esos coristas lanzan azufre como si regalaran caramelos. Mantened el compás: esquivad sus vapores y devolvedles el golpe con interés.»'
+        }
+      ];
+    } else if (scenario === 3) {
+      return [
+        {
+          speaker: mainProtagonist,
+          portraitKey: mainPortrait,
+          portraitSide: 'left',
+          text: '«Los carros de prisioneros cruzaban el Gran Puente bajo la niebla. Si no hubiéramos llegado a tiempo, los soldados habrían arrojado a los campesinos desterrados al abismo del río.»'
+        },
+        {
+          speaker: allyName,
+          portraitKey: allyPortrait,
+          portraitSide: 'right',
+          text: '«El Capitán Vane y sus caballeros áureos protegen los muros de la capital. Creen que su escudo de torre es inquebrantable... pero el fuego negro no pide permiso.»'
+        },
+        {
+          speaker: 'Shalem',
+          portraitKey: 'portrait_shalem',
+          portraitSide: 'left',
+          text: '«El aire de Londinium huele a corrupción y mirra vieja. En cuanto crucemos este puente, la corte entera sabrá que el hijo del Abismo ha venido a cobrar sus deudas.»'
+        }
+      ];
+    } else if (scenario === 4) {
       return [
         {
           speaker: mainProtagonist,

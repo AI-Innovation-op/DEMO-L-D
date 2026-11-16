@@ -389,15 +389,24 @@ export class MenuModalScene extends Phaser.Scene {
       {
         id: 'campanario',
         title: 'II. EL CAMPANARIO (CAPS VII–IX)',
-        sub: 'La Reja Suelta y el Pájaro',
+        sub: 'La Reja Suelta y el Granero',
         portrait: 'elowen_campanario',
-        speaker: 'ELOWEN DE OAKHAVEN',
-        text: '«Recluida en la celda del campanario, Elowen soportó el castigo de la sal gruesa. Antes de que los caballeros dorados la trasladasen a Londinium como ofrenda, Elowen quebró el crisol sagrado de Morwenna con su luz plateada. Con carbón y una tira de lino atada a su pájaro de madera, envió su mensaje a Thomas: "Londinium es sacrificio. Reja suelta." Thomas juró derribar las murallas de la capital.»',
+        speaker: 'ELOWEN & KHATERINE',
+        text: '«Recluida en la celda del campanario, Elowen soportó el castigo de la sal gruesa. Antes de que los caballeros dorados la trasladasen a Londinium como ofrenda, Elowen quebró el crisol sagrado de Morwenna con su luz plateada. Con carbón y una tira de lino atada a su pájaro de madera, envió su mensaje a Thomas: "Londinium es sacrificio. Reja suelta." Al otro lado, Khaterine recuperó las dos hojas del Colmillo del Sauce Negro bajo la losa del granero.»',
         quote: '«Shalem: "El coraje de esa chica supera al de cualquier rey con corona de latón podrido".»'
       },
       {
+        id: 'puente',
+        title: 'III. EL GRAN PUENTE (CAPS X–XIII)',
+        sub: 'El Camino de los Herejes',
+        portrait: 'portrait_thomas',
+        speaker: 'THOMAS & ELOWEN',
+        text: '«El avance hacia el norte llevó al grupo a través de la densa niebla fluvial del Gran Puente de Piedra. Custodiado por el Capitán Áureo Vane y caballeros con escudos de torre, los rebeldes lucharon para liberar el convoy de campesinos y los carros de prisioneros de Martín y Tobías, abriéndose paso hacia las murallas exteriores de Londinium.»',
+        quote: '«Shalem: "Los escudos pesados solo sirven si el corazón de quien los sostiene no tiembla de miedo".»'
+      },
+      {
         id: 'act2',
-        title: 'III. LONDINIUM (CAPS X–XVII)',
+        title: 'IV. LONDINIUM (CAPS XIV–XVII)',
         sub: 'La Corona del Deseo y Alaric',
         portrait: 'portrait_malphas',
         speaker: 'REX MALPHAS (ALARIC)',
@@ -406,7 +415,7 @@ export class MenuModalScene extends Phaser.Scene {
       },
       {
         id: 'act3',
-        title: 'IV. CATEDRAL INVERTIDA (CAPS XVIII–XX)',
+        title: 'V. CATEDRAL INVERTIDA (CAPS XVIII–XX)',
         sub: 'Alba Gris y la Luz en las Tinieblas',
         portrait: 'portrait_astaroth',
         speaker: 'THOMAS & ELOWEN',
@@ -420,23 +429,23 @@ export class MenuModalScene extends Phaser.Scene {
     const listW = 195;
 
     chronicles.forEach((c, idx) => {
-      const cy = -58 + idx * 46;
+      const cy = -68 + idx * 37;
       const isSelected = idx === this.selectedChronicleIndex;
 
-      const btnBg = this.add.rectangle(listX, cy, listW, 40, isSelected ? 0x3d2259 : 0x181026)
+      const btnBg = this.add.rectangle(listX, cy, listW, 33, isSelected ? 0x3d2259 : 0x181026)
         .setStrokeStyle(1.5, isSelected ? 0xffd700 : 0x483259)
         .setInteractive({ useHandCursor: true });
 
-      const titleTxt = this.add.text(listX - listW / 2 + 10, cy - 8, c.title, {
+      const titleTxt = this.add.text(listX - listW / 2 + 10, cy - 7, c.title, {
         fontFamily: 'Cinzel, monospace',
-        fontSize: '8.5px',
+        fontSize: '8px',
         color: isSelected ? '#ffd700' : '#d2c2e8',
         fontStyle: 'bold'
       });
 
-      const subTxt = this.add.text(listX - listW / 2 + 10, cy + 7, c.sub, {
+      const subTxt = this.add.text(listX - listW / 2 + 10, cy + 6, c.sub, {
         fontFamily: 'sans-serif',
-        fontSize: '7px',
+        fontSize: '6.5px',
         color: isSelected ? '#ffffff' : '#8874a3'
       });
 

@@ -21,12 +21,24 @@ describe('Domain: StoryProgress & Scenario Milestones', () => {
   it('calculates global journey percentage across multiple acts', () => {
     const story = new StoryProgress();
     story.addProgress(50);
-    // In Act 1 with 50% scenario progress -> approx 17% global
-    expect(story.getGlobalJourneyPercentage()).toBe(17);
+    // In Act 1 with 50% scenario progress -> 10% global (out of 5 acts)
+    expect(story.getGlobalJourneyPercentage()).toBe(10);
 
     story.setAct(2);
     expect(story.scenarioProgress).toBe(0);
+    expect(story.getScenarioName()).toContain('CAMPANARIO');
+    expect(story.getGlobalJourneyPercentage()).toBe(20);
+
+    story.setAct(3);
+    expect(story.getScenarioName()).toContain('GRAN PUENTE');
+    expect(story.getGlobalJourneyPercentage()).toBe(40);
+
+    story.setAct(4);
     expect(story.getScenarioName()).toContain('LONDINIUM');
-    expect(story.getGlobalJourneyPercentage()).toBe(33);
+    expect(story.getGlobalJourneyPercentage()).toBe(60);
+
+    story.setAct(5);
+    expect(story.getScenarioName()).toContain('CATEDRAL INVERTIDA');
+    expect(story.getGlobalJourneyPercentage()).toBe(80);
   });
 });

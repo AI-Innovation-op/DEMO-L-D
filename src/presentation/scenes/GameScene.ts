@@ -115,6 +115,8 @@ export class GameScene extends Phaser.Scene {
   private key1!: Phaser.Input.Keyboard.Key;
   private key2!: Phaser.Input.Keyboard.Key;
   private key3!: Phaser.Input.Keyboard.Key;
+  private key4!: Phaser.Input.Keyboard.Key;
+  private key5!: Phaser.Input.Keyboard.Key;
   private keyEnter!: Phaser.Input.Keyboard.Key;
 
   // Act Transition and Exit Portal state
@@ -295,6 +297,8 @@ export class GameScene extends Phaser.Scene {
       this.key1 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ONE);
       this.key2 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TWO);
       this.key3 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.THREE);
+      this.key4 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.FOUR);
+      this.key5 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.FIVE);
       this.keyEnter = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
     }
 
@@ -334,7 +338,7 @@ export class GameScene extends Phaser.Scene {
 
     // Proximity next-level auto-transition when walking to the right screen boundary of a cleared act!
     if (this.isActCleared && !this.isTransitioningAct && this.player.position.x >= 595) {
-      const nextAct = this.currentScenario === 1 ? 2 : (this.currentScenario === 2 ? 3 : 1);
+      const nextAct = this.currentScenario < 5 ? (this.currentScenario + 1) : 1;
       this.clearActExit();
       this.transitionToActWithLoading(nextAct);
       return;
@@ -364,13 +368,13 @@ export class GameScene extends Phaser.Scene {
         (this.keyEnter && Phaser.Input.Keyboard.JustDown(this.keyEnter)) ||
         (this.keySpace && Phaser.Input.Keyboard.JustDown(this.keySpace))
       ) {
-        const nextAct = this.currentScenario === 1 ? 2 : (this.currentScenario === 2 ? 3 : 1);
+        const nextAct = this.currentScenario < 5 ? (this.currentScenario + 1) : 1;
         this.clearActExit();
         this.transitionToActWithLoading(nextAct);
         return;
       }
       if (this.keyE && Phaser.Input.Keyboard.JustDown(this.keyE) && this.player.position.x > 500) {
-        const nextAct = this.currentScenario === 1 ? 2 : (this.currentScenario === 2 ? 3 : 1);
+        const nextAct = this.currentScenario < 5 ? (this.currentScenario + 1) : 1;
         this.clearActExit();
         this.transitionToActWithLoading(nextAct);
         return;
@@ -391,6 +395,16 @@ export class GameScene extends Phaser.Scene {
     if (Phaser.Input.Keyboard.JustDown(this.key3)) {
       this.clearActExit();
       this.transitionToActWithLoading(3);
+      return;
+    }
+    if (Phaser.Input.Keyboard.JustDown(this.key4)) {
+      this.clearActExit();
+      this.transitionToActWithLoading(4);
+      return;
+    }
+    if (Phaser.Input.Keyboard.JustDown(this.key5)) {
+      this.clearActExit();
+      this.transitionToActWithLoading(5);
       return;
     }
 
@@ -690,15 +704,33 @@ export class GameScene extends Phaser.Scene {
           player: this.player,
           scenarioIndex: 2,
           audio: this.audio,
-          dialogueType: 'elowen_londinium'
+          dialogueType: 'elowen_belltower'
         });
-      } else {
-        this.storyProgress.completeMilestone('act3_elowen');
-        this.awakenAlbaGris();
+      } else if (this.currentScenario === 3) {
+        this.storyProgress.completeMilestone('act3_refugees');
         this.scene.pause('GameScene');
         this.scene.launch('CharacterDialogueScene', {
           player: this.player,
           scenarioIndex: 3,
+          audio: this.audio,
+          dialogueType: 'elowen_bridge'
+        });
+      } else if (this.currentScenario === 4) {
+        this.storyProgress.completeMilestone('act4_prophecy');
+        this.scene.pause('GameScene');
+        this.scene.launch('CharacterDialogueScene', {
+          player: this.player,
+          scenarioIndex: 4,
+          audio: this.audio,
+          dialogueType: 'elowen_londinium'
+        });
+      } else {
+        this.storyProgress.completeMilestone('act5_weapon');
+        this.awakenAlbaGris();
+        this.scene.pause('GameScene');
+        this.scene.launch('CharacterDialogueScene', {
+          player: this.player,
+          scenarioIndex: 5,
           audio: this.audio,
           dialogueType: 'elowen_cathedral'
         });
@@ -708,6 +740,10 @@ export class GameScene extends Phaser.Scene {
       if (this.currentScenario === 1) {
         this.triggerShalemBalloon("Elowen: «Que la verdadera luz guarde tus pasos, Thomas...»", 5000);
       } else if (this.currentScenario === 2) {
+        this.triggerShalemBalloon("Elowen: «Guarda el pájaro de madera... El lino y carbón revelarán la verdad en Londinium.»", 5000);
+      } else if (this.currentScenario === 3) {
+        this.triggerShalemBalloon("Elowen: «Los refugiados están a salvo... ¡Ahora crucemos las puertas de la capital!»", 5000);
+      } else if (this.currentScenario === 4) {
         this.triggerShalemBalloon("Elowen: «No desperdicies tiempo conmigo... Derrota al rey y libera a Albion.»", 5000);
       } else {
         this.triggerShalemBalloon("Elowen: «Mi luz ya está en tu espada, Thomas. Termina lo que empezamos juntos...»", 5000);
@@ -1430,13 +1466,13 @@ export class GameScene extends Phaser.Scene {
       });
 
       this.triggerShalemBalloon(
-        "Shalem: «¡Madre Morwenna ha caído! ¡Recoge el Lamento de Oakhaven y viaja hacia Londinium por el sendero derecho!»",
+        "Shalem: «¡Madre Morwenna ha caído! ¡Recoge el Lamento de Oakhaven y viaja hacia el Campanario por el sendero derecho!»",
         7000
       );
 
-      // Interactive Exit Portal / Road to Londinium on right screen edge
+      // Interactive Exit Portal / Road to Belltower on right screen edge
       this.exitPortalZone = this.add.ellipse(605, 250, 48, 16, 0xb8923b, 0.55).setDepth(220);
-      this.exitPortalMarker = this.add.text(585, 205, '▶ CAMINO A LONDINIUM ▶\n[E] o Avanza para partir', {
+      this.exitPortalMarker = this.add.text(585, 205, '▶ AL CAMPANARIO ▶\n[E] o Avanza para partir', {
         fontFamily: 'Cinzel, monospace',
         fontSize: '8px',
         color: '#ffd700',
@@ -1470,7 +1506,7 @@ export class GameScene extends Phaser.Scene {
         fontStyle: 'bold'
       }).setOrigin(0.5).setDepth(361);
 
-      this.victoryBannerPrompt = this.add.text(320, 172, 'PULSA [ENTER], [E] O CAMINA A LA DERECHA PARA LONDINIUM ▶', {
+      this.victoryBannerPrompt = this.add.text(320, 172, 'PULSA [ENTER], [E] O CAMINA A LA DERECHA PARA EL CAMPANARIO ▶', {
         fontFamily: 'monospace',
         fontSize: '8.5px',
         color: '#ffffff',
@@ -1485,6 +1521,118 @@ export class GameScene extends Phaser.Scene {
       });
     } else if (this.currentScenario === 2) {
       this.storyProgress.completeMilestone('act2_boss');
+      this.storyProgress.scenarioProgress = 100;
+
+      this.triggerShalemBalloon(
+        "Shalem: «¡El Inquisidor Mayor ha caído y el crisol se ha quebrado! ¡Avanza hacia el Gran Puente de Piedra!»",
+        7000
+      );
+
+      this.exitPortalZone = this.add.ellipse(605, 250, 48, 16, 0x5a7ca8, 0.65).setDepth(220);
+      this.exitPortalMarker = this.add.text(585, 205, '▶ AL GRAN PUENTE ▶\n[E] o Avanza para partir', {
+        fontFamily: 'Cinzel, monospace',
+        fontSize: '8px',
+        color: '#b0d4ff',
+        backgroundColor: '#101626',
+        padding: { x: 6, y: 4 },
+        align: 'center',
+        fontStyle: 'bold'
+      }).setOrigin(0.5).setDepth(340);
+
+      this.exitPortalTween = this.tweens.add({
+        targets: [this.exitPortalMarker, this.exitPortalZone],
+        scaleX: 1.05,
+        scaleY: 1.05,
+        duration: 800,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+      });
+
+      this.victoryBannerBg = this.add.rectangle(320, 160, 440, 78, 0x11081f, 0.95)
+        .setStrokeStyle(2, 0xffd700)
+        .setDepth(360);
+
+      this.victoryBannerTitle = this.add.text(320, 142, '★ ¡ACTO II: EL CAMPANARIO COMPLETADO! ★', {
+        fontFamily: 'Cinzel, Georgia, serif',
+        fontSize: '13px',
+        color: '#ffd700',
+        stroke: '#000',
+        strokeThickness: 3,
+        fontStyle: 'bold'
+      }).setOrigin(0.5).setDepth(361);
+
+      this.victoryBannerPrompt = this.add.text(320, 172, 'PULSA [ENTER], [E] O CAMINA A LA DERECHA PARA EL GRAN PUENTE ▶', {
+        fontFamily: 'monospace',
+        fontSize: '8.5px',
+        color: '#ffffff',
+        backgroundColor: '#203254',
+        padding: { x: 8, y: 4 },
+        fontStyle: 'bold'
+      }).setOrigin(0.5).setDepth(361).setInteractive({ useHandCursor: true });
+
+      this.victoryBannerPrompt.on('pointerdown', () => {
+        this.clearActExit();
+        this.transitionToActWithLoading(3);
+      });
+    } else if (this.currentScenario === 3) {
+      this.storyProgress.completeMilestone('act3_boss');
+      this.storyProgress.scenarioProgress = 100;
+
+      this.triggerShalemBalloon(
+        "Shalem: «¡El Capitán Vane ha caído! ¡Los carros de refugiados están a salvo! ¡Entremos a Londinium!»",
+        7000
+      );
+
+      this.exitPortalZone = this.add.ellipse(605, 250, 48, 16, 0xd4af37, 0.65).setDepth(220);
+      this.exitPortalMarker = this.add.text(585, 205, '▶ A LONDINIUM ▶\n[E] o Avanza para entrar', {
+        fontFamily: 'Cinzel, monospace',
+        fontSize: '8px',
+        color: '#ffd700',
+        backgroundColor: '#261b0c',
+        padding: { x: 6, y: 4 },
+        align: 'center',
+        fontStyle: 'bold'
+      }).setOrigin(0.5).setDepth(340);
+
+      this.exitPortalTween = this.tweens.add({
+        targets: [this.exitPortalMarker, this.exitPortalZone],
+        scaleX: 1.05,
+        scaleY: 1.05,
+        duration: 800,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+      });
+
+      this.victoryBannerBg = this.add.rectangle(320, 160, 440, 78, 0x11081f, 0.95)
+        .setStrokeStyle(2, 0xffd700)
+        .setDepth(360);
+
+      this.victoryBannerTitle = this.add.text(320, 142, '★ ¡ACTO III: EL GRAN PUENTE COMPLETADO! ★', {
+        fontFamily: 'Cinzel, Georgia, serif',
+        fontSize: '13px',
+        color: '#ffd700',
+        stroke: '#000',
+        strokeThickness: 3,
+        fontStyle: 'bold'
+      }).setOrigin(0.5).setDepth(361);
+
+      this.victoryBannerPrompt = this.add.text(320, 172, 'PULSA [ENTER], [E] O CAMINA A LA DERECHA PARA LONDINIUM ▶', {
+        fontFamily: 'monospace',
+        fontSize: '8.5px',
+        color: '#ffffff',
+        backgroundColor: '#4a3713',
+        padding: { x: 8, y: 4 },
+        fontStyle: 'bold'
+      }).setOrigin(0.5).setDepth(361).setInteractive({ useHandCursor: true });
+
+      this.victoryBannerPrompt.on('pointerdown', () => {
+        this.clearActExit();
+        this.transitionToActWithLoading(4);
+      });
+    } else if (this.currentScenario === 4) {
+      this.storyProgress.completeMilestone('act4_boss');
       this.storyProgress.scenarioProgress = 100;
 
       this.triggerShalemBalloon(
@@ -1514,12 +1662,12 @@ export class GameScene extends Phaser.Scene {
         ease: 'Sine.easeInOut'
       });
 
-      // Victory Banner for Act II
+      // Victory Banner for Act IV
       this.victoryBannerBg = this.add.rectangle(320, 160, 440, 78, 0x11081f, 0.95)
         .setStrokeStyle(2, 0xffd700)
         .setDepth(360);
 
-      this.victoryBannerTitle = this.add.text(320, 142, '★ ¡ACTO II: LONDINIUM COMPLETADO! ★', {
+      this.victoryBannerTitle = this.add.text(320, 142, '★ ¡ACTO IV: LONDINIUM COMPLETADO! ★', {
         fontFamily: 'Cinzel, Georgia, serif',
         fontSize: '13px',
         color: '#ffd700',
@@ -1539,58 +1687,49 @@ export class GameScene extends Phaser.Scene {
 
       this.victoryBannerPrompt.on('pointerdown', () => {
         this.clearActExit();
-        this.transitionToActWithLoading(3);
+        this.transitionToActWithLoading(5);
       });
     } else {
-      this.storyProgress.completeMilestone('act3_astaroth');
+      this.storyProgress.completeMilestone('act5_astaroth');
       this.storyProgress.scenarioProgress = 100;
 
       this.triggerShalemBalloon(
-        "Shalem: «¡Astaroth y la teocracia han caído! La luz y la oscuridad han alcanzado el equilibrio. ¡HAS COMPLETADO LA DEMO!»",
+        "Shalem: «¡Astaroth y la teocracia han caído! La luz y la oscuridad han alcanzado el equilibrio. ¡EL PRIMER AMANECER HA LLEGADO!»",
         10000
       );
 
-      // Grand Game Cleared Banner
-      this.victoryBannerBg = this.add.rectangle(320, 160, 440, 85, 0x11081f, 0.96)
-        .setStrokeStyle(3, 0xffd700)
+      // Victory Banner for Finale
+      this.victoryBannerBg = this.add.rectangle(320, 160, 460, 84, 0x11081f, 0.96)
+        .setStrokeStyle(2, 0xffd700)
         .setDepth(360);
 
-      this.victoryBannerTitle = this.add.text(320, 140, '👑 ¡THE LIGHT IN THE DARKNESS: VICTORIA TOTAL! 👑', {
+      this.victoryBannerTitle = this.add.text(320, 140, '★ ¡ALBION REDIMIDO: LA LUZ EN LAS TINIEBLAS! ★', {
         fontFamily: 'Cinzel, Georgia, serif',
-        fontSize: '13px',
+        fontSize: '12.5px',
         color: '#ffd700',
         stroke: '#000',
         strokeThickness: 3,
         fontStyle: 'bold'
       }).setOrigin(0.5).setDepth(361);
 
-      const victorySub = this.add.text(320, 160, 'Albion ha sido liberada del dogma. ¡Gracias por jugar la Demo!', {
-        fontFamily: 'Cinzel, serif',
-        fontSize: '9px',
-        color: '#e699ff'
-      }).setOrigin(0.5).setDepth(361);
-
-      this.victoryBannerPrompt = this.add.text(320, 182, 'PULSA [ENTER] O HAZ CLIC AQUÍ PARA VER EL EPÍLOGO CANÓNICO ▶', {
+      this.victoryBannerPrompt = this.add.text(320, 172, 'PULSA [ENTER] PARA VER EL EPÍLOGO Y LOS CRÉDITOS ▶', {
         fontFamily: 'monospace',
-        fontSize: '8.5px',
+        fontSize: '9px',
         color: '#ffffff',
         backgroundColor: '#3d1f5e',
-        padding: { x: 8, y: 4 },
+        padding: { x: 10, y: 4 },
         fontStyle: 'bold'
       }).setOrigin(0.5).setDepth(361).setInteractive({ useHandCursor: true });
 
       this.victoryBannerPrompt.on('pointerdown', () => {
-        victorySub.destroy();
         this.clearActExit();
-        this.cameras.main.fade(320, 0, 0, 0);
-        this.time.delayedCall(340, () => {
-          if (this.scene.isActive('HUDScene')) {
-            this.scene.stop('HUDScene');
-          }
-          this.scene.start('CinematicScene', {
-            actTransition: 3,
-            characterId: this.player.id
-          });
+        if (this.scene.isActive('HUDScene')) {
+          this.scene.stop('HUDScene');
+        }
+        this.scene.start('CinematicScene', {
+          actTransition: 5,
+          targetAct: 1,
+          characterId: this.player.id
         });
       });
     }
@@ -1824,6 +1963,36 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    if (!forceDirect && this.currentScenario === 3 && targetAct === 4) {
+      this.cameras.main.fade(320, 0, 0, 0);
+      this.time.delayedCall(340, () => {
+        if (this.scene.isActive('HUDScene')) {
+          this.scene.stop('HUDScene');
+        }
+        this.scene.start('CinematicScene', {
+          actTransition: 3,
+          targetAct: 4,
+          characterId: this.player.id
+        });
+      });
+      return;
+    }
+
+    if (!forceDirect && this.currentScenario === 4 && targetAct === 5) {
+      this.cameras.main.fade(320, 0, 0, 0);
+      this.time.delayedCall(340, () => {
+        if (this.scene.isActive('HUDScene')) {
+          this.scene.stop('HUDScene');
+        }
+        this.scene.start('CinematicScene', {
+          actTransition: 4,
+          targetAct: 5,
+          characterId: this.player.id
+        });
+      });
+      return;
+    }
+
     const configs: Record<number, { image: string; title: string; story: string; tip: string }> = {
       1: {
         image: 'loading_pyre_remains',
@@ -1832,16 +2001,28 @@ export class GameScene extends Phaser.Scene {
         tip: '«Consejo de Shalem: El Padre Cedric te entregará el Rosario de Madera y la Tablilla I de la profecía si hablas con él con [E].»'
       },
       2: {
-        image: 'loading_londinium_gate',
-        title: 'ACTO II — LONDINIUM: LA CIUDADELA DORADA',
-        story: '«Morwenna ha caído en Oakhaven, pero Elowen fue trasladada a las mazmorras de Londinium. Cruzando caminos custodiados por caballeros dorados, Thomas descubre que el Rex Malphas vendió su corona al Abismo y falseó la profecía para purgar a los inocentes.»',
-        tip: '«Táctica de Combate: Los guardias dorados tienen escudos pesados. ¡Usa el ataque pesado [K] para quebrar su postura!»'
+        image: 'loading_concept_art',
+        title: 'ACTO II — EL CAMPANARIO Y EL GRANERO DEL SUR',
+        story: '«Elowen resiste el tormento de la sal gruesa en lo alto del campanario. Khaterine recupera las hojas curvas del Colmillo del Sauce Negro bajo la losa del granero. Ha llegado el momento de quebrar el asedio de la torre.»',
+        tip: '«Consejo de Shalem: Habla con Elowen en su celda con [E]. Su pájaro de madera contiene el mensaje de la rebelión.»'
       },
       3: {
+        image: 'loading_bridge_journey',
+        title: 'ACTO III — EL GRAN PUENTE: EL CAMINO DE LOS HEREJES',
+        story: '«Huyendo de Oakhaven con el convoy de campesinos desterrados, el camino a Londinium cruza un monumental puente de piedra bajo la niebla fluvial, custodiado por la vanguardia de la Inquisición.»',
+        tip: '«Táctica de Combate: El Capitán Vane bloquea con escudo de torre. ¡Usa el ataque pesado [K] o un Parry con [L] para quebrar su guardia!»'
+      },
+      4: {
+        image: 'loading_londinium_gate',
+        title: 'ACTO IV — LONDINIUM: LA CIUDADELA DORADA',
+        story: '«Las puertas ciclópeas de Londinium se abren. En el salón de los espejos aguarda Rex Malphas, el soberano que vendió a su aquelarre por una corona marchita y el poder de distorsionar la realidad.»',
+        tip: '«Consejo de Shalem: El Decreto Real de Malphas parece invencible... ¡Resiste sus embates hasta quebrar sus reflejos!»'
+      },
+      5: {
         image: 'loading_shalem_wall',
-        title: 'ACTO III — LA CATEDRAL INVERTIDA: EL ABISMO',
-        story: '«El Rex Malphas ha sido quebrado y las leyes del mundo colapsan. Tras las murallas de Londinium se abre la sima hacia la Catedral Invertida: el templo sacrílego donde el demonio primordial Astaroth aguarda su manifestación definitiva.»',
-        tip: '«Shalem: La gravedad se invierte en este lugar sacrílego. Esquiva con [Espacio] y mantén la guardia alta frente a Astaroth.»'
+        title: 'ACTO V — LA CATEDRAL INVERTIDA: EL SOL DEL ABISMO',
+        story: '«El Rex Malphas ha sido derribado y las leyes del mundo colapsan. Ante ellos se abre la sima cósmica hacia la Catedral Invertida: el templo sacrílego donde el demonio primordial Astaroth aguarda su manifestación definitiva.»',
+        tip: '«Shalem: Elowen te otorgará su Gota de Luz Divina para forjar Alba Gris. ¡Usa su Onda Sagrada para purgar las sombras!»'
       }
     };
 
@@ -2241,7 +2422,7 @@ export class GameScene extends Phaser.Scene {
       this.emberParticles.setPosition(280, 255);
       this.emberParticles.start();
 
-      // Spawn Elowen NPC near the garden fence (as in reference video!)
+      // Spawn Elowen NPC near the garden fence
       this.elowenShadow = this.add.ellipse(270, 225, 24, 7, 0x000000, 0.45).setDepth(224);
       this.elowenSprite = this.add.image(270, 225, 'elowen_npc').setOrigin(0.5, 1).setDepth(225);
 
@@ -2286,10 +2467,92 @@ export class GameScene extends Phaser.Scene {
       this.bossSprite = this.add.image(530, 260, 'boss_morwenna').setOrigin(0.5, 1).setDepth(260);
       this.createBossMarker('Madre Morwenna', 530, 260);
 
-      const introText = introLines[0] ? `${introLines[0].speaker}: ${introLines[0].text}` : "Shalem: «Escenario 1: Oakhaven»";
+      const introText = introLines[0] ? `${introLines[0].speaker}: ${introLines[0].text}` : "Shalem: «Acto I: Oakhaven»";
       this.triggerShalemBalloon(introText, 4500);
     } else if (scenarioIndex === 2) {
-      // Londinium
+      // El Campanario y Granero del Sur (Caps VII-IX)
+      this.bgImage.setTexture('bg_belltower');
+      this.audio.playBgm('bgm_oakhaven_night');
+      this.emberParticles.stop();
+
+      // Spawn Elowen NPC in Belltower cell
+      const elowenTex = this.textures.exists('elowen_campanario') ? 'elowen_campanario' : 'elowen_npc';
+      this.elowenShadow = this.add.ellipse(220, 225, 24, 7, 0x000000, 0.45).setDepth(224);
+      this.elowenSprite = this.add.image(220, 225, elowenTex).setOrigin(0.5, 1).setDepth(225);
+
+      this.tweens.add({
+        targets: this.elowenSprite,
+        scaleY: 1.02,
+        duration: 1400,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+      });
+
+      // Spawn Inquisitor Torre & Sulphur Prowler
+      const e1 = Enemy.createInquisitorTorre('corista_1', new Vector2(390, 255));
+      const e2 = Enemy.createAshProwler('ash_2', new Vector2(460, 280));
+      this.enemies.push(e1, e2);
+
+      const s1 = this.add.ellipse(390, 255, 24, 7, 0x000000, 0.45).setDepth(254);
+      const s2 = this.add.ellipse(460, 280, 26, 8, 0x000000, 0.45).setDepth(279);
+      this.enemyShadows.set(e1.id, s1);
+      this.enemyShadows.set(e2.id, s2);
+
+      this.enemySprites.set(e1.id, this.add.image(e1.position.x, e1.position.y, 'inquisitor_torre').setOrigin(0.5, 1).setDepth(255));
+      this.enemySprites.set(e2.id, this.add.image(e2.position.x, e2.position.y, 'ash_prowler').setOrigin(0.5, 1).setDepth(280));
+
+      // Boss Guardián del Crisol
+      this.currentBoss = Boss.createGuardianCrisol();
+      const bossTex = this.textures.exists('morwenna_crucible') ? 'morwenna_crucible' : 'boss_guardian_crisol';
+      this.bossShadow = this.add.ellipse(520, 260, 32, 9, 0x000000, 0.5).setDepth(259);
+      this.bossSprite = this.add.image(520, 260, bossTex).setOrigin(0.5, 1).setDepth(260);
+      this.createBossMarker('Inquisidor Mayor (Crisol)', 520, 260);
+
+      const introText = introLines[0] ? `${introLines[0].speaker}: ${introLines[0].text}` : "Shalem: «Acto II: El Campanario y Granero»";
+      this.triggerShalemBalloon(introText, 4500);
+    } else if (scenarioIndex === 3) {
+      // El Gran Puente de Piedra y Camino de los Herejes (Caps X-XIII)
+      this.bgImage.setTexture('bg_bridge');
+      this.audio.playBgm('bgm_londinium_city');
+      this.emberParticles.stop();
+
+      // Spawn Elowen NPC escorting refugees
+      this.elowenShadow = this.add.ellipse(170, 255, 24, 7, 0x000000, 0.45).setDepth(254);
+      this.elowenSprite = this.add.image(170, 255, 'elowen_npc').setOrigin(0.5, 1).setDepth(255);
+
+      this.tweens.add({
+        targets: this.elowenSprite,
+        scaleY: 1.02,
+        duration: 1300,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+      });
+
+      // Spawn Golden Guard & Shield Knight
+      const g1 = Enemy.createGoldenGuard('guard_bridge_1', new Vector2(380, 255));
+      const k1 = Enemy.createShieldKnight('shield_knight_1', new Vector2(450, 280));
+      this.enemies.push(g1, k1);
+
+      const s1 = this.add.ellipse(380, 255, 24, 7, 0x000000, 0.45).setDepth(254);
+      const s2 = this.add.ellipse(450, 280, 26, 8, 0x000000, 0.45).setDepth(279);
+      this.enemyShadows.set(g1.id, s1);
+      this.enemyShadows.set(k1.id, s2);
+
+      this.enemySprites.set(g1.id, this.add.image(g1.position.x, g1.position.y, 'golden_guard').setOrigin(0.5, 1).setDepth(255));
+      this.enemySprites.set(k1.id, this.add.image(k1.position.x, k1.position.y, 'shield_knight').setOrigin(0.5, 1).setDepth(280));
+
+      // Boss Capitán Áureo Vane
+      this.currentBoss = Boss.createCapitanAureo();
+      this.bossShadow = this.add.ellipse(520, 260, 32, 9, 0x000000, 0.5).setDepth(259);
+      this.bossSprite = this.add.image(520, 260, 'boss_capitan_aureo').setOrigin(0.5, 1).setDepth(260);
+      this.createBossMarker('Capitán Áureo Vane', 520, 260);
+
+      const introText = introLines[0] ? `${introLines[0].speaker}: ${introLines[0].text}` : "Shalem: «Acto III: El Gran Puente de Piedra»";
+      this.triggerShalemBalloon(introText, 4500);
+    } else if (scenarioIndex === 4) {
+      // Londinium — La Ciudadela Dorada (Caps XIV-XVII)
       this.bgImage.setTexture('bg_londinium');
       this.audio.playBgm('bgm_londinium_city');
       this.emberParticles.stop();
@@ -2307,7 +2570,7 @@ export class GameScene extends Phaser.Scene {
       this.bossSprite = this.add.image(520, 260, 'boss_malphas').setOrigin(0.5, 1).setDepth(260);
       this.createBossMarker('Rex Malphas', 520, 260);
 
-      const introText = introLines[0] ? `${introLines[0].speaker}: ${introLines[0].text}` : "Shalem: «Escenario 2: Londinium»";
+      const introText = introLines[0] ? `${introLines[0].speaker}: ${introLines[0].text}` : "Shalem: «Acto IV: Londinium»";
       this.triggerShalemBalloon(introText, 4500);
 
       // Spawn Elowen NPC — imprisoned near the dungeon gate in Londinium
@@ -2324,11 +2587,18 @@ export class GameScene extends Phaser.Scene {
         ease: 'Sine.easeInOut'
       });
     } else {
-      // Catedral Invertida
+      // Catedral Invertida — El Sol del Abismo (Caps XVIII-XX)
       this.bgImage.setTexture('bg_cathedral');
       this.audio.playBgm('bgm_cathedral_abyss');
       this.emberParticles.setPosition(320, 180);
       this.emberParticles.start();
+
+      // Spawn Abyssal Shadow
+      const sh1 = Enemy.createAbyssalShadow('shadow_1', new Vector2(390, 255));
+      this.enemies.push(sh1);
+      const s1 = this.add.ellipse(390, 255, 24, 7, 0x000000, 0.45).setDepth(254);
+      this.enemyShadows.set(sh1.id, s1);
+      this.enemySprites.set(sh1.id, this.add.image(sh1.position.x, sh1.position.y, 'abyssal_shadow').setOrigin(0.5, 1).setDepth(255));
 
       // Boss Astaroth (Entidad Primordial del Abismo)
       this.currentBoss = Boss.createAstaroth();
@@ -2346,7 +2616,7 @@ export class GameScene extends Phaser.Scene {
         ease: 'Sine.easeInOut'
       });
 
-      const introText = introLines[0] ? `${introLines[0].speaker}: ${introLines[0].text}` : "Shalem: «Escenario 3: La Catedral Invertida»";
+      const introText = introLines[0] ? `${introLines[0].speaker}: ${introLines[0].text}` : "Shalem: «Acto V: La Catedral Invertida»";
       this.triggerShalemBalloon(introText, 4500);
 
       // Spawn Elowen NPC — weakened, offering her Gota de Luz Divina to forge Alba Gris

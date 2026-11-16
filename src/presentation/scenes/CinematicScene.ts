@@ -11,13 +11,13 @@ export interface CinematicSlide {
 }
 
 export interface CinematicSceneData {
-  actTransition: 1 | 2 | 3;
+  actTransition: 1 | 2 | 3 | 4 | 5;
   targetAct?: number;
   characterId?: CharacterId;
 }
 
 export class CinematicScene extends Phaser.Scene {
-  private actTransition: 1 | 2 | 3 = 1;
+  private actTransition: 1 | 2 | 3 | 4 | 5 = 1;
   private targetAct: number = 2;
   private characterId: CharacterId = 'thomas';
   private audio!: WebAudioSoundAdapter;
@@ -52,34 +52,84 @@ export class CinematicScene extends Phaser.Scene {
     this.slides = this.buildSlidesForTransition(this.actTransition);
   }
 
-  private buildSlidesForTransition(trans: 1 | 2 | 3): CinematicSlide[] {
+  private buildSlidesForTransition(trans: 1 | 2 | 3 | 4 | 5): CinematicSlide[] {
     if (trans === 1) {
-      // Transition from Act I (Oakhaven) to Act II (Londinium)
+      // Transition from Act I (Oakhaven) to Act II (El Campanario y Granero)
       return [
         {
           title: 'CAPÍTULO VI — EL HUMO SOBRE OAKHAVEN',
           speaker: 'KHATERINE',
           portraitKey: 'morwenna_crucible',
           bgKey: 'bg_oakhaven',
-          text: '«La pira de Oakhaven ha sido derribada. La maza de la Inquisición yace rota en el barro, pero la victoria fue una trampa: mientras Thomas combatía, los caballeros de la Ciudadela Dorada encadenaron a Elowen a un carro de sal... marchando a toda prisa rumbo a las mazmorras de la capital.»'
+          text: '«La pira de Oakhaven ha sido derribada. La maza de la Inquisición yace rota en el barro, pero la victoria fue una trampa: mientras Thomas combatía, los inquisidores encerraron a Elowen en la torre del campanario, preparándola para la sal y el crisol de bronce.»'
         },
         {
           title: 'CAPÍTULO VII — LA LUZ TRAS LOS BARROTES',
           speaker: 'ELOWEN',
           portraitKey: 'elowen_campanario',
-          bgKey: 'bg_oakhaven',
-          text: '«En lo alto de la torre del campanario, Elowen contempla los dieciocho inviernos marcados en la piedra fría. Morwenna intentó purgarla con el crisol de bronce, pero la luz de Elowen lo redujo a polvo. Con sus últimas fuerzas, ata una tira de lino al pájaro de madera: "Londinium es sacrificio. Reja suelta."»'
+          bgKey: 'bg_belltower',
+          text: '«En lo alto de la torre del campanario, Elowen contempla los dieciocho inviernos marcados en la piedra fría. Morwenna intentó purgarla con el crisol de bronce, pero la luz plateada de Elowen lo redujo a polvo. Con sus últimas fuerzas, ata una tira de lino al pájaro de madera: "Londinium es sacrificio. Reja suelta."»'
         },
         {
-          title: 'CAPÍTULO IX — EL JURAMENTO DEL MONAGUILLO',
-          speaker: 'THOMAS',
-          portraitKey: 'portrait_thomas',
-          bgKey: 'bg_londinium',
-          text: '«Thomas aprieta entre sus dedos el pequeño pájaro de madera en su dormitorio. "La Inquisición cree que somos piezas en su tablero... pero mi alma no la decide su Cáliz Solar". Junto a Khaterine y Shalem, Thomas marcha sin descanso hacia los muros dorados de Londinium.»'
+          title: 'CAPÍTULO VIII — EL COLMILLO DEL SAUCE NEGRO',
+          speaker: 'KHATERINE',
+          portraitKey: 'portrait_khaterine',
+          bgKey: 'bg_belltower',
+          text: '«Al otro lado del patio, en el granero en sombras, Khaterine retira la venda de su brazo y levanta la losa oculta. Empuña las dos hojas curvas del Colmillo del Sauce Negro y toca el chal de Lyra: "La hora de escondernos ha terminado, Shalem. Esta noche quebramos la torre."»'
         }
       ];
     } else if (trans === 2) {
-      // Transition from Act II (Londinium) to Act III (Catedral Invertida)
+      // Transition from Act II (El Campanario) to Act III (El Gran Puente de Piedra)
+      return [
+        {
+          title: 'CAPÍTULO IX — LA FUGA POR EL PORTILLO',
+          speaker: 'THOMAS',
+          portraitKey: 'portrait_thomas',
+          bgKey: 'bg_belltower',
+          text: '«El cerrojo del portillo cede. Guiando a Elowen y resguardando a los campesinos de Martín y Tobías, el grupo escapa hacia el norte bajo la niebla. El pájaro de madera reposa en las manos de Thomas como símbolo de una promesa que no se romperá.»'
+        },
+        {
+          title: 'CAPÍTULO X — LA MARCHA DE LOS DESTERRADOS',
+          speaker: 'ELOWEN',
+          portraitKey: 'portrait_elowen',
+          bgKey: 'bg_bridge',
+          text: '«El río ruge en las profundidades del desfiladero. Ante nosotros se alza el monumental Gran Puente de Piedra: la única vía hacia Londinium, iluminada por farolas de aceite y custodiada por la vanguardia de la Inquisición.»'
+        },
+        {
+          title: 'CAPÍTULO XI — EL MURO DE ESCUDOS ÁUREOS',
+          speaker: 'SHALEM',
+          portraitKey: 'portrait_shalem',
+          bgKey: 'bg_bridge',
+          text: '«El Capitán Áureo Vane y sus caballeros bloquean el paso con escudos de torre y lanzas bendecidas. Dicen defender el reino; pero solo son títeres de un rey que vendió su trono al engaño. ¡Rompe sus escudos, muchacho!»'
+        }
+      ];
+    } else if (trans === 3) {
+      // Transition from Act III (El Gran Puente) to Act IV (Londinium — Ciudadela Dorada)
+      return [
+        {
+          title: 'CAPÍTULO XII — EL RESCATE EN EL PUENTE',
+          speaker: 'THOMAS',
+          portraitKey: 'portrait_thomas',
+          bgKey: 'bg_bridge',
+          text: '«El Capitán Vane ha sido derribado y los carros de prisioneros han quedado libres. Los refugiados de Oakhaven quedan al resguardo de Martín en las granjas del sur. Nuestro camino ahora solo apunta hacia arriba: las puertas doradas de Londinium se abren ante nosotros.»'
+        },
+        {
+          title: 'CAPÍTULO XIII — LA CIUDADELA DEL ENGAÑO',
+          speaker: 'KHATERINE',
+          portraitKey: 'portrait_khaterine',
+          bgKey: 'bg_londinium',
+          text: '«Londinium brilla con el oropel del Cáliz Solar, pero su pueblo vive aterrorizado por falsas profecías. En los pasillos de mármol del palacio, el Rey Malphas nos espera rodeado de espejos que reflejan destinos robados.»'
+        },
+        {
+          title: 'CAPÍTULO XIV — EL SALÓN ASTRAL',
+          speaker: 'SHALEM',
+          portraitKey: 'portrait_shalem',
+          bgKey: 'bg_londinium',
+          text: '«Shalem olfatea el aire del trono con desagrado: "Huelo a Alaric... Tu antiguo maestro no murió en la Luna Roja, novicia. Se coronó rey para alimentarse del miedo de este mundo. Que no quede un solo espejo entero."»'
+        }
+      ];
+    } else if (trans === 4) {
+      // Transition from Act IV (Londinium) to Act V (Catedral Invertida)
       return [
         {
           title: 'CAPÍTULO XVII — EL REY DE LOS ESPEJOS',
@@ -100,11 +150,11 @@ export class CinematicScene extends Phaser.Scene {
           speaker: 'SHALEM',
           portraitKey: 'portrait_shalem',
           bgKey: 'bg_cathedral',
-          text: '«Shalem eriza su pelaje negro y contempla el abismo con insólita reverencia solemne: "Astaroth despierta en el fondo del templo, muchacho. La hora de las mentiras ha terminado. Esta noche sabremos si el fuego de tu espada será la tumba de Albion... o la única Luz en las Tinieblas."»'
+          text: '«Shalem contempla el abismo con reverencia solemne: "Astaroth despierta en el fondo del templo, muchacho. La hora de las mentiras ha terminado. Esta noche sabremos si el fuego de tu espada será la tumba de Albion... o la única Luz en las Tinieblas."»'
         }
       ];
     } else {
-      // Epilogue: Act III Victory
+      // Epilogue: Act V Victory
       return [
         {
           title: 'CAPÍTULO XX — LA MUERTE DEL SOL DEL ABISMO',
@@ -296,23 +346,35 @@ export class CinematicScene extends Phaser.Scene {
 
     this.cameras.main.fade(350, 0, 0, 0);
     this.time.delayedCall(380, () => {
-      if (this.actTransition === 3) {
+      if (this.actTransition === 5) {
         // Epilogue finishes and returns to TitleScene
         this.scene.start('TitleScene');
       } else {
         // Launch loading screen into next Act!
         const configs: Record<number, { image: string; title: string; story: string; tip: string }> = {
           2: {
-            image: 'loading_londinium_gate',
-            title: 'ACTO II — LONDINIUM: LA CIUDADELA DORADA',
-            story: '«Morwenna ha caído en Oakhaven, pero Elowen fue trasladada a las mazmorras de Londinium. Cruzando caminos custodiados por caballeros dorados, Thomas descubre que el Rex Malphas vendió su corona al Abismo...»',
-            tip: '«Consejo de Shalem: Busca a Elowen en las mazmorras de Londinium [E]. ¡Su bendición te dará fuerzas!»'
+            image: 'loading_concept_art',
+            title: 'ACTO II — EL CAMPANARIO: LA REJA SUELTA Y EL GRANERO',
+            story: '«Elowen resiste el tormento de la sal gruesa en lo alto del campanario. Khaterine recupera las hojas curvas del Colmillo del Sauce Negro bajo la losa del granero. Ha llegado el momento de quebrar el asedio.»',
+            tip: '«Consejo de Shalem: Habla con Elowen en su celda con [E]. Su pájaro de madera contiene el mensaje de la rebelión.»'
           },
           3: {
+            image: 'loading_bridge_journey',
+            title: 'ACTO III — EL GRAN PUENTE: EL CAMINO DE LOS HEREJES',
+            story: '«Huyendo de Oakhaven con el convoy de campesinos desterrados, el camino a Londinium cruza un monumental puente de piedra bajo la niebla fluvial, custodiado por la vanguardia de la Inquisición.»',
+            tip: '«Táctica de Combate: El Capitán Vane bloquea con escudo de torre. ¡Usa el ataque pesado [K] o un Parry con [L] para quebrar su guardia!»'
+          },
+          4: {
+            image: 'loading_londinium_gate',
+            title: 'ACTO IV — LONDINIUM: LA CIUDADELA DORADA',
+            story: '«Las puertas ciclópeas de Londinium se abren. En el salón de los espejos aguarda Rex Malphas, el soberano que vendió a su aquelarre por una corona marchita y el poder de distorsionar la realidad.»',
+            tip: '«Consejo de Shalem: El Decreto Real de Malphas parece invencible... ¡Resiste sus embates hasta quebrar sus reflejos!»'
+          },
+          5: {
             image: 'loading_shalem_wall',
-            title: 'ACTO III — LA CATEDRAL INVERTIDA: EL ABISMO',
-            story: '«El Rex Malphas ha sido quebrado y las leyes del mundo colapsan. Ante ellos se abre la sima hacia la Catedral Invertida: el templo sacrílego donde el demonio primordial Astaroth aguarda su manifestación definitiva.»',
-            tip: '«Shalem: La gravedad se invierte en este lugar sacrílego. Esquiva con [Espacio] y mantén la guardia alta frente a Astaroth.»'
+            title: 'ACTO V — LA CATEDRAL INVERTIDA: EL SOL DEL ABISMO',
+            story: '«El Rex Malphas ha sido derribado y las leyes del mundo colapsan. Ante ellos se abre la sima cósmica hacia la Catedral Invertida: el templo sacrílego donde el demonio primordial Astaroth aguarda su manifestación definitiva.»',
+            tip: '«Shalem: Elowen te otorgará su Gota de Luz Divina para forjar Alba Gris. ¡Usa su Onda Sagrada para purgar las sombras!»'
           }
         };
 
@@ -328,7 +390,7 @@ export class CinematicScene extends Phaser.Scene {
           chapterTitle: cfg.title,
           storyText: cfg.story,
           tipText: cfg.tip,
-          minDurationMs: 2000
+          minDurationMs: 2500
         });
       }
     });

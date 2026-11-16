@@ -23,6 +23,42 @@ export class DialogueRepository implements IDialoguePort {
     } else if (scenarioIndex === 2) {
       return [
         {
+          speaker: 'Khaterine',
+          portraitKey: 'portrait_khaterine',
+          text: '«El Campanario de Oakhaven... Elowen está retenida en lo alto de la torre sobre sal gruesa. Los inquisidores calientan su crisol de bronce.»'
+        },
+        {
+          speaker: 'Thomas',
+          portraitKey: 'portrait_thomas',
+          text: '«Encontré el pájaro de madera con la nota escrita en lino: "Londinium es sacrificio. Reja suelta." ¡Debemos quebrar el asedio de la torre!»'
+        },
+        {
+          speaker: 'Shalem',
+          portraitKey: 'portrait_shalem',
+          text: '«Cuidado con los coristas de azufre. Usa [L] para ejecutar un Parry Perfecto justo antes de sus impactos y quebrarás su compostura.»'
+        }
+      ];
+    } else if (scenarioIndex === 3) {
+      return [
+        {
+          speaker: 'Shalem',
+          portraitKey: 'portrait_shalem',
+          text: '«El Gran Puente de Piedra... El Camino de los Herejes que conduce a Londinium. La niebla del río oculta los carros de prisioneros.»'
+        },
+        {
+          speaker: 'Thomas',
+          portraitKey: 'portrait_thomas',
+          text: '«El convoy de Martín y los campesinos desterrados intenta cruzar. El Capitán Áureo Vane bloquea el puente con sus escudos pesados.»'
+        },
+        {
+          speaker: 'Khaterine',
+          portraitKey: 'portrait_khaterine',
+          text: '«Nadie más será entregado como ofrenda al falso Cáliz Solar. ¡Avanzad!»'
+        }
+      ];
+    } else if (scenarioIndex === 4) {
+      return [
+        {
           speaker: 'Shalem',
           portraitKey: 'portrait_shalem',
           text: '«Londinium... La Ciudadela Dorada. Huele a incienso sacro y a traición añeja. El Rey Malphas nos aguarda en su trono astral.»'
@@ -144,6 +180,32 @@ export class DialogueRepository implements IDialoguePort {
           }
         ];
       }
+    } else if (bossId === 'guardian_crisol') {
+      return [
+        {
+          speaker: 'Inquisidor Mayor',
+          portraitKey: 'portrait_morwenna',
+          text: '«¡Herejes! Esta torre es el purgatorio de los pecadores. ¡El bronce del crisol fundirá vuestras blasfemias antes de que Elowen toque el lino!»'
+        },
+        {
+          speaker: 'Khaterine',
+          portraitKey: 'portrait_khaterine',
+          text: '«Tu crisol ya está quebrado por la luz de Elowen. ¡Aparta tu acero si valoras tu vida!»'
+        }
+      ];
+    } else if (bossId === 'capitan_aureo') {
+      return [
+        {
+          speaker: 'Capitán Áureo Vane',
+          portraitKey: 'portrait_malphas',
+          text: '«¡Por la corona de Londinium y el Cáliz Solar! Ningún rebelde cruzará el río mientras la vanguardia áurea custodie este puente.»'
+        },
+        {
+          speaker: 'Thomas',
+          portraitKey: 'portrait_thomas',
+          text: '«Vuestros escudos dorados no protegen a un dios, sino a un usurpador. ¡Abre paso, Capitán!»'
+        }
+      ];
     } else if (bossId === 'morwenna' || bossId === 'boss_morwenna') {
       return [
         {
