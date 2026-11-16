@@ -30,8 +30,13 @@ export class MenuModalScene extends Phaser.Scene {
   }
 
   public create(): void {
-    // 1. Dim Dark Background Overlay
-    this.add.rectangle(320, 180, 640, 360, 0x05030a, 0.88).setInteractive();
+    // 0. Sleep HUDScene so HUD elements don't bleed through or conflict with the modal
+    if (this.scene.isActive('HUDScene')) {
+      this.scene.sleep('HUDScene');
+    }
+
+    // 1. Dim Dark Background Overlay (opaque enough to keep focus completely on the modal)
+    this.add.rectangle(320, 180, 640, 360, 0x05030a, 0.94).setInteractive();
 
     // 2. Modal Main Frame Container (Scale animation)
     this.modalContainer = this.add.container(320, 180);
@@ -229,7 +234,12 @@ export class MenuModalScene extends Phaser.Scene {
     // Left Column: Character Card
     const cardBg = this.add.rectangle(-160, 10, 180, 200, 0x1d142e).setStrokeStyle(1, 0x6e4b8a);
     const portraitKey = isThomas ? 'portrait_thomas' : 'portrait_khaterine';
-    const portrait = this.add.image(-160, -40, portraitKey).setDisplaySize(72, 72);
+    let portrait: Phaser.GameObjects.GameObject;
+    if (this.textures.exists(portraitKey)) {
+      portrait = this.add.image(-160, -40, portraitKey).setDisplaySize(72, 72);
+    } else {
+      portrait = this.add.rectangle(-160, -40, 72, 72, 0x271a3d).setStrokeStyle(1, 0x6e4b8a);
+    }
 
     const nameText = this.add.text(-160, 5, isThomas ? 'THOMAS' : 'KHATERINE', {
       fontFamily: 'Cinzel, Georgia, serif',
@@ -258,33 +268,50 @@ export class MenuModalScene extends Phaser.Scene {
     // Right Column: Detailed Stats & Shalem Level Up
     const statsBg = this.add.rectangle(100, 10, 310, 200, 0x1a1229).setStrokeStyle(1, 0x503766);
 
-    const statsHeader = this.add.text(-40, -75, '— ATRIBUTOS DEL ALMA & ESTADO —', {
+    const statsHeader = this.add.text(100, -75, '— ATRIBUTOS DEL ALMA & ESTADO —', {
       fontFamily: 'Cinzel, serif',
       fontSize: '11px',
       color: '#ffd700',
       fontStyle: 'bold'
-    });
+    }).setOrigin(0.5);
 
     const stats = [
       { label: 'Salud Actual', val: `${this.player.stats.health} / ${this.player.stats.maxHealth}`, col: '#ff7777', pct: this.player.stats.health / this.player.stats.maxHealth },
       { label: 'Guardia / Postura', val: `${this.player.stats.posture} / ${this.player.stats.maxPosture}`, col: '#77aaff', pct: this.player.stats.posture / this.player.stats.maxPosture },
       { label: 'Velocidad de Desplazamiento', val: `${this.player.stats.speed} px/s (${isThomas ? 'Muy Alta' : 'Moderada'})`, col: '#aaffaa', pct: this.player.stats.speed / 250 },
       { label: 'Poder de Ataque Base', val: `${this.player.stats.attackPower} (+ ${this.player.disarmManager.getCurrentWeapon().baseDamage} arma)`, col: '#ddaaff', pct: 0.75 },
-      { label: 'Progreso de Nivel (Shalem)', val: `Nivel ${this.player.levelUp.level} (${this.player.levelUp.currentExp}/${this.player.levelUp.maxExp} EXP)`, col: '#ffd700', pct: this.player.levelUp.currentExp / this.player.levelUp.maxExp }
+      { label: 'Progreso de Nivel (Shalem)', val: `Nivel ${this.player.levelUp.level} (${this.player.levelUp.currentExp}/${this.player.levelUp.maxExp} EXP)`, col: '#ffd700', pct: this.player.levelUp.maxExp > 0 ? this.player.levelUp.currentExp / this.player.levelUp.maxExp : 0 }
     ];
 
-    stats.forEach((s, i) => {
-      const sy = -50 + i * 32;
-      this.add.text(-40, sy, s.label, { fontFamily: 'monospace', fontSize: '9px', color: '#c7bed4' });
-      this.add.text(240, sy, s.val, { fontFamily: 'monospace', fontSize: '9px', color: s.col }).setOrigin(1, 0);
+    const statusObjects: Phaser.GameObjects.GameObject[] = [
+      cardBg, portrait, nameText, roleText, traitBox, traitText, statsBg, statsHeader
+    ];
 
-      // Bar
-      this.add.rectangle(100, sy + 15, 270, 6, 0x0c0714).setStrokeStyle(1, 0x3d274f);
-      const fillW = Math.max(0, Math.min(270, 270 * s.pct));
-      this.add.rectangle(-35 + fillW / 2, sy + 15, fillW, 6, Phaser.Display.Color.HexStringToColor(s.col).color);
+    const barW = 280;
+    stats.forEach((s, i) => {
+      const sy = -52 + i * 32;
+      const labelText = this.add.text(-40, sy, s.label, {
+        fontFamily: 'Cinzel, monospace',
+        fontSize: '8.5px',
+        color: '#c7bed4'
+      });
+      const valText = this.add.text(240, sy, s.val, {
+        fontFamily: 'monospace',
+        fontSize: '8.5px',
+        color: s.col,
+        fontStyle: 'bold'
+      }).setOrigin(1, 0);
+
+      // Bar container & fill
+      const barBg = this.add.rectangle(100, sy + 14, barW, 6, 0x0c0714).setStrokeStyle(1, 0x3d274f);
+      const safePct = isNaN(s.pct) ? 0 : Math.max(0, Math.min(1, s.pct));
+      const fillW = Math.max(0, Math.min(barW, barW * safePct));
+      const barFill = this.add.rectangle(-40 + fillW / 2, sy + 14, fillW, 6, Phaser.Display.Color.HexStringToColor(s.col).color);
+
+      statusObjects.push(labelText, valText, barBg, barFill);
     });
 
-    this.contentContainer.add([cardBg, portrait, nameText, roleText, traitBox, traitText, statsBg, statsHeader]);
+    this.contentContainer.add(statusObjects);
   }
 
   // ==========================================
@@ -637,7 +664,7 @@ export class MenuModalScene extends Phaser.Scene {
       } catch { /* ignore */ }
     }
 
-    if (this.scene.isActive('HUDScene')) {
+    if (this.scene.isActive('HUDScene') || this.scene.isSleeping('HUDScene')) {
       this.scene.stop('HUDScene');
     }
 
@@ -658,6 +685,9 @@ export class MenuModalScene extends Phaser.Scene {
       duration: 160,
       ease: 'Back.easeIn',
       onComplete: () => {
+        if (this.scene.isSleeping('HUDScene')) {
+          this.scene.wake('HUDScene');
+        }
         this.scene.stop('MenuModalScene');
         this.scene.resume('GameScene');
       }
