@@ -594,15 +594,16 @@ export class MenuModalScene extends Phaser.Scene {
   // ==========================================
   private renderControlsTab(): void {
     const controls = [
-      { key: 'A / D o Flechas', desc: 'Desplazamiento horizontal fluido con inercia.' },
-      { key: 'W / ESPACIO', desc: 'Salto acrobático para evadir golpes bajos.' },
-      { key: 'J', desc: 'Ataque Melee / Magia: Combos continuos y remates.' },
-      { key: 'K', desc: 'Bloqueo / Duelista: Consume guardia y anula daño.' },
-      { key: 'L', desc: 'Esquiva: Dash con fotogramas de invulnerabilidad.' },
-      { key: 'T', desc: 'Lanzar Arma (Desarme Opción B): Aturde a distancia.' },
-      { key: 'E', desc: 'Recoger Arma: Recupera tu espada o roba del suelo.' },
-      { key: 'M', desc: 'Minijuegos con Shalem: Se activa con Level Up lleno.' },
-      { key: '1 / 2 / 3', desc: 'Viaje rápido entre Oakhaven, Londinium y Catedral.' }
+      { key: 'WASD / Flechas', desc: 'Movimiento en 2.5D: Desplazamiento y profundidad.' },
+      { key: 'J', desc: 'Ataque Ligero / Rúnico: Cadencia rápida y combos continuos.' },
+      { key: 'K', desc: 'Ataque Fuerte (x1.6): Quiebra guardia y causa alto impacto.' },
+      { key: 'L (Mantener)', desc: 'Guardia & Parry: Bloquea y repele con timing exacto.' },
+      { key: 'ESPACIO', desc: 'Esquiva / Dash: Evasión acrobática con invulnerabilidad.' },
+      { key: 'TAB', desc: 'Cambiar Héroe: Alterna entre Thomas y Khaterine en combate.' },
+      { key: 'T / Q', desc: 'Lanzar Arma (Opción B): Desarme táctico para noquear a distancia.' },
+      { key: 'E', desc: 'Recoger / Hablar: Toma armas del suelo o dialoga con aliados.' },
+      { key: 'C', desc: 'Charlas de Lore: Diálogos canónicos con Elowen y Cedric.' },
+      { key: 'P / ESC', desc: 'Menú & Códice: Arsenal, profecía, crónicas y pausa.' }
     ];
 
     controls.forEach((c, index) => {

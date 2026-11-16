@@ -102,10 +102,33 @@ export class StoryProgress {
   }
 
   public getCurrentObjective(): string {
+    if (this.scenarioProgress >= 100) {
+      return '¡Victoria! Territorio purgado. Avanza a la salida hacia el norte [D]';
+    }
     const list = this.milestones.get(this.currentAct);
     if (!list) return 'Sobrevive y avanza';
     const pending = list.find(m => !m.isCompleted);
-    return pending ? pending.description : '¡Objetivos completados! Avanza al siguiente capítulo.';
+    return pending ? pending.description : '¡Victoria! Territorio purgado. Avanza a la salida hacia el norte [D]';
+  }
+
+  public getCompletedMilestones(): string[] {
+    const res: string[] = [];
+    this.milestones.forEach((list) => {
+      list.forEach(m => {
+        if (m.isCompleted) res.push(m.id);
+      });
+    });
+    return res;
+  }
+
+  public completeAllActMilestones(act?: number): void {
+    const targetAct = act ?? this.currentAct;
+    const list = this.milestones.get(targetAct);
+    if (list) {
+      list.forEach(m => m.isCompleted = true);
+    }
+    this.scenarioProgress = 100;
+    this.notifyUpdate();
   }
 
   public getGlobalJourneyPercentage(): number {

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { CharacterId } from '../../domain/character/CharacterEnums';
 import { WebAudioSoundAdapter } from '../../infrastructure/audio/WebAudioSoundAdapter';
+import { SessionStateStore } from '../../domain/save/SessionStateStore';
 
 export class TitleScene extends Phaser.Scene {
   private selectedCharacter: CharacterId = 'thomas';
@@ -442,7 +443,13 @@ export class TitleScene extends Phaser.Scene {
       .setStrokeStyle(1.5, 0x6e4b8a)
       .setInteractive({ useHandCursor: true });
 
-    const spr = this.add.image(0, -28, spriteKey).setDisplaySize(38, 68);
+    // Proportional character sprite rendering: Thomas native pixel art is 96x80 (ratio 1.2:1)
+    let spr: Phaser.GameObjects.Image;
+    if (charId === 'thomas') {
+      spr = this.add.image(0, -28, spriteKey).setDisplaySize(82, 68);
+    } else {
+      spr = this.add.image(0, -28, spriteKey).setDisplaySize(30, 68);
+    }
 
     const nameTxt = this.add.text(0, 16, name, {
       fontFamily: 'Cinzel, Georgia, serif',
@@ -797,6 +804,7 @@ export class TitleScene extends Phaser.Scene {
   }
 
   private startGame(): void {
+    SessionStateStore.getInstance().resetToDefaults(this.selectedCharacter, 1);
     this.audio.playSfx('dodge');
     this.cameras.main.fade(320, 0, 0, 0);
     this.time.delayedCall(340, () => {
@@ -951,6 +959,10 @@ export class TitleScene extends Phaser.Scene {
       rowBg.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
         pointer.event.stopPropagation();
         this.audio.playSfx('menu_select');
+        const session = SessionStateStore.getInstance();
+        session.loadFromStorage();
+        session.currentAct = s.act;
+        session.leaderId = activeCharId;
         this.cameras.main.fade(300, 0, 0, 0);
         this.time.delayedCall(320, () => {
           const cfg = this.getContinueLoadingConfig(s.act);

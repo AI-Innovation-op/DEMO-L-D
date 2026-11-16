@@ -12,6 +12,7 @@ import { HUDScene } from './HUDScene';
 import { StoryProgress } from '../../domain/story/StoryProgress';
 import { ProphecyRepository } from '../../domain/mission/Mission';
 import { Weapon } from '../../domain/weapon/Weapon';
+import { SessionStateStore } from '../../domain/save/SessionStateStore';
 
 export class GameScene extends Phaser.Scene {
   // Dual Characters (Thomas & Khaterine)
@@ -21,6 +22,7 @@ export class GameScene extends Phaser.Scene {
   private audio!: WebAudioSoundAdapter;
   private dialogues!: DialogueRepository;
   public storyProgress: StoryProgress = new StoryProgress();
+  private isInvulnerable: boolean = false;
 
   // Visual Sprites & Ground Shadows
   private bgImage!: Phaser.GameObjects.Image;
@@ -140,8 +142,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   public init(data: { characterId?: CharacterId; scenarioIndex?: number }): void {
-    const charId = data.characterId || 'thomas';
-    this.initialScenario = data.scenarioIndex || 1;
+    const session = SessionStateStore.getInstance();
+    const charId = data.characterId || session.leaderId || 'thomas';
+    this.initialScenario = data.scenarioIndex || session.currentAct || 1;
+
     if (charId === 'thomas') {
       this.player = Character.createThomas();
       this.allyChar = Character.createKhaterine();
@@ -149,6 +153,11 @@ export class GameScene extends Phaser.Scene {
       this.player = Character.createKhaterine();
       this.allyChar = Character.createThomas();
     }
+
+    // Hydrate characters from persistent session so level, EXP and weapons are preserved across acts!
+    session.hydrateCharacter(this.player, true);
+    session.hydrateCharacter(this.allyChar, true);
+
     this.shalem = new ShalemCompanion();
     this.audio = new WebAudioSoundAdapter();
     this.dialogues = new DialogueRepository();
@@ -156,6 +165,7 @@ export class GameScene extends Phaser.Scene {
     // Reset scene lifecycle and transition state flags so new acts are fully playable!
     this.isTransitioningAct = false;
     this.isActCleared = false;
+    this.isInvulnerable = false;
     this.attackCooldown = 0;
     this.enemyAttackTimer = 0;
     this.bossAttackTimer = 0;
@@ -969,11 +979,10 @@ export class GameScene extends Phaser.Scene {
       const dy = Math.abs(enemy.position.y - playerY);
 
       if (dx > 0 && dx <= reachX && dy <= reachY) {
-        const res = CombatUseCases.executeAttackOnEnemy(this.player, enemy);
+        const res = CombatUseCases.executeAttackOnEnemy(this.player, enemy, isHeavy);
 
         this.cameras.main.shake(isHeavy ? 160 : 100, isHeavy ? 0.012 : 0.006);
-        const finalDamage = isHeavy ? Math.round(res.damageDealt * 1.6) : res.damageDealt;
-        this.spawnDamageNumber(enemy.position.x, enemy.position.y - 35, finalDamage, isHeavy);
+        this.spawnDamageNumber(enemy.position.x, enemy.position.y - 35, res.damageDealt, isHeavy);
 
         // Passive Effect: Cosecha de Culpa (Lamento de Oakhaven heals on strike)
         const curWpn = this.player.disarmManager.getCurrentWeapon();
@@ -1044,11 +1053,10 @@ export class GameScene extends Phaser.Scene {
       const effectiveReachY = reachY + 16;
 
       if (bdx > 0 && bdx <= effectiveReachX && bdy <= effectiveReachY) {
-        const res = CombatUseCases.executeAttackOnBoss(this.player, this.currentBoss);
+        const res = CombatUseCases.executeAttackOnBoss(this.player, this.currentBoss, isHeavy);
 
         this.cameras.main.shake(isHeavy ? 200 : 140, isHeavy ? 0.016 : 0.01);
-        const finalDamage = isHeavy ? Math.round(res.damageDealt * 1.6) : res.damageDealt;
-        this.spawnDamageNumber(this.currentBoss.position.x, this.currentBoss.position.y - 50, finalDamage, true);
+        this.spawnDamageNumber(this.currentBoss.position.x, this.currentBoss.position.y - 50, res.damageDealt, true);
 
         // Passive Effect: Cosecha de Culpa
         const curWpn = this.player.disarmManager.getCurrentWeapon();
@@ -1179,21 +1187,17 @@ export class GameScene extends Phaser.Scene {
       onComplete: () => blast.destroy()
     });
 
-    const damage = isHeavy ? 55 : 32;
-
     if (isBoss && this.currentBoss && this.bossSprite) {
-      const res = CombatUseCases.executeAttackOnBoss(this.player, this.currentBoss);
-      const finalDmg = Math.round(damage * (isHeavy ? 1.4 : 1.0));
-      this.spawnDamageNumber(this.currentBoss.position.x, this.currentBoss.position.y - 50, finalDmg, isHeavy, '#d477ff');
+      const res = CombatUseCases.executeAttackOnBoss(this.player, this.currentBoss, isHeavy);
+      this.spawnDamageNumber(this.currentBoss.position.x, this.currentBoss.position.y - 50, res.damageDealt, isHeavy, '#d477ff');
       this.bossSprite.setTint(0xba68c8);
       this.time.delayedCall(120, () => this.bossSprite?.clearTint());
       if (res.targetKilled || this.currentBoss.health <= 0) {
         this.handleBossDefeated();
       }
     } else if (targetEnemy) {
-      const res = CombatUseCases.executeAttackOnEnemy(this.player, targetEnemy);
-      const finalDmg = Math.round(damage * (isHeavy ? 1.4 : 1.0));
-      this.spawnDamageNumber(targetEnemy.position.x, targetEnemy.position.y - 35, finalDmg, isHeavy, '#d477ff');
+      const res = CombatUseCases.executeAttackOnEnemy(this.player, targetEnemy, isHeavy);
+      this.spawnDamageNumber(targetEnemy.position.x, targetEnemy.position.y - 35, res.damageDealt, isHeavy, '#d477ff');
       const sprite = this.enemySprites.get(targetEnemy.id);
       if (sprite) {
         sprite.setTint(0xba68c8);
@@ -1437,12 +1441,32 @@ export class GameScene extends Phaser.Scene {
       });
     }
 
-    // Advance story progress to 100% and enable Next-Level transition
+    // Advance story progress to 100%, grant player invulnerability and enable Next-Level transition
     this.isActCleared = true;
+    this.isInvulnerable = true;
+    this.storyProgress.completeAllActMilestones(this.currentScenario);
+
+    // Destroy and pacify all remaining minions so player cannot take damage during victory!
+    for (const enemy of this.enemies) {
+      enemy.health = 0;
+      enemy.state = 'DEAD';
+      const sprite = this.enemySprites.get(enemy.id);
+      if (sprite) {
+        this.tweens.add({
+          targets: sprite,
+          alpha: 0,
+          y: sprite.y - 15,
+          duration: 350,
+          onComplete: () => sprite.destroy()
+        });
+      }
+      this.enemyShadows.get(enemy.id)?.destroy();
+    }
+    this.enemies = [];
+    this.enemySprites.clear();
+    this.enemyShadows.clear();
 
     if (this.currentScenario === 1) {
-      this.storyProgress.completeMilestone('act1_boss');
-      this.storyProgress.scenarioProgress = 100;
 
       // Spawn dropped Lamento de Oakhaven item
       this.droppedCenserShadow = this.add.ellipse(520, 260, 24, 6, 0x000000, 0.5).setDepth(259);
@@ -1887,9 +1911,10 @@ export class GameScene extends Phaser.Scene {
     this.isGameOverModalOpen = false;
   }
 
-  /** Persist lightweight checkpoint to localStorage so "Continuar partida" works. */
+  /** Persist full session (level, EXP, weapons, relics) and lightweight checkpoint to localStorage. */
   private saveCheckpoint(): void {
     try {
+      SessionStateStore.getInstance().saveSession(this.player, this.allyChar, this.currentScenario, this.storyProgress);
       const checkpoint = {
         characterId: this.player.id,
         scenarioIndex: this.currentScenario,
@@ -1931,6 +1956,10 @@ export class GameScene extends Phaser.Scene {
     if (this.isTransitioningAct) return;
     this.isTransitioningAct = true;
     this.clearActExit();
+
+    // Preserve level, EXP, improved stats and weapons into SessionStateStore before transitioning!
+    SessionStateStore.getInstance().saveSession(this.player, this.allyChar, targetAct, this.storyProgress);
+    this.saveCheckpoint();
 
     // If moving between acts naturally, trigger the illustrated CinematicScene!
     if (!forceDirect && this.currentScenario === 1 && targetAct === 2) {
@@ -2162,6 +2191,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateEnemies(delta: number): void {
+    if (this.isActCleared || this.isInvulnerable || this.isTransitioningAct) return;
     this.enemyAttackTimer += delta;
 
     for (const enemy of this.enemies) {
@@ -2225,7 +2255,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateBoss(delta: number): void {
-    if (!this.currentBoss || !this.bossSprite || this.currentBoss.health <= 0) return;
+    if (this.isActCleared || this.isInvulnerable || !this.currentBoss || !this.bossSprite || this.currentBoss.health <= 0) return;
 
     if (this.bossMarker) {
       this.bossMarker.x = this.bossSprite.x;
@@ -2475,10 +2505,9 @@ export class GameScene extends Phaser.Scene {
       this.audio.playBgm('bgm_oakhaven_night');
       this.emberParticles.stop();
 
-      // Spawn Elowen NPC in Belltower cell
-      const elowenTex = this.textures.exists('elowen_campanario') ? 'elowen_campanario' : 'elowen_npc';
+      // Spawn Elowen NPC in Belltower cell (using canonical pixel art sprite 27x72)
       this.elowenShadow = this.add.ellipse(220, 225, 24, 7, 0x000000, 0.45).setDepth(224);
-      this.elowenSprite = this.add.image(220, 225, elowenTex).setOrigin(0.5, 1).setDepth(225);
+      this.elowenSprite = this.add.image(220, 225, 'elowen_npc').setOrigin(0.5, 1).setDepth(225);
 
       this.tweens.add({
         targets: this.elowenSprite,
@@ -2502,11 +2531,14 @@ export class GameScene extends Phaser.Scene {
       this.enemySprites.set(e1.id, this.add.image(e1.position.x, e1.position.y, 'inquisitor_torre').setOrigin(0.5, 1).setDepth(255));
       this.enemySprites.set(e2.id, this.add.image(e2.position.x, e2.position.y, 'ash_prowler').setOrigin(0.5, 1).setDepth(280));
 
-      // Boss Guardián del Crisol
+      // Boss Guardián del Crisol (pixel art scaled for battlefield balance)
       this.currentBoss = Boss.createGuardianCrisol();
-      const bossTex = this.textures.exists('morwenna_crucible') ? 'morwenna_crucible' : 'boss_guardian_crisol';
       this.bossShadow = this.add.ellipse(520, 260, 32, 9, 0x000000, 0.5).setDepth(259);
-      this.bossSprite = this.add.image(520, 260, bossTex).setOrigin(0.5, 1).setDepth(260);
+      const bossTexKey = this.textures.exists('boss_guardian_crisol') ? 'boss_guardian_crisol' : 'boss_morwenna';
+      this.bossSprite = this.add.image(520, 260, bossTexKey).setOrigin(0.5, 1).setDepth(260);
+      if (this.bossSprite.height > 90) {
+        this.bossSprite.setDisplaySize(60, 85);
+      }
       this.createBossMarker('Inquisidor Mayor (Crisol)', 520, 260);
 
       const introText = introLines[0] ? `${introLines[0].speaker}: ${introLines[0].text}` : "Shalem: «Acto II: El Campanario y Granero»";

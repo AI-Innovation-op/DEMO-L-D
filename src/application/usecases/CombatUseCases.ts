@@ -19,20 +19,21 @@ export class CombatUseCases {
   /**
    * Execute Player Attack against an enemy.
    */
-  public static executeAttackOnEnemy(player: Character, enemy: Enemy): AttackResult {
+  public static executeAttackOnEnemy(player: Character, enemy: Enemy, isHeavy: boolean = false): AttackResult {
     const attackInfo = player.executeAttack();
     if (!attackInfo) {
       return new AttackResult(false, 0, 0, FinisherStyle.NONE, false, false);
     }
 
     const { damage, multiplier } = attackInfo;
-    const effectiveDamage = Math.max(1, damage);
+    const baseDamage = Math.max(1, damage);
+    const effectiveDamage = isHeavy ? Math.round(baseDamage * 1.6) : baseDamage;
 
-    // Apply damage to enemy
+    // Apply exact damage to enemy health
     enemy.takeDamage(effectiveDamage);
 
-    // Apply posture damage
-    const postureDamage = Math.round(20 * multiplier);
+    // Apply posture damage (heavy attacks deal heightened posture damage)
+    const postureDamage = Math.round((isHeavy ? 35 : 20) * multiplier);
     const postureBroken = enemy.damagePosture(postureDamage);
 
     let finisherStyle = FinisherStyle.NONE;
@@ -74,15 +75,16 @@ export class CombatUseCases {
   /**
    * Execute Player Attack against a Boss.
    */
-  public static executeAttackOnBoss(player: Character, boss: Boss): AttackResult {
+  public static executeAttackOnBoss(player: Character, boss: Boss, isHeavy: boolean = false): AttackResult {
     const attackInfo = player.executeAttack();
     if (!attackInfo) {
       return new AttackResult(false, 0, 0, FinisherStyle.NONE, false, false);
     }
 
     const { damage } = attackInfo;
-    const { actualDamage } = boss.takeDamage(damage);
-    boss.damagePosture(15);
+    const effectiveDamage = isHeavy ? Math.round(damage * 1.6) : damage;
+    const { actualDamage } = boss.takeDamage(effectiveDamage);
+    boss.damagePosture(isHeavy ? 28 : 15);
 
     const targetKilled = boss.health <= 0 && boss.phase !== 'PHASE_3_UNBEATABLE';
     if (targetKilled) {
