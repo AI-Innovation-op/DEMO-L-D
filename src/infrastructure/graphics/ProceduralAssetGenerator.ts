@@ -532,6 +532,35 @@ export class ProceduralAssetGenerator {
       }
     }
 
+    if (!textures.exists('dummy_training')) {
+      const c = textures.createCanvas('dummy_training', 44, 58);
+      if (c) {
+        const ctx = c.getContext();
+        // Wooden vertical post & crossbeam
+        drawShadedRect(ctx, 19, 10, 6, 44, '#4a2f1c', '#6e462a', '#24140b');
+        drawShadedRect(ctx, 10, 20, 24, 6, '#4a2f1c', '#6e462a', '#24140b');
+        // Straw burlap sack torso
+        drawShadedRect(ctx, 12, 16, 20, 28, '#c29b53', '#dbb874', '#8a682b');
+        // Rope bindings
+        ctx.fillStyle = '#3d2514';
+        ctx.fillRect(12, 22, 20, 2);
+        ctx.fillRect(12, 36, 20, 2);
+        // Painted target on straw chest
+        ctx.strokeStyle = '#991122';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(22, 30, 6, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = '#ffd700';
+        ctx.fillRect(21, 29, 2, 2);
+        // Straw tuft head
+        ctx.fillStyle = '#e8c97d';
+        ctx.fillRect(18, 10, 8, 7);
+        ctx.fillRect(20, 7, 4, 3);
+        c.refresh();
+      }
+    }
+
     if (!textures.exists('boss_morwenna')) {
       const c = textures.createCanvas('boss_morwenna', 72, 80);
       if (c) {

@@ -75,14 +75,33 @@ export class CombatUseCases {
   /**
    * Execute Player Attack against a Boss.
    */
-  public static executeAttackOnBoss(player: Character, boss: Boss, isHeavy: boolean = false): AttackResult {
+  public static executeAttackOnBoss(
+    player: Character,
+    boss: Boss,
+    isHeavy: boolean = false,
+    isRanged: boolean = false
+  ): AttackResult {
     const attackInfo = player.executeAttack();
     if (!attackInfo) {
       return new AttackResult(false, 0, 0, FinisherStyle.NONE, false, false);
     }
 
     const { damage } = attackInfo;
-    const effectiveDamage = isHeavy ? Math.round(damage * 1.6) : damage;
+    let effectiveDamage = isHeavy ? Math.round(damage * 1.6) : damage;
+
+    // Boss Flame Shield mechanic (mitigates ranged spam, broken by heavy melee)
+    if (boss.isFlameShieldActive) {
+      if (isHeavy) {
+        boss.damageFlameShield(100);
+      } else if (isRanged) {
+        effectiveDamage = Math.max(1, Math.round(effectiveDamage * 0.3));
+        boss.damageFlameShield(15);
+      } else {
+        effectiveDamage = Math.max(1, Math.round(effectiveDamage * 0.6));
+        boss.damageFlameShield(25);
+      }
+    }
+
     const { actualDamage } = boss.takeDamage(effectiveDamage);
     boss.damagePosture(isHeavy ? 28 : 15);
 

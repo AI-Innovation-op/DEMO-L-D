@@ -36,6 +36,18 @@ export class Boss {
   public isUiBroken: boolean = false;
   public surviveTimer: number = 0; // Countdown when in unbeatable phase
 
+  // Combat Timing & Telegraphed Wind-up / Recovery
+  public state: 'IDLE' | 'MOVING' | 'WINDUP' | 'ATTACKING' | 'RECOVERY' | 'STUNNED' = 'IDLE';
+  public windupTimer: number = 0;
+  public windupTotal: number = 600;
+  public recoveryTimer: number = 0;
+  public stunTimer: number = 0;
+
+  // Anti-kite & Flame Shield
+  public isFlameShieldActive: boolean = false;
+  public flameShieldHp: number = 0;
+  public teleportCooldown: number = 0;
+
   constructor(
     public readonly id: BossId,
     public readonly name: string,
@@ -126,7 +138,7 @@ export class Boss {
         );
       }
     } else if (this.id === 'madre_morwenna') {
-      if (this.phase === BossPhaseType.PHASE_1 && this.health <= this.maxHealth * 0.4) {
+      if (this.phase === BossPhaseType.PHASE_1 && this.health <= this.maxHealth * 0.5) {
         this.phase = BossPhaseType.PHASE_2;
         phaseChanged = true;
         EventBus.getInstance().publish(
@@ -162,5 +174,76 @@ export class Boss {
 
   public recoverPosture(): void {
     this.posture = this.maxPosture;
+    if (this.state === 'STUNNED') {
+      this.state = 'IDLE';
+    }
+  }
+
+  public startWindup(durationMs: number = 600): void {
+    if (this.health <= 0 || this.state === 'STUNNED') return;
+    this.state = 'WINDUP';
+    this.windupTimer = durationMs;
+    this.windupTotal = durationMs;
+  }
+
+  public startRecovery(durationMs: number = 500): void {
+    if (this.health <= 0 || this.state === 'STUNNED') return;
+    this.state = 'RECOVERY';
+    this.recoveryTimer = durationMs;
+  }
+
+  public interruptAttack(stunDurationMs: number = 1400): void {
+    this.windupTimer = 0;
+    this.recoveryTimer = 0;
+    this.state = 'STUNNED';
+    this.stunTimer = stunDurationMs;
+  }
+
+  public activateFlameShield(shieldHp: number = 80): void {
+    this.isFlameShieldActive = true;
+    this.flameShieldHp = shieldHp;
+  }
+
+  public damageFlameShield(amount: number): boolean {
+    if (!this.isFlameShieldActive) return false;
+    this.flameShieldHp = Math.max(0, this.flameShieldHp - amount);
+    if (this.flameShieldHp === 0) {
+      this.isFlameShieldActive = false;
+      return true; // Shield broken!
+    }
+    return false;
+  }
+
+  public updateBossCombatTimers(deltaMs: number): { shouldStrike: boolean; recoveryEnded: boolean; stunEnded: boolean } {
+    let shouldStrike = false;
+    let recoveryEnded = false;
+    let stunEnded = false;
+
+    if (this.teleportCooldown > 0) {
+      this.teleportCooldown = Math.max(0, this.teleportCooldown - deltaMs);
+    }
+
+    if (this.state === 'STUNNED') {
+      this.stunTimer = Math.max(0, this.stunTimer - deltaMs);
+      if (this.stunTimer === 0) {
+        this.recoverPosture();
+        this.state = 'IDLE';
+        stunEnded = true;
+      }
+    } else if (this.state === 'WINDUP') {
+      this.windupTimer = Math.max(0, this.windupTimer - deltaMs);
+      if (this.windupTimer === 0) {
+        this.state = 'ATTACKING';
+        shouldStrike = true;
+      }
+    } else if (this.state === 'RECOVERY') {
+      this.recoveryTimer = Math.max(0, this.recoveryTimer - deltaMs);
+      if (this.recoveryTimer === 0) {
+        this.state = 'IDLE';
+        recoveryEnded = true;
+      }
+    }
+
+    return { shouldStrike, recoveryEnded, stunEnded };
   }
 }

@@ -136,6 +136,30 @@ export class WebAudioSoundAdapter implements IAudioPort {
         gain.gain.linearRampToValueAtTime(0, now + 0.18);
         osc.start(now);
         osc.stop(now + 0.18);
+      } else if (sfxKey === 'warning') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(520, now);
+        osc.frequency.exponentialRampToValueAtTime(840, now + 0.1);
+        gain.gain.setValueAtTime(0.16, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+        osc.start(now);
+        osc.stop(now + 0.12);
+      } else if (sfxKey === 'parry') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1200, now);
+        osc.frequency.exponentialRampToValueAtTime(750, now + 0.28);
+        gain.gain.setValueAtTime(0.24, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+        osc.start(now);
+        osc.stop(now + 0.3);
+      } else if (sfxKey === 'shield_break') {
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(260, now);
+        osc.frequency.exponentialRampToValueAtTime(70, now + 0.3);
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+        osc.start(now);
+        osc.stop(now + 0.32);
       }
     } catch {}
   }

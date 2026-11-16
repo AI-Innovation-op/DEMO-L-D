@@ -31,6 +31,10 @@ export class MenuModalScene extends Phaser.Scene {
 
   public create(): void {
     // 0. Sleep and completely HIDE HUDScene so HUD elements don't bleed through or conflict with the modal
+    const hud = this.scene.get('HUDScene');
+    if (hud) {
+      hud.cameras?.main?.setVisible(false);
+    }
     if (this.scene.isActive('HUDScene')) {
       this.scene.sleep('HUDScene');
       this.scene.setVisible(false, 'HUDScene');
@@ -684,6 +688,10 @@ export class MenuModalScene extends Phaser.Scene {
       duration: 160,
       ease: 'Back.easeIn',
       onComplete: () => {
+        const hud = this.scene.get('HUDScene');
+        if (hud) {
+          hud.cameras?.main?.setVisible(true);
+        }
         if (this.scene.isSleeping('HUDScene') || this.scene.isActive('HUDScene')) {
           this.scene.setVisible(true, 'HUDScene');
           this.scene.wake('HUDScene');

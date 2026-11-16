@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { Character } from '../../domain/character/Character';
 import { CharacterId, CharacterState } from '../../domain/character/CharacterEnums';
 import { Enemy } from '../../domain/enemy/Enemy';
-import { Boss } from '../../domain/boss/Boss';
+import { Boss, BossPhaseType } from '../../domain/boss/Boss';
 import { ShalemCompanion } from '../../domain/companion/ShalemCompanion';
 import { Vector2 } from '../../domain/shared/Vector2';
 import { CombatUseCases } from '../../application/usecases/CombatUseCases';
@@ -133,9 +133,31 @@ export class GameScene extends Phaser.Scene {
 
   // Combat Timers
   private attackCooldown: number = 0;
-  private enemyAttackTimer: number = 0;
   private bossAttackTimer: number = 0;
   private timeSinceLastHit: number = 0;
+
+  // Combat Depth & Telegraph Indicators (Segunda Entrega)
+  private targetFocusMarker?: Phaser.GameObjects.Text;
+  private enemyWarningBadges: Map<string, Phaser.GameObjects.Text> = new Map();
+  private bossWarningBadge?: Phaser.GameObjects.Text;
+  private bossShieldAura?: Phaser.GameObjects.Arc;
+  private activeFlamePillars: Array<{ warningCircle: Phaser.GameObjects.Arc; timer: number; x: number; y: number; hasExploded: boolean }> = [];
+  private pillarSpawnTimer: number = 0;
+  private kitingTimer: number = 0;
+  private rangedHitsOnBoss: number = 0;
+
+  // Training Trial (Safe Zone with Shalem)
+  private isTutorialActive: boolean = false;
+  private tutorialStep: number = 0;
+  private tutorialDummy?: Phaser.GameObjects.Sprite;
+  private tutorialDummyShadow?: Phaser.GameObjects.Ellipse;
+  private tutorialTargetRing?: Phaser.GameObjects.Ellipse;
+  private tutorialBannerBg?: Phaser.GameObjects.Rectangle;
+  private tutorialBannerText?: Phaser.GameObjects.Text;
+  private tutorialSkipPrompt?: Phaser.GameObjects.Text;
+  private tutorialHits: number = 0;
+  private shouldPlayOakhavenTraining: boolean = true;
+  private keyEsc!: Phaser.Input.Keyboard.Key;
 
   constructor() {
     super('GameScene');
@@ -167,7 +189,6 @@ export class GameScene extends Phaser.Scene {
     this.isActCleared = false;
     this.isInvulnerable = false;
     this.attackCooldown = 0;
-    this.enemyAttackTimer = 0;
     this.bossAttackTimer = 0;
     this.timeSinceLastHit = 0;
     this.enemies = [];
@@ -190,6 +211,23 @@ export class GameScene extends Phaser.Scene {
     this.gameOverContainer = undefined;
     this.lastGuardPressTime = 0;
     this.hasAlbaGrisAwakened = false;
+    this.targetFocusMarker = undefined;
+    this.enemyWarningBadges.clear();
+    this.bossWarningBadge = undefined;
+    this.bossShieldAura = undefined;
+    this.activeFlamePillars = [];
+    this.pillarSpawnTimer = 0;
+    this.kitingTimer = 0;
+    this.rangedHitsOnBoss = 0;
+    this.isTutorialActive = false;
+    this.tutorialStep = 0;
+    this.tutorialDummy = undefined;
+    this.tutorialDummyShadow = undefined;
+    this.tutorialTargetRing = undefined;
+    this.tutorialBannerBg = undefined;
+    this.tutorialBannerText = undefined;
+    this.tutorialSkipPrompt = undefined;
+    this.tutorialHits = 0;
   }
 
   public create(): void {
@@ -310,7 +348,18 @@ export class GameScene extends Phaser.Scene {
       this.key4 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.FOUR);
       this.key5 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.FIVE);
       this.keyEnter = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
+      this.keyEsc = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
     }
+
+    // 10.1 Ground Target & Depth Alignment Focus Marker
+    this.targetFocusMarker = this.add.text(0, 0, '▼ [EN LA MIRA] ▼', {
+      fontFamily: 'monospace',
+      fontSize: '7.5px',
+      color: '#ffd700',
+      stroke: '#000000',
+      strokeThickness: 2,
+      fontStyle: 'bold'
+    }).setOrigin(0.5).setDepth(350).setVisible(false);
 
     // 11. Launch HUDScene if not already running
     if (!this.scene.isActive('HUDScene')) {
@@ -340,6 +389,9 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.handleInput(delta);
+    if (this.isTutorialActive) {
+      this.updateTraining(delta);
+    }
     this.updateShalemAndAlly(delta);
     this.updateEnemies(delta);
     this.updateBoss(delta);
@@ -500,6 +552,9 @@ export class GameScene extends Phaser.Scene {
           onComplete: () => {
             this.player.position = new Vector2(this.playerSprite.x, this.playerSprite.y);
             this.player.finishDodge();
+            if (this.isTutorialActive && this.tutorialStep === 4) {
+              this.time.delayedCall(300, () => this.finishTrainingAndSpawnRealEnemies());
+            }
           }
         });
       }
@@ -532,6 +587,9 @@ export class GameScene extends Phaser.Scene {
     // Voluntary Weapon Throw (Option B) [T] or [Q]
     if (Phaser.Input.Keyboard.JustDown(this.keyT) || Phaser.Input.Keyboard.JustDown(this.keyQ)) {
       this.executeWeaponThrow();
+      if (this.isTutorialActive && this.tutorialStep === 4) {
+        this.time.delayedCall(300, () => this.finishTrainingAndSpawnRealEnemies());
+      }
     }
 
     // Proximity Interaction / Pick Up [E]
@@ -1045,6 +1103,22 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
+    // Check hit against Training Dummy in Step 2 of Tutorial
+    if (this.isTutorialActive && this.tutorialStep === 2 && this.tutorialDummy) {
+      const tdx = (this.tutorialDummy.x - playerX) * facing;
+      const tdy = Math.abs(this.tutorialDummy.y - playerY);
+      if (tdx > 0 && tdx <= reachX + 15 && tdy <= reachY + 12) {
+        this.tutorialHits++;
+        this.cameras.main.shake(isHeavy ? 140 : 80, isHeavy ? 0.01 : 0.005);
+        this.spawnDamageNumber(this.tutorialDummy.x, this.tutorialDummy.y - 45, isHeavy ? 56 : 35, isHeavy);
+        this.tutorialDummy.setTint(0xffffff);
+        this.time.delayedCall(100, () => this.tutorialDummy?.clearTint());
+        if (this.tutorialHits >= 2) {
+          this.advanceTrainingStep(3);
+        }
+      }
+    }
+
     // Check hit against Boss in 2.5D
     if (this.currentBoss && this.bossSprite && this.currentBoss.health > 0) {
       const bdx = (this.currentBoss.position.x - playerX) * facing;
@@ -1053,7 +1127,17 @@ export class GameScene extends Phaser.Scene {
       const effectiveReachY = reachY + 16;
 
       if (bdx > 0 && bdx <= effectiveReachX && bdy <= effectiveReachY) {
-        const res = CombatUseCases.executeAttackOnBoss(this.player, this.currentBoss, isHeavy);
+        // If boss has active flame shield and attack is heavy -> SHATTER!
+        if (this.currentBoss.isFlameShieldActive && isHeavy) {
+          this.destroyBossShieldAura();
+          this.audio.playSfx('shield_break');
+          this.cameras.main.shake(220, 0.02);
+          this.spawnDamageNumber(this.currentBoss.position.x, this.currentBoss.position.y - 65, '¡ESCUDO ROTO!', true, '#ffd700');
+          this.currentBoss.interruptAttack(1400);
+          this.triggerShalemBalloon("Shalem: «¡Eso es, muchacho! ¡El escudo se hizo añicos! ¡Remátala!»", 3200);
+        }
+
+        const res = CombatUseCases.executeAttackOnBoss(this.player, this.currentBoss, isHeavy, false);
 
         this.cameras.main.shake(isHeavy ? 200 : 140, isHeavy ? 0.016 : 0.01);
         this.spawnDamageNumber(this.currentBoss.position.x, this.currentBoss.position.y - 50, res.damageDealt, true);
@@ -1131,6 +1215,24 @@ export class GameScene extends Phaser.Scene {
         const currentX = projectile.x;
         const currentY = projectile.y;
 
+        // Check collision with training dummy during tutorial
+        if (this.isTutorialActive && this.tutorialStep === 2 && this.tutorialDummy) {
+          const ddist = Math.hypot(this.tutorialDummy.x - currentX, this.tutorialDummy.y - currentY);
+          if (ddist < 35) {
+            hasHit = true;
+            this.tutorialHits++;
+            this.explodeAbyssalOrb(currentX, currentY, isHeavy);
+            this.tutorialDummy.setTint(0xffffff);
+            this.time.delayedCall(100, () => this.tutorialDummy?.clearTint());
+            projectile.destroy();
+            innerCore.destroy();
+            if (this.tutorialHits >= 2) {
+              this.advanceTrainingStep(3);
+            }
+            return;
+          }
+        }
+
         // Check collision with alive enemies
         for (const enemy of this.enemies) {
           if (!enemy.isAlive()) continue;
@@ -1149,6 +1251,12 @@ export class GameScene extends Phaser.Scene {
           const bdist = Math.hypot(this.currentBoss.position.x - currentX, this.currentBoss.position.y - currentY);
           if (bdist < 45) {
             hasHit = true;
+            this.rangedHitsOnBoss++;
+            if (this.currentBoss.id === 'madre_morwenna' && !this.currentBoss.isFlameShieldActive && this.rangedHitsOnBoss >= 2) {
+              this.currentBoss.activateFlameShield(80);
+              this.createBossShieldAura();
+              this.triggerShalemBalloon("Shalem: «¡Madre Morwenna levantó el Escudo Ígneo! ¡Cambia a Thomas con [TAB] y destrózalo con un golpe fuerte [K]!»", 4000);
+            }
             this.explodeAbyssalOrb(currentX, currentY, isHeavy, undefined, true);
             projectile.destroy();
             innerCore.destroy();
@@ -1188,8 +1296,10 @@ export class GameScene extends Phaser.Scene {
     });
 
     if (isBoss && this.currentBoss && this.bossSprite) {
-      const res = CombatUseCases.executeAttackOnBoss(this.player, this.currentBoss, isHeavy);
-      this.spawnDamageNumber(this.currentBoss.position.x, this.currentBoss.position.y - 50, res.damageDealt, isHeavy, '#d477ff');
+      const res = CombatUseCases.executeAttackOnBoss(this.player, this.currentBoss, isHeavy, true);
+      const damageCol = this.currentBoss.isFlameShieldActive ? '#ffaa44' : '#d477ff';
+      const label = this.currentBoss.isFlameShieldActive ? `${res.damageDealt} [ESCUDO]` : res.damageDealt;
+      this.spawnDamageNumber(this.currentBoss.position.x, this.currentBoss.position.y - 50, label, isHeavy, damageCol);
       this.bossSprite.setTint(0xba68c8);
       this.time.delayedCall(120, () => this.bossSprite?.clearTint());
       if (res.targetKilled || this.currentBoss.health <= 0) {
@@ -1388,9 +1498,10 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private spawnDamageNumber(x: number, y: number, amount: number, isCritical: boolean, customColor?: string): void {
+  private spawnDamageNumber(x: number, y: number, amount: number | string, isCritical: boolean, customColor?: string): void {
     const color = customColor || (isCritical ? '#ffd700' : '#e699ff');
-    const text = this.add.text(x, y, `${customColor ? '+' : '-'}${amount}`, {
+    const displayText = typeof amount === 'number' ? `${customColor ? '+' : '-'}${amount}` : String(amount);
+    const text = this.add.text(x, y, displayText, {
       fontFamily: 'Cinzel, Georgia, serif',
       fontSize: isCritical ? '16px' : '12px',
       color: color,
@@ -2192,23 +2303,124 @@ export class GameScene extends Phaser.Scene {
 
   private updateEnemies(delta: number): void {
     if (this.isActCleared || this.isInvulnerable || this.isTransitioningAct) return;
-    this.enemyAttackTimer += delta;
+
+    let closestAlignedEnemy: Enemy | null = null;
+    let closestAlignedDist = Infinity;
+    const playerX = this.playerSprite.x;
+    const playerY = this.playerSprite.y;
+    const facing = this.player.facingDirection;
+    const reachY = 26;
 
     for (const enemy of this.enemies) {
-      if (!enemy.isAlive()) continue;
+      if (!enemy.isAlive()) {
+        this.clearEnemyWarning(enemy.id);
+        continue;
+      }
 
       const sprite = this.enemySprites.get(enemy.id);
       const shadow = this.enemyShadows.get(enemy.id);
       if (!sprite) continue;
 
-      // Move toward player across both X and Y in 2.5D
-      const dx = this.playerSprite.x - enemy.position.x;
-      const dy = this.playerSprite.y - enemy.position.y;
+      // 2.5D Depth Alignment check (Pilar 2)
+      const isDepthAligned = Math.abs(enemy.position.y - playerY) <= reachY;
+      const dxToPlayer = (enemy.position.x - playerX) * facing;
+
+      if (shadow) {
+        if (isDepthAligned) {
+          // Visual cue: Golden/Amber shadow ring when aligned on the same attack plane!
+          shadow.setFillStyle(0xffaa22, 0.65);
+        } else {
+          // Neutral shadow when unaligned
+          shadow.setFillStyle(0x000000, 0.45);
+        }
+      }
+
+      // Track closest depth-aligned enemy in front of player for targeting reticle
+      if (isDepthAligned && dxToPlayer > 0 && dxToPlayer < closestAlignedDist) {
+        closestAlignedDist = dxToPlayer;
+        closestAlignedEnemy = enemy;
+      }
+
+      // Update combat wind-up & recovery timers (Pilar 1)
+      const { shouldStrike, recoveryEnded, stunEnded } = enemy.updateCombatTimers(delta);
+
+      if (stunEnded) {
+        sprite.clearTint();
+      }
+
+      if (recoveryEnded) {
+        sprite.clearTint();
+      }
+
+      const dx = playerX - enemy.position.x;
+      const dy = playerY - enemy.position.y;
       const dist = Math.hypot(dx, dy);
       const dirX = dx > 0 ? 1 : -1;
       sprite.setFlipX(dirX > 0);
 
-      if (dist > 38 && enemy.state !== 'STUNNED') {
+      // Handle Telegraphed Strike completion
+      if (shouldStrike) {
+        this.clearEnemyWarning(enemy.id);
+
+        if (dist <= 48) {
+          // Check for Perfect Parry!
+          const isParry = this.player.state === CharacterState.BLOCKING && (this.time.now - this.lastGuardPressTime) <= 280;
+          if (isParry) {
+            this.triggerPerfectParry(enemy.position.x, enemy.position.y, false, enemy);
+            enemy.interruptAttack(1200);
+            sprite.setTint(0x77aaff);
+            continue;
+          }
+
+          // Check for Player Invulnerable Dodge
+          if (this.isInvulnerable || this.player.state === CharacterState.DODGING) {
+            this.spawnDamageNumber(this.playerSprite.x, this.playerSprite.y - 45, '¡ESQUIVADO!', false, '#88ffaa');
+            enemy.startRecovery(380);
+            sprite.setTint(0x666666);
+            continue;
+          }
+
+          const hitRes = CombatUseCases.executeEnemyAttack(enemy, this.player, false);
+          this.timeSinceLastHit = 0;
+
+          if (hitRes.damageToHealth > 0) {
+            this.audio.playCombatHit(false);
+            this.playerSprite.setTint(0xff5555);
+            this.time.delayedCall(120, () => this.playerSprite.clearTint());
+            this.spawnDamageNumber(this.playerSprite.x, this.playerSprite.y - 45, hitRes.damageToHealth, false, '#ff4444');
+          } else if (hitRes.absorbedByGuard > 0) {
+            this.audio.playSfx('block');
+            this.playerSprite.setTint(0x55aaff);
+            this.time.delayedCall(120, () => this.playerSprite.clearTint());
+            this.spawnDamageNumber(this.playerSprite.x, this.playerSprite.y - 45, hitRes.absorbedByGuard, false, '#55aaff');
+          }
+
+          enemy.startRecovery(380);
+          sprite.setTint(0x666666);
+        } else {
+          // Attack whiffed / player moved away
+          enemy.startRecovery(250);
+          sprite.setTint(0x666666);
+        }
+        continue;
+      }
+
+      // During Windup: enemy stays still, flashes warning and telegraph badge is kept overhead
+      if (enemy.state === 'WINDUP') {
+        const warn = this.enemyWarningBadges.get(enemy.id);
+        if (warn) {
+          warn.setPosition(sprite.x, sprite.y - 42);
+        }
+        continue;
+      }
+
+      // During Recovery or Stunned: enemy cannot move
+      if (enemy.state === 'RECOVERY' || enemy.state === 'STUNNED') {
+        continue;
+      }
+
+      // Normal movement toward player in 2.5D
+      if (dist > 38) {
         const speedX = enemy.speed * (delta / 1000);
         const speedY = (enemy.speed * 0.65) * (delta / 1000);
 
@@ -2218,47 +2430,66 @@ export class GameScene extends Phaser.Scene {
         enemy.position = new Vector2(newX, newY);
         sprite.setPosition(newX, newY).setDepth(newY);
         if (shadow) shadow.setPosition(newX, newY).setDepth(newY - 1);
-      } else if (dist <= 38 && this.enemyAttackTimer >= 1400) {
-        // Enemy attacks player: guardia/shield absorbs first!
+      } else if (dist <= 38 && enemy.attackCooldown <= 0 && (enemy.state === 'IDLE' || enemy.state === 'MOVING')) {
+        // Start Telegraphed Attack Wind-up (Pilar 1: 450ms reaction window!)
+        enemy.startWindup(450);
+        sprite.setTint(0xff2222);
+        this.audio.playSfx('warning');
+        this.showEnemyWarning(enemy.id, sprite.x, sprite.y - 42);
+
         if (enemy.id.startsWith('ash')) {
           sprite.setTexture('ash_prowler_attack');
-          this.time.delayedCall(320, () => {
+          this.time.delayedCall(450, () => {
             if (enemy.isAlive()) sprite.setTexture('ash_prowler');
           });
         }
+      }
+    }
 
-        // Check for Perfect Parry!
-        const isParry = this.player.state === CharacterState.BLOCKING && (this.time.now - this.lastGuardPressTime) <= 280;
-        if (isParry) {
-          this.triggerPerfectParry(enemy.position.x, enemy.position.y, false, enemy);
-          this.enemyAttackTimer = 0;
-          return;
+    // Update Target Focus Reticle
+    if (this.targetFocusMarker) {
+      if (closestAlignedEnemy) {
+        this.targetFocusMarker.setPosition(closestAlignedEnemy.position.x, closestAlignedEnemy.position.y - 48).setVisible(true);
+      } else if (this.currentBoss && this.bossSprite && this.currentBoss.health > 0) {
+        const isBossAligned = Math.abs(this.bossSprite.y - playerY) <= 32;
+        const bdxToPlayer = (this.currentBoss.position.x - playerX) * facing;
+        if (isBossAligned && bdxToPlayer > 0 && bdxToPlayer <= 160) {
+          this.targetFocusMarker.setPosition(this.bossSprite.x, this.bossSprite.y - 65).setVisible(true);
+        } else {
+          this.targetFocusMarker.setVisible(false);
         }
-
-        const hitRes = CombatUseCases.executeEnemyAttack(enemy, this.player, false);
-        this.timeSinceLastHit = 0;
-
-        if (hitRes.damageToHealth > 0) {
-          this.audio.playCombatHit(false);
-          this.playerSprite.setTint(0xff5555);
-          this.time.delayedCall(120, () => this.playerSprite.clearTint());
-          this.spawnDamageNumber(this.playerSprite.x, this.playerSprite.y - 45, hitRes.damageToHealth, false, '#ff4444');
-        } else if (hitRes.absorbedByGuard > 0) {
-          this.audio.playSfx('block');
-          this.playerSprite.setTint(0x55aaff);
-          this.time.delayedCall(120, () => this.playerSprite.clearTint());
-          this.spawnDamageNumber(this.playerSprite.x, this.playerSprite.y - 45, hitRes.absorbedByGuard, false, '#55aaff');
-        }
-        this.enemyAttackTimer = 0;
+      } else {
+        this.targetFocusMarker.setVisible(false);
       }
     }
   }
 
   private updateBoss(delta: number): void {
-    if (this.isActCleared || this.isInvulnerable || !this.currentBoss || !this.bossSprite || this.currentBoss.health <= 0) return;
+    if (this.isActCleared || this.isInvulnerable || !this.currentBoss || !this.bossSprite || this.currentBoss.health <= 0) {
+      this.clearBossWarning();
+      this.destroyBossShieldAura();
+      return;
+    }
 
     if (this.bossMarker) {
       this.bossMarker.x = this.bossSprite.x;
+    }
+
+    // 2.5D Depth Alignment on Boss Shadow (Pilar 2)
+    const isBossAligned = Math.abs(this.bossSprite.y - this.playerSprite.y) <= 32;
+    if (this.bossShadow) {
+      this.bossShadow.setFillStyle(isBossAligned ? 0xff4444 : 0x000000, isBossAligned ? 0.65 : 0.5);
+    }
+
+    // Update Boss Combat Timers (Pilar 1 & 3)
+    const { shouldStrike, recoveryEnded, stunEnded } = this.currentBoss.updateBossCombatTimers(delta);
+
+    if (stunEnded) {
+      this.bossSprite.clearTint();
+    }
+
+    if (recoveryEnded) {
+      this.bossSprite.clearTint();
     }
 
     const dx = this.playerSprite.x - this.bossSprite.x;
@@ -2266,32 +2497,46 @@ export class GameScene extends Phaser.Scene {
     const dist = Math.hypot(dx, dy);
     const aliveEnemies = this.enemies.filter(e => e.isAlive()).length;
 
-    // When minions are defeated, boss actively advances toward player in 2.5D!
-    if (aliveEnemies === 0 && dist > 65) {
-      const speedX = 40 * (delta / 1000);
-      const speedY = 26 * (delta / 1000);
-
-      this.bossSprite.x += (dx / dist) * speedX;
-      this.bossSprite.y += (dy / dist) * speedY;
-      this.currentBoss.position = new Vector2(this.bossSprite.x, this.bossSprite.y);
-
-      this.bossSprite.setFlipX(dx > 0);
-      this.bossSprite.setDepth(this.bossSprite.y);
-      if (this.bossShadow) {
-        this.bossShadow.setPosition(this.bossSprite.x, this.bossSprite.y).setDepth(this.bossSprite.y - 1);
-      }
+    // Boss Flame Shield Aura Sync (Pilar 3)
+    if (this.currentBoss.isFlameShieldActive && this.bossShieldAura) {
+      this.bossShieldAura.setPosition(this.bossSprite.x, this.bossSprite.y - 35).setDepth(this.bossSprite.y + 1);
+    } else if (!this.currentBoss.isFlameShieldActive && this.bossShieldAura) {
+      this.destroyBossShieldAura();
     }
 
-    this.bossAttackTimer += delta;
+    // Anti-Kiting / Flame Step (Pilar 3: Prevents sitting in the distance shooting Morwenna)
+    if (this.currentBoss.id === 'madre_morwenna' && dist > 150 && this.currentBoss.state !== 'STUNNED') {
+      this.kitingTimer += delta;
+      if (this.kitingTimer >= 2200 && this.currentBoss.teleportCooldown <= 0) {
+        this.executeBossFlameStep();
+        this.kitingTimer = 0;
+      }
+    } else {
+      this.kitingTimer = 0;
+    }
 
-    if (this.bossAttackTimer >= 2200) {
-      this.bossAttackTimer = 0;
-      if (dist < 80) {
+    // Phase 2 Ground Flame Pillars (Pilar 3)
+    this.updateFlamePillars(delta);
+
+    // Handle Telegraphed Boss Strike completion
+    if (shouldStrike) {
+      this.clearBossWarning();
+
+      if (dist < 85) {
         // Check for Perfect Parry against Boss!
         const isParry = this.player.state === CharacterState.BLOCKING && (this.time.now - this.lastGuardPressTime) <= 280;
         if (isParry) {
           this.triggerPerfectParry(this.bossSprite.x, this.bossSprite.y, true);
-          this.bossAttackTimer = 0;
+          this.currentBoss.interruptAttack(1400);
+          this.bossSprite.setTint(0x77aaff);
+          return;
+        }
+
+        // Check for Player Invulnerable Dodge
+        if (this.isInvulnerable || this.player.state === CharacterState.DODGING) {
+          this.spawnDamageNumber(this.playerSprite.x, this.playerSprite.y - 50, '¡ESQUIVADO!', true, '#88ffaa');
+          this.currentBoss.startRecovery(500);
+          this.bossSprite.setTint(0x666666);
           return;
         }
 
@@ -2314,8 +2559,367 @@ export class GameScene extends Phaser.Scene {
           this.time.delayedCall(120, () => this.playerSprite.clearTint());
           this.spawnDamageNumber(this.playerSprite.x, this.playerSprite.y - 50, hitRes.absorbedByGuard, false, '#55aaff');
         }
+
+        this.currentBoss.startRecovery(500);
+        this.bossSprite.setTint(0x666666);
+      } else {
+        // Whiffed
+        this.currentBoss.startRecovery(350);
+        this.bossSprite.setTint(0x666666);
+      }
+      return;
+    }
+
+    // During Boss Windup: boss stays still and keeps warning badge positioned
+    if (this.currentBoss.state === 'WINDUP') {
+      if (this.bossWarningBadge) {
+        this.bossWarningBadge.setPosition(this.bossSprite.x, this.bossSprite.y - 70);
+      }
+      return;
+    }
+
+    // During Recovery or Stunned: boss cannot move
+    if (this.currentBoss.state === 'RECOVERY' || this.currentBoss.state === 'STUNNED') {
+      return;
+    }
+
+    // When minions are defeated or boss engages: advance in 2.5D!
+    if ((aliveEnemies === 0 || this.currentBoss.phase === BossPhaseType.PHASE_2) && dist > 65) {
+      const speedX = (this.currentBoss.phase === BossPhaseType.PHASE_2 ? 55 : 40) * (delta / 1000);
+      const speedY = (this.currentBoss.phase === BossPhaseType.PHASE_2 ? 35 : 26) * (delta / 1000);
+
+      this.bossSprite.x += (dx / dist) * speedX;
+      this.bossSprite.y += (dy / dist) * speedY;
+      this.currentBoss.position = new Vector2(this.bossSprite.x, this.bossSprite.y);
+
+      this.bossSprite.setFlipX(dx > 0);
+      this.bossSprite.setDepth(this.bossSprite.y);
+      if (this.bossShadow) {
+        this.bossShadow.setPosition(this.bossSprite.x, this.bossSprite.y).setDepth(this.bossSprite.y - 1);
       }
     }
+
+    // Start Telegraphed Boss Strike
+    if (dist < 80 && (this.currentBoss.state === 'IDLE' || this.currentBoss.state === 'MOVING')) {
+      this.bossAttackTimer += delta;
+      const attackThreshold = this.currentBoss.phase === BossPhaseType.PHASE_2 ? 1400 : 1900;
+
+      if (this.bossAttackTimer >= attackThreshold) {
+        this.bossAttackTimer = 0;
+        this.currentBoss.startWindup(580);
+        this.bossSprite.setTint(0xff5500);
+        this.audio.playSfx('warning');
+        this.showBossWarning('⚠️ ¡GOLPE DE BÁCULO! ⚠️', this.bossSprite.x, this.bossSprite.y - 70);
+      }
+    }
+  }
+
+  private showEnemyWarning(enemyId: string, x: number, y: number): void {
+    if (this.enemyWarningBadges.has(enemyId)) {
+      this.enemyWarningBadges.get(enemyId)!.setPosition(x, y);
+      return;
+    }
+    const txt = this.add.text(x, y, '⚠️', {
+      fontSize: '12px'
+    }).setOrigin(0.5).setDepth(340);
+    this.tweens.add({
+      targets: txt,
+      scaleX: 1.35,
+      scaleY: 1.35,
+      duration: 200,
+      yoyo: true,
+      repeat: -1
+    });
+    this.enemyWarningBadges.set(enemyId, txt);
+  }
+
+  private clearEnemyWarning(enemyId: string): void {
+    const badge = this.enemyWarningBadges.get(enemyId);
+    if (badge) {
+      badge.destroy();
+      this.enemyWarningBadges.delete(enemyId);
+    }
+  }
+
+  private showBossWarning(text: string, x: number, y: number): void {
+    if (!this.bossWarningBadge) {
+      this.bossWarningBadge = this.add.text(x, y, text, {
+        fontFamily: 'Cinzel, Georgia, serif',
+        fontSize: '8.5px',
+        color: '#ff4400',
+        stroke: '#000000',
+        strokeThickness: 3,
+        fontStyle: 'bold'
+      }).setOrigin(0.5).setDepth(345);
+      this.tweens.add({
+        targets: this.bossWarningBadge,
+        scaleX: 1.15,
+        scaleY: 1.15,
+        duration: 180,
+        yoyo: true,
+        repeat: -1
+      });
+    } else {
+      this.bossWarningBadge.setText(text).setPosition(x, y).setVisible(true);
+    }
+  }
+
+  private clearBossWarning(): void {
+    if (this.bossWarningBadge) {
+      this.bossWarningBadge.destroy();
+      this.bossWarningBadge = undefined;
+    }
+  }
+
+  private executeBossFlameStep(): void {
+    if (!this.currentBoss || !this.bossSprite) return;
+    this.currentBoss.teleportCooldown = 4500;
+    const targetX = Phaser.Math.Clamp(this.playerSprite.x + (this.player.facingDirection > 0 ? 55 : -55), 60, 580);
+    const targetY = Phaser.Math.Clamp(this.playerSprite.y, 225, 295);
+
+    this.cameras.main.shake(120, 0.008);
+    this.audio.playSfx('dodge');
+    this.spawnDamageNumber(this.bossSprite.x, this.bossSprite.y - 65, '¡PASO PIROCLÁSTICO!', false, '#ff7733');
+
+    this.bossSprite.setPosition(targetX, targetY).setDepth(targetY);
+    if (this.bossShadow) this.bossShadow.setPosition(targetX, targetY).setDepth(targetY - 1);
+    this.currentBoss.position = new Vector2(targetX, targetY);
+  }
+
+  private createBossShieldAura(): void {
+    if (this.bossShieldAura) this.destroyBossShieldAura();
+    if (!this.bossSprite) return;
+
+    this.bossShieldAura = this.add.circle(this.bossSprite.x, this.bossSprite.y - 35, 36, 0xff5500, 0.35)
+      .setStrokeStyle(2, 0xffaa00)
+      .setDepth(330);
+
+    this.tweens.add({
+      targets: this.bossShieldAura,
+      scaleX: 1.12,
+      scaleY: 1.12,
+      alpha: 0.65,
+      duration: 500,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
+
+    this.spawnDamageNumber(this.bossSprite.x, this.bossSprite.y - 60, '¡ESCUDO ÍGNEO!', true, '#ffaa00');
+  }
+
+  private destroyBossShieldAura(): void {
+    if (this.bossShieldAura) {
+      this.bossShieldAura.destroy();
+      this.bossShieldAura = undefined;
+    }
+  }
+
+  private triggerPhase2FirePillars(): void {
+    if (!this.currentBoss || this.currentBoss.phase !== BossPhaseType.PHASE_2 || this.currentBoss.health <= 0) return;
+    const px = Phaser.Math.Clamp(this.playerSprite.x + (Math.random() - 0.5) * 60, 60, 580);
+    const py = Phaser.Math.Clamp(this.playerSprite.y + (Math.random() - 0.5) * 30, 225, 295);
+
+    const warningCircle = this.add.circle(px, py, 24, 0xff0000, 0.4)
+      .setStrokeStyle(1.5, 0xff5500)
+      .setDepth(210);
+
+    this.tweens.add({
+      targets: warningCircle,
+      scaleX: 1.25,
+      scaleY: 1.25,
+      alpha: 0.8,
+      duration: 650,
+      ease: 'Quad.easeIn'
+    });
+
+    this.activeFlamePillars.push({
+      warningCircle,
+      timer: 700,
+      x: px,
+      y: py,
+      hasExploded: false
+    });
+  }
+
+  private updateFlamePillars(delta: number): void {
+    if (this.currentBoss && this.currentBoss.phase === BossPhaseType.PHASE_2 && this.currentBoss.health > 0) {
+      this.pillarSpawnTimer += delta;
+      if (this.pillarSpawnTimer >= 4200) {
+        this.pillarSpawnTimer = 0;
+        this.triggerPhase2FirePillars();
+      }
+    }
+
+    for (let i = this.activeFlamePillars.length - 1; i >= 0; i--) {
+      const p = this.activeFlamePillars[i];
+      p.timer -= delta;
+      if (p.timer <= 0 && !p.hasExploded) {
+        p.hasExploded = true;
+        p.warningCircle.destroy();
+
+        const col = this.add.rectangle(p.x, p.y - 45, 32, 90, 0xff4400, 0.85).setDepth(p.y + 10);
+        this.audio.playCombatHit(true);
+        this.cameras.main.shake(140, 0.01);
+
+        const distToPlayer = Math.hypot(this.playerSprite.x - p.x, this.playerSprite.y - p.y);
+        if (distToPlayer < 32 && !this.isInvulnerable && this.player.state !== CharacterState.DODGING) {
+          this.player.takeHit(18, true);
+          this.spawnDamageNumber(this.playerSprite.x, this.playerSprite.y - 45, 18, true, '#ff2200');
+          this.playerSprite.setTint(0xff2200);
+          this.time.delayedCall(120, () => this.playerSprite.clearTint());
+        }
+
+        this.tweens.add({
+          targets: col,
+          scaleX: 0.1,
+          alpha: 0,
+          duration: 350,
+          onComplete: () => col.destroy()
+        });
+
+        this.activeFlamePillars.splice(i, 1);
+      }
+    }
+  }
+
+  private startOakhavenTraining(): void {
+    this.isTutorialActive = true;
+    this.tutorialStep = 1;
+    this.tutorialHits = 0;
+
+    const dummyX = 350;
+    const dummyY = 260;
+    this.tutorialDummyShadow = this.add.ellipse(dummyX, dummyY, 26, 8, 0x000000, 0.45).setDepth(dummyY - 1);
+    this.tutorialDummy = this.add.sprite(dummyX, dummyY, 'dummy_training').setOrigin(0.5, 1).setDepth(dummyY);
+
+    this.tutorialTargetRing = this.add.ellipse(220, 260, 36, 14, 0xffd700, 0.4)
+      .setStrokeStyle(1.5, 0xffea00)
+      .setDepth(200);
+
+    this.tweens.add({
+      targets: this.tutorialTargetRing,
+      scaleX: 1.15,
+      scaleY: 1.15,
+      alpha: 0.75,
+      duration: 600,
+      yoyo: true,
+      repeat: -1
+    });
+
+    this.tutorialBannerBg = this.add.rectangle(320, 22, 530, 24, 0x12081f, 0.92)
+      .setStrokeStyle(1.5, 0xffd700)
+      .setDepth(340);
+    this.tutorialBannerText = this.add.text(320, 22, 'ENTRENAMIENTO (PASO 1/4): Usa [WASD] para moverte en profundidad hacia el círculo dorado', {
+      fontFamily: 'Cinzel, monospace',
+      fontSize: '8px',
+      color: '#ffd700',
+      fontStyle: 'bold'
+    }).setOrigin(0.5).setDepth(341);
+
+    this.tutorialSkipPrompt = this.add.text(320, 40, '[ESC] o [ENTER]: Saltar Entrenamiento y combatir de inmediato', {
+      fontFamily: 'monospace',
+      fontSize: '7.5px',
+      color: '#bbaacc'
+    }).setOrigin(0.5).setDepth(341);
+
+    this.triggerShalemBalloon("Shalem: «¡No tan rápido, muchacho! Antes de que Morwenna arrase Oakhaven, asegúrate de recordar cómo moverte en 2.5D.»", 5000);
+  }
+
+  private updateTraining(_delta: number): void {
+    if (!this.isTutorialActive) return;
+
+    if ((this.keyEsc && Phaser.Input.Keyboard.JustDown(this.keyEsc)) ||
+        (this.keyEnter && Phaser.Input.Keyboard.JustDown(this.keyEnter))) {
+      this.finishTrainingAndSpawnRealEnemies();
+      return;
+    }
+
+    if (this.tutorialStep === 1) {
+      const dist = Math.hypot(this.playerSprite.x - 220, this.playerSprite.y - 260);
+      if (dist < 22) {
+        this.advanceTrainingStep(2);
+      }
+    }
+  }
+
+  private advanceTrainingStep(step: number): void {
+    this.tutorialStep = step;
+    this.audio.playSfx('menu_select');
+
+    if (step === 2) {
+      if (this.tutorialTargetRing) this.tutorialTargetRing.setVisible(false);
+      this.tutorialBannerText?.setText('ENTRENAMIENTO (PASO 2/4): Golpea el muñeco con Ataque Ligero [J] y Fuerte [K] (x1.6)');
+      this.triggerShalemBalloon("Shalem: «¡Bien! Ahora dale un par de tajos al muñeco de paja con [J] y un remate pesado con [K].»", 4500);
+    } else if (step === 3) {
+      this.tutorialBannerText?.setText('ENTRENAMIENTO (PASO 3/4): Cuando el muñeco destelle en rojo ⚠️, pulsa [L] para hacer PARRY');
+      this.triggerShalemBalloon("Shalem: «¡Atento! El muñeco cargará un golpe telegrafiado. Pulsa [L] justo al ver el destello ⚠️ para hacer Parry Perfecto.»", 5000);
+
+      this.time.delayedCall(1200, () => {
+        if (!this.isTutorialActive || this.tutorialStep !== 3 || !this.tutorialDummy) return;
+        this.tutorialDummy.setTint(0xff2222);
+        this.audio.playSfx('warning');
+        const warn = this.add.text(this.tutorialDummy.x, this.tutorialDummy.y - 48, '⚠️', { fontSize: '14px' }).setOrigin(0.5).setDepth(340);
+        this.time.delayedCall(450, () => {
+          warn.destroy();
+          if (!this.isTutorialActive || this.tutorialStep !== 3) return;
+          this.tutorialDummy?.clearTint();
+          if (this.player.state === CharacterState.BLOCKING) {
+            this.triggerPerfectParry(this.tutorialDummy!.x, this.tutorialDummy!.y, false);
+            this.advanceTrainingStep(4);
+          } else {
+            this.triggerShalemBalloon("Shalem: «¡Casi! Tienes que pulsar [L] justo al ver el aviso rojo. ¡Intentémoslo de nuevo!»", 3000);
+            this.time.delayedCall(2000, () => this.advanceTrainingStep(3));
+          }
+        });
+      });
+    } else if (step === 4) {
+      this.tutorialBannerText?.setText('ENTRENAMIENTO (PASO 4/4): Esquiva con [ESPACIO] o lanza tu arma con [T] y recógela con [E]');
+      this.triggerShalemBalloon("Shalem: «¡Ese fue un Parry impecable! Ahora prueba tu esquiva con [ESPACIO] o lanza tu espada con [T].»", 4500);
+      this.time.delayedCall(3000, () => {
+        this.finishTrainingAndSpawnRealEnemies();
+      });
+    }
+  }
+
+  private finishTrainingAndSpawnRealEnemies(): void {
+    this.isTutorialActive = false;
+    this.shouldPlayOakhavenTraining = false;
+
+    this.tutorialDummy?.destroy();
+    this.tutorialDummy = undefined;
+    this.tutorialDummyShadow?.destroy();
+    this.tutorialDummyShadow = undefined;
+    this.tutorialTargetRing?.destroy();
+    this.tutorialTargetRing = undefined;
+    this.tutorialBannerBg?.destroy();
+    this.tutorialBannerBg = undefined;
+    this.tutorialBannerText?.destroy();
+    this.tutorialBannerText = undefined;
+    this.tutorialSkipPrompt?.destroy();
+    this.tutorialSkipPrompt = undefined;
+
+    this.spawnAct1RealEnemies();
+    this.triggerShalemBalloon("Shalem: «¡Suficiente práctica! ¡Las antorchas de Morwenna ya están aquí! ¡A la batalla!»", 5000);
+  }
+
+  private spawnAct1RealEnemies(): void {
+    const e1 = Enemy.createAshProwler('ash_1', new Vector2(380, 245));
+    const e2 = Enemy.createFanaticMonk('monk_1', new Vector2(460, 280));
+    this.enemies.push(e1, e2);
+
+    const s1 = this.add.ellipse(380, 245, 26, 8, 0x000000, 0.45).setDepth(244);
+    const s2 = this.add.ellipse(460, 280, 24, 7, 0x000000, 0.45).setDepth(279);
+    this.enemyShadows.set(e1.id, s1);
+    this.enemyShadows.set(e2.id, s2);
+
+    this.enemySprites.set(e1.id, this.add.image(e1.position.x, e1.position.y, 'ash_prowler').setOrigin(0.5, 1).setDepth(245));
+    this.enemySprites.set(e2.id, this.add.image(e2.position.x, e2.position.y, 'fanatic_monk').setOrigin(0.5, 1).setDepth(280));
+
+    this.currentBoss = Boss.createMadreMorwenna();
+    this.bossShadow = this.add.ellipse(530, 260, 32, 9, 0x000000, 0.5).setDepth(259);
+    this.bossSprite = this.add.image(530, 260, 'boss_morwenna').setOrigin(0.5, 1).setDepth(260);
+    this.createBossMarker('Madre Morwenna', 530, 260);
   }
 
   private createBossMarker(bossName: string, x: number, y: number): void {
@@ -2478,27 +3082,13 @@ export class GameScene extends Phaser.Scene {
         ease: 'Sine.easeInOut'
       });
 
-      // Spawn Ash Prowlers & Fanatic Monk in 2.5D space
-      const e1 = Enemy.createAshProwler('ash_1', new Vector2(380, 245));
-      const e2 = Enemy.createFanaticMonk('monk_1', new Vector2(460, 280));
-      this.enemies.push(e1, e2);
-
-      const s1 = this.add.ellipse(380, 245, 26, 8, 0x000000, 0.45).setDepth(244);
-      const s2 = this.add.ellipse(460, 280, 24, 7, 0x000000, 0.45).setDepth(279);
-      this.enemyShadows.set(e1.id, s1);
-      this.enemyShadows.set(e2.id, s2);
-
-      this.enemySprites.set(e1.id, this.add.image(e1.position.x, e1.position.y, 'ash_prowler').setOrigin(0.5, 1).setDepth(245));
-      this.enemySprites.set(e2.id, this.add.image(e2.position.x, e2.position.y, 'fanatic_monk').setOrigin(0.5, 1).setDepth(280));
-
-      // Boss Madre Morwenna
-      this.currentBoss = Boss.createMadreMorwenna();
-      this.bossShadow = this.add.ellipse(530, 260, 32, 9, 0x000000, 0.5).setDepth(259);
-      this.bossSprite = this.add.image(530, 260, 'boss_morwenna').setOrigin(0.5, 1).setDepth(260);
-      this.createBossMarker('Madre Morwenna', 530, 260);
-
-      const introText = introLines[0] ? `${introLines[0].speaker}: ${introLines[0].text}` : "Shalem: «Acto I: Oakhaven»";
-      this.triggerShalemBalloon(introText, 4500);
+      if (this.shouldPlayOakhavenTraining) {
+        this.startOakhavenTraining();
+      } else {
+        this.spawnAct1RealEnemies();
+        const introText = introLines[0] ? `${introLines[0].speaker}: ${introLines[0].text}` : "Shalem: «Acto I: Oakhaven»";
+        this.triggerShalemBalloon(introText, 4500);
+      }
     } else if (scenarioIndex === 2) {
       // El Campanario y Granero del Sur (Caps VII-IX)
       this.bgImage.setTexture('bg_belltower');

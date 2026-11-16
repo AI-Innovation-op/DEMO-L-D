@@ -110,4 +110,77 @@ describe('Domain: Boss Mechanics & Rex Malphas Combat', () => {
     expect(malphas.health).toBe(0);
     expect(res.actualDamage).toBe(300);
   });
+
+  it('Madre Morwenna transitions to Phase 2 at 50% HP', () => {
+    const morwenna = Boss.createMadreMorwenna();
+    expect(morwenna.phase).toBe(BossPhaseType.PHASE_1);
+
+    // 350 max HP -> 50% is 175
+    morwenna.takeDamage(180);
+    expect(morwenna.phase).toBe(BossPhaseType.PHASE_2);
+  });
+
+  it('Madre Morwenna Flame Shield mitigates ranged damage and is broken by heavy melee strike', () => {
+    const morwenna = Boss.createMadreMorwenna();
+    morwenna.activateFlameShield(80);
+    expect(morwenna.isFlameShieldActive).toBe(true);
+
+    const khaterine = Character.createKhaterine();
+    // Ranged attack against shield is mitigated
+    const rangedRes = CombatUseCases.executeAttackOnBoss(khaterine, morwenna, false, true);
+    expect(rangedRes.hitTarget).toBe(true);
+    expect(morwenna.isFlameShieldActive).toBe(true); // Still active
+
+    const thomas = Character.createThomas();
+    // Heavy melee strike shatters the flame shield
+    const heavyRes = CombatUseCases.executeAttackOnBoss(thomas, morwenna, true, false);
+    expect(heavyRes.hitTarget).toBe(true);
+    expect(morwenna.isFlameShieldActive).toBe(false); // Shattered!
+  });
+});
+
+describe('Domain: Enemy Combat Telegraphed Wind-up & Recovery', () => {
+  it('handles wind-up countdown, triggers strike, and enters recovery', () => {
+    const enemy = Enemy.createAshProwler('ash_t', new Vector2(100, 260));
+    enemy.startWindup(400);
+
+    expect(enemy.state).toBe('WINDUP');
+    expect(enemy.windupTimer).toBe(400);
+
+    // Advance 200ms -> Still in windup
+    const midUpdate = enemy.updateCombatTimers(200);
+    expect(midUpdate.shouldStrike).toBe(false);
+    expect(enemy.state).toBe('WINDUP');
+
+    // Advance 200ms -> Reaches 0, strikes!
+    const strikeUpdate = enemy.updateCombatTimers(200);
+    expect(strikeUpdate.shouldStrike).toBe(true);
+    expect(enemy.state).toBe('ATTACKING');
+
+    // Enter recovery
+    enemy.startRecovery(350);
+    expect(enemy.state).toBe('RECOVERY');
+
+    // Advance recovery to completion
+    const recUpdate = enemy.updateCombatTimers(350);
+    expect(recUpdate.recoveryEnded).toBe(true);
+    expect(enemy.state).toBe('IDLE');
+  });
+
+  it('interrupts attack wind-up and stuns enemy upon parry', () => {
+    const enemy = Enemy.createFanaticMonk('monk_t', new Vector2(100, 260));
+    enemy.startWindup(500);
+    expect(enemy.state).toBe('WINDUP');
+
+    // Player parries -> Interrupt!
+    enemy.interruptAttack(800);
+    expect(enemy.state).toBe('STUNNED');
+    expect(enemy.windupTimer).toBe(0);
+    expect(enemy.stunTimer).toBe(800);
+
+    // Stun expires
+    const stunUpdate = enemy.updateCombatTimers(800);
+    expect(stunUpdate.stunEnded).toBe(true);
+    expect(enemy.state).toBe('IDLE');
+  });
 });
