@@ -1,35 +1,31 @@
-# The Light in the Darkness (v0.5.0) — Double Blood
+# The Light in the Darkness (v0.5.2) — Double Blood
 
-> **Arcade-Action Adventure & Metroidvania** ambientado en un medievo anglosajón teocentrista oscuro.
-> Desarrollado con **Phaser 3 + TypeScript + Vite** bajo los principios de **Domain-Driven Design (DDD)**.
+> **Arcade-Action Adventure & Metroidvania 2.5D** ambientado en un medievo anglosajón teocentrista oscuro.
+> Desarrollado con **Phaser 3 + TypeScript + Vite** bajo principios rigurosos de **Domain-Driven Design (DDD)**.
 
 ---
 
 > [!IMPORTANT]
-> ### 🛡️ PROPIEDAD INTELECTUAL, UNIVERSO Y DERECHOS DE AUTOR
-> **Toda la obra literaria original, universo narrativo, personajes, mitología, facciones, manuscritos y lore de este proyecto fueron creados exclusivamente por Kevin.**
+> ### 🛡️ PROPIEDAD INTELECTUAL, UNIVERSO NARRATIVO Y DERECHOS DE AUTOR
+> **Toda la obra literaria original, universo narrativo, personajes, mitología, facciones, manuscritos y lore de este proyecto fueron creados y son propiedad exclusiva de KEVIN.**
 > 
 > *Todos los derechos de autor reservados © Kevin — "The Light in the Darkness" / "Double Blood" (2026).*
 > 
-> *Queda terminantemente prohibida la copia, reproducción, distribución, adaptación o apropiación no autorizada de esta narrativa, sus textos canónicos, sus personajes (Thomas, Khaterine, Elowen, Shalem, Padre Cedric, Madre Morwenna, Rex Malphas / Alaric, Astaroth) y su mundo sin el consentimiento expreso y por escrito del autor.*
+> *Queda terminantemente prohibida la copia, reproducción, distribución, adaptación, comercialización o apropiación no autorizada de esta narrativa, sus textos canónicos, sus personajes (Thomas, Khaterine, Elowen, Shalem, Padre Cedric, Madre Morwenna, Capitán Vane, Rex Malphas / Alaric, Astaroth) y su cosmología sin el consentimiento expreso y por escrito del autor.*
 
 ---
 
-## 📖 Compendio Narrativo Canónico: La Saga de Albion
+## 📚 Manuscritos Canónicos de la Novela (20 Capítulos en 5 Actos)
 
-*Basado en los manuscritos y apuntes literarios de 20 capítulos del autor Kevin.*
+Los textos completos de la obra literaria de Kevin se encuentran archivados en el directorio [docs/novela/](file:///d:/Edged/docs/novela/):
 
-### 🌒 Prólogo: El Fruto de las Nueve Brujas y la Noche de la Luna Roja
-Durante generaciones, el Reino de Albion subsistió bajo la tiranía teocrática del **Cáliz Solar**, un dogma fanático que predica la purificación mediante el fuego y condena toda disidencia como corrupción del Abismo. En la fatídica **Noche de la Luna Roja**, nueve hechiceras fueron atadas a la pira ceremonial; en su agonía final, entrelazaron sus almas para otorgar al recién nacido **Thomas** una semilla de libre albedrío y el fuego negro del Abismo en su interior. Salvado clandestinamente de las cenizas por la novicia **Khaterine**, Thomas creció en las sombras como un simple monaguillo en la aislada aldea de Oakhaven. Simultáneamente, la pequeña **Elowen** quedó expuesta ante el pueblo, asumiendo involuntariamente la mirada inquisitorial y el estigma de la sospecha como la supuesta causante de la maldición.
-
-### ⚔️ Acto I: Cenizas en Oakhaven — Las Hogueras de la Inquisición
-Dieciocho años después, el Cáliz Solar desciende con toda su furia sobre Oakhaven. La inquisidora **Madre Morwenna** marcha con monjes fanáticos y bestias cuadrúpedas (*Acechadores de Ceniza*) decidida a arrancar a Elowen y purgar la aldea. El anciano **Padre Cedric** interviene para resguardar a los jóvenes, entregando a Thomas el sagrado **Rosario de Madera** y el primer fragmento de la **Profecía Original** junto a su incensario litúrgico (*Lamento de Oakhaven*). Al ver el pueblo en llamas, Thomas despierta el fuego negro de su hoja y, junto a Khaterine y las advertencias del demonio felino **Shalem**, quiebra la guardia de Morwenna en un brutal combate. Aunque la inquisidora es derrotada, los guardias imperiales logran secuestrar a Elowen para trasladarla como ofrenda a las mazmorras de la capital.
-
-### 👑 Acto II: Londinium — La Ciudadela Dorada y el Velo de Alaric
-El avance hacia la capital obliga a cruzar el monumental puente de piedra y el **Camino de los Herejes**, plagado de Caballeros Áureos armados con escudos pesados. En este trayecto, Shalem desentraña el mayor secreto de la corona: **Rex Malphas**, el venerado soberano de Londinium, no es ningún enviado celestial, sino **Alaric**, el antiguo maestro del Aquelarre del Sauce Negro. Alaric sacrificó su linaje y vendió su carne al Abismo para instaurar un reino basado en la mentira y el pánico colectivo: *«No tuve que obligarlos a odiarte, hijo mío; solo tuve que enseñarles a temerte»*. En la sala del trono, Thomas y Khaterine confrontan a Malphas en un combate a muerte en dos fases, quebrando su Decreto Real y revelando la sima colosal oculta bajo el palacio.
-
-### 🌌 Acto III: La Catedral Invertida — El Juicio de Astaroth
-Con la caída de Malphas, las leyes de la física y la gravedad colapsan. La tierra se abre hacia la **Catedral Invertida**, un santuario sacrílego flotante donde la arquitectura gótica pende sobre el vacío cósmico. Allí aguarda el demonio primordial **Astaroth**, el *Padre de las Cenizas y Sol del Abismo*, cuya manifestación amenaza con devorar toda la luz restante de Albion. Es aquí donde Thomas y Khaterine deben decidir si abrazar la herencia demoníaca de su sangre o fundir la luz y la oscuridad junto a Elowen para redimir a la humanidad.
+* 📜 **[Compendio General e Índice de la Obra](file:///d:/Edged/docs/novela/INDICE_Y_COMPENDIO.md)**: Fichas de autor, mapa de personajes, facciones, cosmología y registro de derechos de autor.
+* 🌒 **[Prólogo: La Noche de la Luna Roja](file:///d:/Edged/docs/novela/00_PROLOGO_Y_COSMOLOGIA.md)**: El sacrificio de las nueve brujas, el nacimiento marcado de Thomas, el rescate clandestino de Khaterine, la infancia vigilada de Elowen y el dogma del Cáliz Solar.
+* ⚔️ **[Acto I: Cenizas en Oakhaven (Caps. I a VI)](file:///d:/Edged/docs/novela/ACTO_1_OAKHAVEN_CAPS_01_06.md)**: Thomas monaguillo, el pájaro de madera tallado, la invasión de Madre Morwenna, el sacrificio del Padre Cedric, el despertar del fuego negro y la captura de Elowen.
+* 🔔 **[Acto II: El Campanario y Granero del Sur (Caps. VII a IX)](file:///d:/Edged/docs/novela/ACTO_2_CAMPANARIO_CAPS_07_09.md)**: El martirio de Elowen sobre sal gruesa, el mensaje en el pájaro de madera, el desentierro del *Colmillo del Sauce Negro* y la destrucción del crisol inquisitorial.
+* 🌉 **[Acto III: El Gran Puente de Piedra — El Camino de los Herejes (Caps. X a XIII)](file:///d:/Edged/docs/novela/ACTO_3_GRAN_PUENTE_CAPS_10_13.md)**: La marcha en la niebla fluvial, la liberación del convoy de campesinos de Martín y Tobías, el duelo contra el escudo de torre del Capitán Áureo Vane y la toma del mandoble *Falso Veredicto*.
+* 👑 **[Acto IV: Londinium — La Ciudadela Dorada (Caps. XIV a XVII)](file:///d:/Edged/docs/novela/ACTO_4_LONDINIUM_CAPS_14_17.md)**: La entrada por acueductos, el Salón de los Espejos, la revelación desgarradora de Rex Malphas como Alaric (padre de Thomas y traidor del aquelarre), el Decreto Real de la *Ley del Deseo* y el colapso del palacio.
+* 🌌 **[Acto V: La Catedral Invertida — El Sol del Abismo (Caps. XVIII a XX)](file:///d:/Edged/docs/novela/ACTO_5_CATEDRAL_INVERTIDA_CAPS_18_20.md)**: El descenso a la arquitectura flotante sobre el vacío cósmico, la forja sagrada de *Alba Gris* con la Gota de Luz Divina de Elowen y el fuego negro de Thomas, el juicio final contra Astaroth y el primer amanecer sobre Albion.
 
 ---
 
@@ -37,121 +33,138 @@ Con la caída de Malphas, las leyes de la física y la gravedad colapsan. La tie
 
 | Personaje | Rol Canónico | Estilo de Juego / Mecánica |
 |---|---|---|
-| **Thomas** | Protagonista híbrido, nacido del sacrificio de las 9 brujas. | Ágil, combate cuerpo a cuerpo con espada corta, fuego negro y esquiva fluida. |
-| **Khaterine** | Exiliada del abismo, protectora con hábito monacal y cruz. | Combate a media distancia con proyectiles violetas, alta resistencia y bendiciones. |
-| **Shalem** | Gran Marqués de las Brasas atrapado en el cuerpo de un gato negro. | Guía sarcástico en 2.5D, tutor de combate y juez del minijuego de *Level Up*. |
-| **Elowen** | Hermana de destino de Thomas y símbolo de inocencia de Oakhaven. | PNJ central que impulsa la trama y la búsqueda de redención. |
-| **Padre Cedric** | Sacerdote disidente de Oakhaven leal a la verdad. | Entrega el *Rosario de Madera* y el incensario litúrgico arrojadizo. |
-| **Madre Morwenna** | Jefa del Acto I, inquisidora fanática del Cáliz Solar. | Ataques con báculo de fuego, invocación de ceniza y embestidas piroclásticas. |
-| **Rex Malphas (Alaric)** | Jefe del Acto II, monarca corrupto de Londinium. | Combate en 2 fases con mandoble áureo y despertar de la *Ley del Deseo*. |
-| **Astaroth** | Jefe del Acto III, entidad primordial del Abismo. | Proyectiles de fuego oscuro, ondas de choque y distorsión gravitatoria. |
+| **Thomas** | Protagonista híbrido, nacido del sacrificio de las 9 brujas. | Ágil, combate cuerpo a cuerpo con espada corta, fuego negro destructivo y esquiva fluida con estela. |
+| **Khaterine** | Exiliada del Sauce Negro, protectora bajo hábito monacal. | Combate a media distancia con proyectiles violetas, alta resistencia física, apoyo místico y dagas rituales. |
+| **Shalem** | Gran Marqués de las Brasas atrapado en el cuerpo de un gato negro. | Guía sarcástico en 2.5D, tutor de combate, juez del minijuego de *Level Up* y guardián moral. |
+| **Elowen** | Hermana de destino de Thomas, símbolo de pureza y perdón. | PNJ central; su *Gota de Luz Divina* permite forjar el arma definitiva de la redención. |
+| **Padre Cedric** | Sacerdote disidente de Oakhaven leal a la verdad. | Entrega el *Rosario de Madera*, el incensario litúrgico arrojadizo y la primera tablilla profética. |
+| **Madre Morwenna** | Jefa del Acto I, inquisidora fanática del Cáliz Solar. | Ataques con báculo de fuego, invocación de Acechadores de Ceniza y embestidas piroclásticas. |
+| **Guardián del Crisol** | Jefe del Acto II, verdugo de bronce del Campanario. | Martillazos de fundición de área, salpicaduras de salitre y defensa acorazada pesada. |
+| **Capitán Áureo Vane** | Jefe del Acto III, comandante de la guardia del Gran Puente. | Escudo de torre impenetrable, mandoble pesado y barreras de contención marcial. |
+| **Rex Malphas (Alaric)** | Jefe del Acto IV, monarca corrupto de Londinium y padre de Thomas. | Combate en dos fases: esgrima áurea y despertar cósmico con la *Ley del Deseo*. |
+| **Astaroth** | Jefe del Acto V, entidad primordial y Padre de las Cenizas. | Lluvia de meteoros de vacío, ondas gravitatorias y tentación moral de juicio absoluto. |
 
 ---
 
-## 🎮 Flujo Cinemático y Experiencia de Usuario (v0.5.0)
+## 🎮 Controles Unificados (In-Game & HUD)
 
-1. **Carátula Principal Inmediata (`TitleScene`):** Al abrir el juego, se despliega de inmediato la carátula maestra en alta resolución con el título gótico, brasas animadas y menú interactivo.
-2. **Carga Narrativa del Prólogo (`LoadingScene`):** Al hacer clic en *"Nueva partida"*, se presenta la primera pantalla de Shalem en las murallas bajo la luna, con animación *Ken Burns* de zoom respiratorio, música atmosférica y crónicas del Prólogo.
-3. **Selección de Personaje:** Al pulsar `[ENTER]` o clic, se abre el modal de elección: ¿quién liderará el viaje, Thomas o Khaterine?
-4. **Diálogo Interactivo de Shalem (`StoryIntroScene`):** Con el personaje elegido, el gato Shalem se presenta en primer plano para narrar la profecía y dar el trasfondo histórico.
-5. **Transición a los Actos:** Pantallas de carga maestras con crónicas de lore y consejos antes de cada nivel (Oakhaven, Londinium, Catedral Invertida).
-6. **Sistema de Game Over y Reintento:** Al caer en combate, se abre un modal gótico que permite **reintentar el escenario de inmediato** con salud completa o **volver al menú principal**.
-
----
-
-## ⚔️ Mecánicas de Combate y Jugabilidad
-
-- **Caminata Animada Nítida:** Thomas cuenta con ciclo de caminata nativo de 4 cuadros ($96 \times 80$, $7\text{ FPS}$) alineado al píxel en suelo ($y = 71$) sin saltos ni desfasajes.
-- **Doble Personaje (`[TAB]`):** Alterna el control instantáneamente entre Thomas y Khaterine. El personaje inactivo camina y acompaña como aliado en pantalla.
-- **Sistema de Desarme Doble:**
-  - *Desarme Táctico (Crisis):* Si el enemigo rompe tu guardia con un golpe pesado, tu arma sale volando al suelo. Debes luchar a puñetazos mientras corres a recogerla con `[E]`.
-  - *Lanzamiento Voluntario (`[T]`):* Arroja tu arma a distancia para aturdir y quebrar posturas.
-- **Sistema de Guardia y Rompepostura (`[K]`):** Bloquea impactos frontales consumiendo postura. La postura se regenera tras $2.2\text{ segundos}$ sin recibir daño.
-- **Esquiva con Estela Fantasma (`[ESPACIO]`):** Dash veloz con cuadros de invulnerabilidad y silueta sombría.
-- **Combos y Remates Cinemáticos (`[J]`):** Encadena golpes consecutivos para elevar el multiplicador de daño hasta desatar remates visuales en cámara lenta.
+| Tecla / Control | Acción | Descripción |
+|---|---|---|
+| `[W]` `[A]` `[S]` `[D]` o Flechas | **Movimiento en 2.5D** | Desplazamiento lateral y profundidad en la arena de combate con alineación precisa al suelo. |
+| `[J]` | **Ataque Ligero / Magia** | Cadenas de golpes rápidos (Thomas: tajo cuerpo a cuerpo / Khaterine: proyectil violeta arcano). |
+| `[K]` | **Ataque Pesado (x1.6)** | Golpe contundente que inflige daño masivo y destroza la postura enemiga. |
+| `[L]` | **Guardia / Parry Perfecto** | Bloqueo frontal que reduce daño; si se pulsa justo antes del impacto, desvía y aturde al agresor. |
+| `[ESPACIO]` | **Esquiva con Estela** | Dash veloz con cuadros de invulnerabilidad (*i-frames*) y silueta sombría residual. |
+| `[TAB]` | **Cambio de Personaje** | Alterna el control instantáneamente entre Thomas y Khaterine. El aliado acompaña en pantalla. |
+| `[T]` o `[Q]` | **Lanzar Arma** | Arroja el arma equipada para aturdir a distancia y quebrar escudos. |
+| `[E]` | **Recoger / Interactuar** | Recoge armas desarmadas del suelo y abre diálogos con NPCs y rescatados. |
+| `[C]` | **Charlar Lore** | Inicia conversaciones contextuales de historia con el compañero de viaje. |
+| `[M]` | **Minijuego de Shalem** | Se activa al llenar la barra de *Level Up* para obtener bendiciones y mejoras permanentes de atributos. |
+| `[P]` | **Códice & Menú gótico** | Pausa la partida, consulta estadísticas de alma, arsenal, profecías, crónicas y acceso al Menú Principal. |
+| `[1]` a `[5]` | **Atajos de Actos** | Acceso de depuración directo para transitar entre los 5 Actos de la campaña. |
 
 ---
 
-## 🏛️ Arquitectura del Software (DDD)
+## 🏰 Los 5 Actos Jugables
 
-El proyecto está diseñado bajo principios rigurosos de **Domain-Driven Design (DDD)** para garantizar desacoplamiento, pruebas unitarias y escalabilidad:
+1. **Acto I: Oakhaven — Las Cenizas de la Inquisición**
+   * *Escenario:* La aldea de Oakhaven bajo el asedio nocturno del Cáliz Solar.
+   * *Jefa:* Madre Morwenna.
+   * *Objetivo:* Defender la parroquia del Padre Cedric, repeler a los Acechadores de Ceniza y quebrar a la Inquisición.
+2. **Acto II: El Campanario y Granero del Sur**
+   * *Escenario:* La torre fortificada donde Elowen permanece martirizada sobre sal gruesa.
+   * *Jefe:* Guardián del Crisol / Madre Morwenna del Crisol.
+   * *Objetivo:* Desenterrar el *Colmillo del Sauce Negro* bajo la losa del granero, quebrar el crisol y rescatar a Elowen.
+3. **Acto III: El Gran Puente de Piedra — El Camino de los Herejes**
+   * *Escenario:* El viaducto monumental rodeado de densa niebla fluvial y el convoy de carretas.
+   * *Jefe:* Capitán Áureo Vane.
+   * *Objetivo:* Liberar a los prisioneros desterrados de Martín y Tobías, quebrar el escudo de torre de Vane y reclamar el *Falso Veredicto*.
+4. **Acto IV: Londinium — La Ciudadela Dorada**
+   * *Escenario:* Las calles monumentales y el trono astral del palacio de Londinium.
+   * *Jefe:* Rex Malphas (Alaric).
+   * *Objetivo:* Atravesar el Salón de los Espejos, confrontar la verdad del padre biológico traidor y quebrar la *Ley del Deseo*.
+5. **Acto V: La Catedral Invertida — El Sol del Abismo**
+   * *Escenario:* Santuario cósmico suspendido de cabeza sobre el vacío estelar y el Sol del Abismo.
+   * *Jefe Final:* Astaroth, el Padre de las Cenizas.
+   * *Objetivo:* Forjar la espada definitiva *Alba Gris* uniendo la Gota de Luz Divina de Elowen con el Fuego Negro de Thomas, derrotar a Astaroth y desatar el primer amanecer sobre Albion.
+
+---
+
+## ⚙️ Innovaciones Técnicas y Jugabilidad (v0.5.2)
+
+* **Persistencia Integral de Partida (`SessionStateStore` v1.0.0):**
+  Guarda en memoria y `localStorage` el nivel, experiencia acumulada, salud, postura, armas desbloqueadas, reliquias e hitos de historia. Los avances de Thomas y Khaterine se conservan al cambiar de acto, recargar o continuar partida.
+* **Protocolo de Victoria Coherente:**
+  Al derrotar al jefe de cada acto, todos los esbirros menores quedan neutralizados de inmediato, el jugador adquiere invulnerabilidad absoluta y el HUD actualiza el objetivo en tiempo real hacia la salida norte.
+* **Calibración y Normalización Visual:**
+  Proporciones pixel art calibradas sin estiramientos. Sprites de Elowen, Morwenna, Guardián del Crisol y los protagonistas alineados con apoyos en el suelo y cajas de colisión independientes.
+* **Menú Modal de Códice & Ajustes `[P]` Pulido:**
+  Aislamiento visual completo (ocultamiento de HUD de fondo), acceso directo para volver a la partida o retornar al Menú Inicial.
+* **Selector de Actos en Portada ("Continuar partida"):**
+  Permite seleccionar cualquiera de los 5 Actos desbloqueados con persistencia de atributos del personaje.
+* **Audio Procedural en Web Audio API:**
+  Efectos de sonido sintetizados en tiempo real (tajos, parries, fuego oscuro, pasos y melodías góticas) sin dependencias pesadas externas.
+
+---
+
+## 🏛️ Arquitectura del Software (Domain-Driven Design - DDD)
 
 ```
 src/
-├── domain/                      # Lógica pura del dominio (independiente del motor)
-│   ├── character/               # Entidad Character, Stats, Enums, LevelUpProgress
+├── domain/                      # Reglas puras de negocio (agnósticas de la tecnología)
+│   ├── character/               # Character, Stats, LevelUpProgress, Dual-Switch
 │   ├── combat/                  # DisarmManager, ComboSystem, CombatTypes
-│   ├── weapon/                  # Entidades de Armas y efectos especiales
+│   ├── weapon/                  # Entidades de Armas (Espada Corta, Alba Gris, etc.)
 │   ├── companion/               # ShalemCompanion (Sarcasmo, Guía, Minijuegos)
-│   ├── boss/                    # Aggregate Root Boss (Morwenna, Malphas, Astaroth)
-│   ├── enemy/                   # Entidades enemigas (Acechador, Monje, Guardia)
+│   ├── boss/                    # Aggregate Root Boss (Morwenna, Vane, Malphas, Astaroth)
+│   ├── enemy/                   # Entidades de esbirros (Acechador, Monje, Guardia Áureo)
 │   ├── mission/                 # Misiones y Fragmentos de la Profecía Original
-│   ├── story/                   # Progreso narrativo y hitos de historia
+│   ├── story/                   # Hitos narrativos y seguimiento de capítulos
+│   ├── save/                    # SessionStateStore (Persistencia cross-act v1.0.0)
 │   └── shared/                  # EventBus desacoplado, Vector2, ValueObjects
 │
-├── application/                 # Orquestación y casos de uso
+├── application/                 # Casos de uso y orquestación de la aplicación
 │   ├── usecases/                # CombatUseCases, ShalemUseCases
 │   └── ports/                   # Interfaces IAudioPort, IDialoguePort
 │
-├── infrastructure/              # Implementaciones técnicas concretas
+├── infrastructure/              # Adaptadores técnicos concretos
 │   ├── audio/                   # WebAudioSoundAdapter (Síntesis procedural)
-│   ├── dialogue/                # DialogueRepository (Scripts y diálogos canónicos)
+│   ├── dialogue/                # DialogueRepository (Diálogos canónicos completos)
 │   └── graphics/                # ProceduralAssetGenerator (Generación de respaldo)
 │
-└── presentation/                # Capa visual (Phaser 3)
+└── presentation/                # Capa visual e interactiva (Phaser 3)
     ├── scenes/
-    │   ├── BootScene.ts         # Precarga de spritesheets, fondos HD y audio
-    │   ├── TitleScene.ts        # Carátula principal y selección de líder
+    │   ├── BootScene.ts         # Precarga de spritesheets, fondos y audio
+    │   ├── TitleScene.ts        # Portada maestra, selector de héroe y selector de actos
     │   ├── LoadingScene.ts      # Pantallas de carga Ken Burns con crónicas
-    │   ├── StoryIntroScene.ts   # Prólogo narrativo interactivo con Shalem
-    │   ├── GameScene.ts         # Bucle principal de combate y arenas 2.5D
-    │   ├── HUDScene.ts          # Barras de salud, guardia, combos e indicadores
-    │   ├── MenuModalScene.ts    # Codex de instrucciones, estado y créditos
-    │   ├── CharacterDialogueScene.ts # Diálogos de personajes con retratos HD
-    │   ├── InventoryScene.ts    # Arsenal y fragmentos de profecía
-    │   └── ShalemMinigameScene.ts # Minijuegos de trivia y memoria con Shalem
-    └── main.ts                  # Configuración y arranque de Phaser (640x360)
+    │   ├── StoryIntroScene.ts   # Prólogo interactivo con Shalem
+    │   ├── GameScene.ts         # Bucle 2.5D, combate, jefes y progresión de los 5 Actos
+    │   ├── HUDScene.ts          # Salud, postura, experiencia, combos, leyendas y jefes
+    │   ├── MenuModalScene.ts    # Códice gótico, estado, arsenal, profecía y controles
+    │   ├── CharacterDialogueScene.ts # Diálogos in-game con retratos
+    │   ├── InventoryScene.ts    # Arsenal rápido y tablillas sagradas
+    │   └── ShalemMinigameScene.ts # Minijuegos de trivia y dones abismales
+    └── main.ts                  # Inicialización y configuración de Phaser
 ```
 
 ---
 
-## 🎮 Controles
-
-| Tecla / Control | Acción |
-|---|---|
-| `[A]` / `[D]` o Flechas | Caminar hacia la izquierda / derecha (con animación fluida) |
-| `[W]` / `[S]` o Flechas | Desplazamiento en profundidad vertical (Arena 2.5D) |
-| `[J]` | Ataque ligero (Combos progresivos) |
-| `[K]` | Ataque pesado / Postura de Guardia sostenida |
-| `[L]` o `[ESPACIO]` | Esquiva / Dash con estela de invulnerabilidad |
-| `[TAB]` | Alternar control activo entre Thomas y Khaterine |
-| `[T]` o `[Q]` | Lanzar arma equipada para aturdir a distancia |
-| `[E]` | Recoger arma del suelo / Hablar con NPCs y compañeros |
-| `[C]` | Abrir diálogo lore con el compañero cercano |
-| `[M]` | Abrir Minijuego de Shalem al llenar la barra de *Level Up* |
-| `[P]` | Menú gótico de pausa, arsenal e instrucciones |
-| `[I]` | Inventario rápido y consulta de tablillas de la profecía |
-| `[N]` | Silenciar / Activar sonido (Web Audio) |
-| `[1]` / `[2]` / `[3]` | Atajos de depuración para transitar entre los Actos I, II y III |
-
----
-
-## 🛠️ Comandos de Instalación y Desarrollo
+## 🛠️ Comandos de Instalación, Pruebas y Compilación
 
 ```bash
-# 1. Instalar dependencias
+# 1. Instalar dependencias del proyecto
 npm install
 
-# 2. Iniciar servidor de desarrollo con Vite (puerto 3000)
+# 2. Iniciar servidor de desarrollo en local (puerto 3000)
 npm run dev
 
-# 3. Ejecutar suite de pruebas unitarias con Vitest
+# 3. Ejecutar la suite completa de pruebas unitarias (Vitest)
 npm test
 
-# 4. Compilar para producción (TypeScript + Vite Bundle)
+# 4. Compilar el paquete optimizado para producción
 npm run build
 ```
 
 ---
 
-*Desarrollado con dedicación para dar vida a la visión literaria de **Kevin**.*
+*Proyecto desarrollado con máxima dedicación para dar vida jugable y visual a la obra de **Kevin**.*

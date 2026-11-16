@@ -30,16 +30,18 @@ export class MenuModalScene extends Phaser.Scene {
   }
 
   public create(): void {
-    // 0. Sleep HUDScene so HUD elements don't bleed through or conflict with the modal
+    // 0. Sleep and completely HIDE HUDScene so HUD elements don't bleed through or conflict with the modal
     if (this.scene.isActive('HUDScene')) {
       this.scene.sleep('HUDScene');
+      this.scene.setVisible(false, 'HUDScene');
     }
+    this.scene.bringToTop('MenuModalScene');
 
     // 1. Dim Dark Background Overlay (opaque enough to keep focus completely on the modal)
-    this.add.rectangle(320, 180, 640, 360, 0x05030a, 0.94).setInteractive();
+    this.add.rectangle(320, 180, 640, 360, 0x05030a, 0.95).setInteractive().setDepth(99);
 
     // 2. Modal Main Frame Container (Scale animation)
-    this.modalContainer = this.add.container(320, 180);
+    this.modalContainer = this.add.container(320, 180).setDepth(100);
     this.modalContainer.setScale(0.85);
     this.modalContainer.setAlpha(0);
 
@@ -283,9 +285,7 @@ export class MenuModalScene extends Phaser.Scene {
       { label: 'Progreso de Nivel (Shalem)', val: `Nivel ${this.player.levelUp.level} (${this.player.levelUp.currentExp}/${this.player.levelUp.maxExp} EXP)`, col: '#ffd700', pct: this.player.levelUp.maxExp > 0 ? this.player.levelUp.currentExp / this.player.levelUp.maxExp : 0 }
     ];
 
-    const statusObjects: Phaser.GameObjects.GameObject[] = [
-      cardBg, portrait, nameText, roleText, traitBox, traitText, statsBg, statsHeader
-    ];
+    this.contentContainer.add([cardBg, portrait, nameText, roleText, traitBox, traitText, statsBg, statsHeader]);
 
     const barW = 280;
     stats.forEach((s, i) => {
@@ -308,10 +308,8 @@ export class MenuModalScene extends Phaser.Scene {
       const fillW = Math.max(0, Math.min(barW, barW * safePct));
       const barFill = this.add.rectangle(-40 + fillW / 2, sy + 14, fillW, 6, Phaser.Display.Color.HexStringToColor(s.col).color);
 
-      statusObjects.push(labelText, valText, barBg, barFill);
+      this.contentContainer.add([labelText, valText, barBg, barFill]);
     });
-
-    this.contentContainer.add(statusObjects);
   }
 
   // ==========================================
@@ -686,7 +684,8 @@ export class MenuModalScene extends Phaser.Scene {
       duration: 160,
       ease: 'Back.easeIn',
       onComplete: () => {
-        if (this.scene.isSleeping('HUDScene')) {
+        if (this.scene.isSleeping('HUDScene') || this.scene.isActive('HUDScene')) {
+          this.scene.setVisible(true, 'HUDScene');
           this.scene.wake('HUDScene');
         }
         this.scene.stop('MenuModalScene');
