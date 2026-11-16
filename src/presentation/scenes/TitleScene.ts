@@ -216,62 +216,49 @@ export class TitleScene extends Phaser.Scene {
 
     this.menuContainer.add([bgOuter, bgInner, titleText, divider]);
 
-    // 1. Button "Continuar partida" — enabled when a checkpoint exists in localStorage
+    // 1. Button "Continuar partida" — opens scenario selector allowing player to pick any act
     const checkpoint = this.loadCheckpoint();
     const hasSave = !!checkpoint;
 
-    const btnContinueBg = this.add.rectangle(0, -70, boxW - 20, 24,
-      hasSave ? 0x1a1030 : 0x0f0b1a, hasSave ? 0.95 : 0.8
-    )
-      .setStrokeStyle(1, hasSave ? 0xd4af37 : 0x2b2238);
+    const btnContinueBg = this.add.rectangle(0, -70, boxW - 20, 24, 0x1a1030, 0.95)
+      .setStrokeStyle(1.5, 0xd4af37)
+      .setInteractive({ useHandCursor: true });
 
-    const actNames: Record<number, string> = { 1: 'Oakhaven', 2: 'Londinium', 3: 'Catedral Invertida' };
+    const actNames: Record<number, string> = {
+      1: 'I · Oakhaven',
+      2: 'II · Campanario',
+      3: 'III · Gran Puente',
+      4: 'IV · Londinium',
+      5: 'V · Catedral Invertida'
+    };
     const continueLabel = hasSave
-      ? `Continuar · ${actNames[checkpoint!.scenarioIndex] || 'Acto ' + checkpoint!.scenarioIndex}`
-      : 'Continuar · sin partida';
+      ? `Continuar partida · Elegir Acto (${actNames[checkpoint!.scenarioIndex] || 'Acto ' + checkpoint!.scenarioIndex})`
+      : 'Continuar partida · Elegir Acto';
 
     const btnContinueText = this.add.text(0, -70, continueLabel, {
-      fontFamily: hasSave ? 'Cinzel, sans-serif' : 'sans-serif',
-      fontSize: '9px',
-      color: hasSave ? '#e8d8ff' : '#5e5570',
-      fontStyle: hasSave ? 'bold' : 'italic'
+      fontFamily: 'Cinzel, sans-serif',
+      fontSize: '8px',
+      color: '#ffd700',
+      fontStyle: 'bold'
     }).setOrigin(0.5);
 
-    if (hasSave) {
-      btnContinueBg.setInteractive({ useHandCursor: true });
-      btnContinueBg.on('pointerover', () => {
-        btnContinueBg.setFillStyle(0x2a1440, 0.98);
-        btnContinueBg.setStrokeStyle(1.5, 0xffd700);
-        btnContinueText.setColor('#ffffff');
-      });
-      btnContinueBg.on('pointerout', () => {
-        btnContinueBg.setFillStyle(0x1a1030, 0.95);
-        btnContinueBg.setStrokeStyle(1, 0xd4af37);
-        btnContinueText.setColor('#e8d8ff');
-      });
-      btnContinueBg.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-        pointer.event.stopPropagation();
-        if (!this.activeModalContainer) {
-          this.audio.playSfx('menu_select');
-          this.cameras.main.fade(300, 0, 0, 0);
-          this.time.delayedCall(320, () => {
-            const cfg = this.getContinueLoadingConfig(checkpoint!.scenarioIndex);
-            this.scene.start('LoadingScene', {
-              targetScene: 'GameScene',
-              targetData: {
-                characterId: checkpoint!.characterId,
-                scenarioIndex: checkpoint!.scenarioIndex
-              },
-              imageKey: cfg.image,
-              chapterTitle: cfg.title,
-              storyText: cfg.story,
-              tipText: cfg.tip,
-              minDurationMs: 1800
-            });
-          });
-        }
-      });
-    }
+    btnContinueBg.on('pointerover', () => {
+      btnContinueBg.setFillStyle(0x351952, 0.98);
+      btnContinueBg.setStrokeStyle(1.5, 0xffe680);
+      btnContinueText.setColor('#ffffff');
+    });
+    btnContinueBg.on('pointerout', () => {
+      btnContinueBg.setFillStyle(0x1a1030, 0.95);
+      btnContinueBg.setStrokeStyle(1.5, 0xd4af37);
+      btnContinueText.setColor('#ffd700');
+    });
+    btnContinueBg.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      pointer.event.stopPropagation();
+      if (!this.activeModalContainer) {
+        this.audio.playSfx('menu_select');
+        this.showScenarioSelectModal(checkpoint || undefined);
+      }
+    });
 
     this.menuContainer.add([btnContinueBg, btnContinueText]);
 
@@ -817,6 +804,194 @@ export class TitleScene extends Phaser.Scene {
     });
   }
 
+  // ==========================================
+  // MODAL: SELECCIÓN DE ESCENARIO (CONTINUAR)
+  // ==========================================
+  private showScenarioSelectModal(checkpoint?: { characterId: string; scenarioIndex: number }): void {
+    this.closeModal();
+
+    this.activeModalContainer = this.add.container(320, 180).setDepth(55);
+
+    const dimBg = this.add.rectangle(0, 0, 640, 360, 0x040208, 0.85).setInteractive();
+    dimBg.on('pointerdown', (p: Phaser.Input.Pointer) => p.event.stopPropagation());
+
+    const frameW = 500;
+    const frameH = 310;
+    const winBg = this.add.rectangle(0, 0, frameW, frameH, 0x0c0817, 0.98)
+      .setStrokeStyle(2, 0xd4af37);
+    const winInner = this.add.rectangle(0, 0, frameW - 8, frameH - 8)
+      .setStrokeStyle(1, 0x5a3e75);
+
+    const title = this.add.text(0, -132, '✦ ELEGIR ESCENARIO PARA CONTINUAR ✦', {
+      fontFamily: 'Cinzel, Georgia, serif',
+      fontSize: '12px',
+      color: '#ffd700',
+      fontStyle: 'bold'
+    }).setOrigin(0.5);
+
+    let activeCharId: CharacterId = (checkpoint && checkpoint.characterId === 'khaterine') ? 'khaterine' : 'thomas';
+
+    // Character Switcher Pill
+    const charPillBg = this.add.rectangle(0, -108, 320, 20, 0x1d132b)
+      .setStrokeStyle(1, 0x7e5999)
+      .setInteractive({ useHandCursor: true });
+
+    const charPillText = this.add.text(0, -108, `LÍDER INICIAL: [ ${activeCharId.toUpperCase()} ] · Clic para alternar`, {
+      fontFamily: 'monospace',
+      fontSize: '8.5px',
+      color: '#ffd700',
+      fontStyle: 'bold'
+    }).setOrigin(0.5);
+
+    charPillBg.on('pointerover', () => {
+      charPillBg.setFillStyle(0x351b52);
+      charPillBg.setStrokeStyle(1.5, 0xffd700);
+      charPillText.setColor('#ffffff');
+    });
+    charPillBg.on('pointerout', () => {
+      charPillBg.setFillStyle(0x1d132b);
+      charPillBg.setStrokeStyle(1, 0x7e5999);
+      charPillText.setColor('#ffd700');
+    });
+    charPillBg.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      p.event.stopPropagation();
+      this.audio.playSfx('menu_select');
+      activeCharId = activeCharId === 'thomas' ? 'khaterine' : 'thomas';
+      charPillText.setText(`LÍDER INICIAL: [ ${activeCharId.toUpperCase()} ] · Clic para alternar`);
+    });
+
+    this.activeModalContainer.add([dimBg, winBg, winInner, title, charPillBg, charPillText]);
+
+    const scenarios = [
+      {
+        act: 1,
+        tag: 'ACTO I',
+        name: 'OAKHAVEN (ALDEA EN LLAMAS)',
+        sub: 'Caps I–VI · Piras de la Inquisición, Padre Cedric y Madre Morwenna'
+      },
+      {
+        act: 2,
+        tag: 'ACTO II',
+        name: 'EL CAMPANARIO Y GRANERO DEL SUR',
+        sub: 'Caps VII–IX · Elowen en la Celda, Pájaro de Madera y Crisol de Bronce'
+      },
+      {
+        act: 3,
+        tag: 'ACTO III',
+        name: 'EL GRAN PUENTE DE PIEDRA',
+        sub: 'Caps X–XIII · Camino de los Herejes, Refugiados y Capitán Áureo Vane'
+      },
+      {
+        act: 4,
+        tag: 'ACTO IV',
+        name: 'LONDINIUM — LA CIUDADELA DORADA',
+        sub: 'Caps XIV–XVII · Salón de los Espejos, Ley del Deseo y Rex Malphas (Alaric)'
+      },
+      {
+        act: 5,
+        tag: 'ACTO V',
+        name: 'LA CATEDRAL INVERTIDA — EL ABISMO',
+        sub: 'Caps XVIII–XX · Forja de Alba Gris, Juicio de Astaroth y Primer Amanecer'
+      }
+    ];
+
+    const startY = -78;
+    const rowH = 34;
+
+    scenarios.forEach((s, idx) => {
+      const cy = startY + idx * (rowH + 4);
+      const isCheckpoint = !!(checkpoint && checkpoint.scenarioIndex === s.act);
+
+      const rowBg = this.add.rectangle(0, cy, 460, rowH, isCheckpoint ? 0x2e1a42 : 0x160f24)
+        .setStrokeStyle(isCheckpoint ? 1.5 : 1, isCheckpoint ? 0xffd700 : 0x5a3d75)
+        .setInteractive({ useHandCursor: true });
+
+      const tagText = this.add.text(-215, cy - 6, s.tag, {
+        fontFamily: 'Cinzel, monospace',
+        fontSize: '9px',
+        color: isCheckpoint ? '#ffd700' : '#d2bfff',
+        fontStyle: 'bold'
+      }).setOrigin(0, 0.5);
+
+      const nameText = this.add.text(-155, cy - 6, s.name, {
+        fontFamily: 'Cinzel, sans-serif',
+        fontSize: '8.5px',
+        color: isCheckpoint ? '#ffffff' : '#e6dcfa',
+        fontStyle: 'bold'
+      }).setOrigin(0, 0.5);
+
+      const subText = this.add.text(-215, cy + 7, s.sub, {
+        fontFamily: 'sans-serif',
+        fontSize: '7px',
+        color: isCheckpoint ? '#ffea9f' : '#8f7da8'
+      }).setOrigin(0, 0.5);
+
+      let badge: Phaser.GameObjects.Text | undefined;
+      if (isCheckpoint) {
+        badge = this.add.text(215, cy, '★ ÚLTIMO CHECKPOINT ★', {
+          fontFamily: 'monospace',
+          fontSize: '7.5px',
+          color: '#ffd700',
+          backgroundColor: '#4a2608',
+          padding: { x: 4, y: 2 }
+        }).setOrigin(1, 0.5);
+      }
+
+      rowBg.on('pointerover', () => {
+        rowBg.setFillStyle(0x3d2059);
+        rowBg.setStrokeStyle(1.5, 0xffe680);
+        nameText.setColor('#ffffff');
+      });
+      rowBg.on('pointerout', () => {
+        rowBg.setFillStyle(isCheckpoint ? 0x2e1a42 : 0x160f24);
+        rowBg.setStrokeStyle(isCheckpoint ? 1.5 : 1, isCheckpoint ? 0xffd700 : 0x5a3d75);
+        nameText.setColor(isCheckpoint ? '#ffffff' : '#e6dcfa');
+      });
+
+      rowBg.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+        pointer.event.stopPropagation();
+        this.audio.playSfx('menu_select');
+        this.cameras.main.fade(300, 0, 0, 0);
+        this.time.delayedCall(320, () => {
+          const cfg = this.getContinueLoadingConfig(s.act);
+          this.scene.start('LoadingScene', {
+            targetScene: 'GameScene',
+            targetData: {
+              characterId: activeCharId,
+              scenarioIndex: s.act
+            },
+            imageKey: cfg.image,
+            chapterTitle: cfg.title,
+            storyText: cfg.story,
+            tipText: cfg.tip,
+            minDurationMs: 2000
+          });
+        });
+      });
+
+      this.activeModalContainer?.add([rowBg, tagText, nameText, subText]);
+      if (badge && this.activeModalContainer) this.activeModalContainer.add(badge);
+    });
+
+    // Close button
+    const closeBtn = this.add.text(0, 130, '[ VOLVER AL MENÚ ]', {
+      fontFamily: 'monospace',
+      fontSize: '9.5px',
+      color: '#bba8d4',
+      backgroundColor: '#1b1226',
+      padding: { x: 10, y: 4 }
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+    closeBtn.on('pointerover', () => closeBtn.setColor('#ffd700'));
+    closeBtn.on('pointerout', () => closeBtn.setColor('#bba8d4'));
+    closeBtn.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      p.event.stopPropagation();
+      this.closeModal();
+    });
+
+    this.activeModalContainer?.add(closeBtn);
+  }
+
   /** Read the lightweight checkpoint from localStorage. Returns null if none. */
   private loadCheckpoint(): { characterId: string; scenarioIndex: number; timestamp: number } | null {
     try {
@@ -838,16 +1013,28 @@ export class TitleScene extends Phaser.Scene {
         tip: '«Shalem: Habla con Elowen [E] para recibir su bendición y con el Padre Cedric para obtener el Rosario de Madera.»'
       },
       2: {
+        image: 'loading_concept_art',
+        title: 'ACTO II — EL CAMPANARIO Y EL GRANERO DEL SUR',
+        story: '«Retomarás la gesta en el Campanario. Elowen resiste el tormento de la sal gruesa en lo alto de la torre. El Colmillo del Sauce Negro aguarda bajo la losa del granero.»',
+        tip: '«Shalem: Elowen te entregará su pájaro de madera [E] con el mensaje que guiará la fuga hacia el norte.»'
+      },
+      3: {
+        image: 'loading_bridge_journey',
+        title: 'ACTO III — EL GRAN PUENTE: EL CAMINO DE LOS HEREJES',
+        story: '«Retomarás el asedio en el Gran Puente de Piedra. El convoy de refugiados de Martín y Tobías intenta cruzar el desfiladero mientras el Capitán Áureo Vane bloquea el paso.»',
+        tip: '«Táctica de Combate: Los caballeros áureos portan escudos de torre. ¡Usa ataques pesados [K] o contraataques con Parry [L]!»'
+      },
+      4: {
         image: 'loading_londinium_gate',
-        title: 'ACTO II — LONDINIUM: LA CIUDADELA DORADA',
+        title: 'ACTO IV — LONDINIUM: LA CIUDADELA DORADA',
         story: '«Retomarás el asalto a la Ciudadela Dorada. Elowen permanece encadenada en las mazmorras de Londinium. El Rex Malphas aguarda en su trono astral.»',
         tip: '«Shalem: Busca a Elowen en las mazmorras [E] antes de enfrentar al falso rey. ¡Su bendición te dará fuerzas!»'
       },
-      3: {
+      5: {
         image: 'loading_shalem_wall',
-        title: 'ACTO III — LA CATEDRAL INVERTIDA: EL ABISMO',
-        story: '«Retomarás la batalla en la Catedral Invertida. Elowen ha sacrificado su Gota de Luz Divina para forjar Alba Gris. El demonio Astaroth te espera.»',
-        tip: '«Shalem: Habla con Elowen [E] antes del combate final. Su última bendición puede ser la diferencia entre la victoria y la ruina.»'
+        title: 'ACTO V — LA CATEDRAL INVERTIDA: EL SOL DEL ABISMO',
+        story: '«Retomarás la batalla en la Catedral Invertida. Elowen ha sacrificado su Gota de Luz Divina para forjar Alba Gris. El demonio primordial Astaroth te espera.»',
+        tip: '«Shalem: Habla con Elowen [E] antes del combate final. Su bendición despierta la Onda Sagrada en Alba Gris.»'
       }
     };
     return configs[scenarioIndex] || configs[1];

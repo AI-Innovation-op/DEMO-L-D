@@ -99,7 +99,54 @@ export class MenuModalScene extends Phaser.Scene {
     // Content container
     this.contentContainer = this.add.container(0, 15);
 
-    this.modalContainer.add([frameBg, innerBorder, titleText, closeBtn]);
+    // Bottom Action Bar: [⮌ VOLVER AL MENÚ INICIAL] and [▶ VOLVER A LA PARTIDA]
+    const btnMenuBg = this.add.rectangle(-115, 134, 210, 24, 0x2e111d)
+      .setStrokeStyle(1.5, 0xb83d52)
+      .setInteractive({ useHandCursor: true });
+
+    const btnMenuText = this.add.text(-115, 134, '⮌ VOLVER AL MENÚ INICIAL', {
+      fontFamily: 'Cinzel, monospace',
+      fontSize: '8.5px',
+      color: '#ffb3ba',
+      fontStyle: 'bold'
+    }).setOrigin(0.5);
+
+    btnMenuBg.on('pointerover', () => {
+      btnMenuBg.setFillStyle(0x4a1827);
+      btnMenuBg.setStrokeStyle(1.5, 0xffd700);
+      btnMenuText.setColor('#ffffff');
+    });
+    btnMenuBg.on('pointerout', () => {
+      btnMenuBg.setFillStyle(0x2e111d);
+      btnMenuBg.setStrokeStyle(1.5, 0xb83d52);
+      btnMenuText.setColor('#ffb3ba');
+    });
+    btnMenuBg.on('pointerdown', () => this.returnToMainMenu());
+
+    const btnResumeBg = this.add.rectangle(115, 134, 210, 24, 0x142b1a)
+      .setStrokeStyle(1.5, 0x3d9456)
+      .setInteractive({ useHandCursor: true });
+
+    const btnResumeText = this.add.text(115, 134, '▶ VOLVER A LA PARTIDA', {
+      fontFamily: 'Cinzel, monospace',
+      fontSize: '8.5px',
+      color: '#b3ffc6',
+      fontStyle: 'bold'
+    }).setOrigin(0.5);
+
+    btnResumeBg.on('pointerover', () => {
+      btnResumeBg.setFillStyle(0x1d4026);
+      btnResumeBg.setStrokeStyle(1.5, 0xffd700);
+      btnResumeText.setColor('#ffffff');
+    });
+    btnResumeBg.on('pointerout', () => {
+      btnResumeBg.setFillStyle(0x142b1a);
+      btnResumeBg.setStrokeStyle(1.5, 0x3d9456);
+      btnResumeText.setColor('#b3ffc6');
+    });
+    btnResumeBg.on('pointerdown', () => this.closeMenu());
+
+    this.modalContainer.add([frameBg, innerBorder, titleText, closeBtn, btnMenuBg, btnMenuText, btnResumeBg, btnResumeText]);
     this.tabButtons.forEach(btn => this.modalContainer.add([btn.bg, btn.text]));
     this.modalContainer.add(this.contentContainer);
 
@@ -577,6 +624,29 @@ export class MenuModalScene extends Phaser.Scene {
     });
 
     this.contentContainer.add([muteTogglePill, muteToggleText]);
+  }
+
+  private returnToMainMenu(): void {
+    this.audio.playSfx('menu_select');
+
+    // Attempt to persist latest progress
+    const gameScene = this.scene.get('GameScene') as unknown as { saveCheckpoint?: () => void };
+    if (gameScene && typeof gameScene.saveCheckpoint === 'function') {
+      try {
+        gameScene.saveCheckpoint();
+      } catch { /* ignore */ }
+    }
+
+    if (this.scene.isActive('HUDScene')) {
+      this.scene.stop('HUDScene');
+    }
+
+    this.cameras.main.fade(300, 0, 0, 0);
+    this.time.delayedCall(320, () => {
+      this.scene.stop('MenuModalScene');
+      this.scene.stop('GameScene');
+      this.scene.start('TitleScene');
+    });
   }
 
   private closeMenu(): void {
