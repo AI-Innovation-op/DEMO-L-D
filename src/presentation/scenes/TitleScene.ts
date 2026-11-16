@@ -409,10 +409,25 @@ export class TitleScene extends Phaser.Scene {
     // Card 2: Khaterine
     const c2 = this.createCharCard(105, 5, 'khaterine', 'KHATERINE', 'Hechicera del Abismo', 'Magia rúnica a distancia, poderosa y resistente.', 'khaterine_idle');
 
-    // Close button
-    const closeBtn = this.add.text(0, 105, '[ VOLVER AL MENÚ ]', {
+    // Close & Quick Action buttons
+    const quickBtn = this.add.text(-80, 105, '⚡ ACCIÓN RÁPIDA (COMBATE)', {
+      fontFamily: 'Cinzel, monospace',
+      fontSize: '8px',
+      color: '#ffd700',
+      backgroundColor: '#1b2612',
+      padding: { x: 8, y: 4 }
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+    quickBtn.on('pointerover', () => quickBtn.setColor('#ffffff'));
+    quickBtn.on('pointerout', () => quickBtn.setColor('#ffd700'));
+    quickBtn.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      p.event.stopPropagation();
+      this.startQuickGame(this.selectedCharacter);
+    });
+
+    const closeBtn = this.add.text(90, 105, '[ VOLVER AL MENÚ ]', {
       fontFamily: 'monospace',
-      fontSize: '9px',
+      fontSize: '8px',
       color: '#bba8d4',
       backgroundColor: '#1b1226',
       padding: { x: 8, y: 4 }
@@ -425,7 +440,27 @@ export class TitleScene extends Phaser.Scene {
       this.closeModal();
     });
 
-    this.activeModalContainer.add([c1, c2, closeBtn]);
+    this.activeModalContainer.add([c1, c2, quickBtn, closeBtn]);
+  }
+
+  private startQuickGame(charId: CharacterId = 'thomas'): void {
+    SessionStateStore.getInstance().resetToDefaults(charId, 1);
+    this.audio.playSfx('dodge');
+    this.cameras.main.fade(300, 0, 0, 0);
+    this.time.delayedCall(320, () => {
+      this.scene.start('LoadingScene', {
+        targetScene: 'GameScene',
+        targetData: {
+          characterId: charId,
+          scenarioIndex: 1
+        },
+        imageKey: 'loading_pyre_remains',
+        chapterTitle: 'ACTO I — CENIZAS EN OAKHAVEN',
+        storyText: '«Thomas y Khaterine empuñan sus armas ante la pira de los herejes. Shalem observa desde el muro... La batalla comienza.»',
+        tipText: '«Consejo: Usa [J] para golpe ligero y [K] para golpe pesado capaz de romper escudos.»',
+        minDurationMs: 1200
+      });
+    });
   }
 
   private createCharCard(

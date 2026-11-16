@@ -284,7 +284,13 @@ export class GameScene extends Phaser.Scene {
     this.playerShadow = this.add.ellipse(initX, initY, 26, 8, 0x000000, 0.45).setDepth(initY - 1);
     const playerTex = this.player.id === 'thomas' ? 'thomas_idle' : 'khaterine_idle';
     const playerOriginY = this.player.id === 'thomas' ? 0.9 : 1.0;
-    this.playerSprite = this.add.sprite(initX, initY, playerTex).setOrigin(0.5, playerOriginY).setDepth(initY);
+    this.playerSprite = this.normalizeSprite(
+      this.add.sprite(initX, initY, playerTex),
+      58,
+      72,
+      0.5,
+      playerOriginY
+    ).setDepth(initY);
 
     // 6. Ally Companion (Walking alongside in 2.5D)
     const allyInitX = 65;
@@ -293,13 +299,25 @@ export class GameScene extends Phaser.Scene {
     this.allyShadow = this.add.ellipse(allyInitX, allyInitY, 24, 7, 0x000000, 0.4).setDepth(allyInitY - 1);
     const allyTex = this.allyChar.id === 'thomas' ? 'thomas_idle' : 'khaterine_idle';
     const allyOriginY = this.allyChar.id === 'thomas' ? 0.9 : 1.0;
-    this.allySprite = this.add.sprite(allyInitX, allyInitY, allyTex).setOrigin(0.5, allyOriginY).setAlpha(0.92).setDepth(allyInitY);
+    this.allySprite = this.normalizeSprite(
+      this.add.sprite(allyInitX, allyInitY, allyTex),
+      58,
+      72,
+      0.5,
+      allyOriginY
+    ).setAlpha(0.92).setDepth(allyInitY);
 
     // 7. Shalem Sprite (Cat Companion in 2.5D)
     const catInitX = 85;
     const catInitY = 268;
     this.shalemShadow = this.add.ellipse(catInitX, catInitY, 20, 6, 0x000000, 0.45).setDepth(catInitY - 1);
-    this.shalemSprite = this.add.image(catInitX, catInitY, 'shalem_cat').setOrigin(0.5, 1).setDepth(catInitY);
+    this.shalemSprite = this.normalizeSprite(
+      this.add.image(catInitX, catInitY, 'shalem_cat'),
+      40,
+      32,
+      0.5,
+      1
+    ).setDepth(catInitY);
 
     // 8. Floating Interaction Badge (Follows nearest interactable target)
     this.floatingPromptBadge = this.add.text(0, 0, '[E] HABLAR', {
@@ -692,8 +710,8 @@ export class GameScene extends Phaser.Scene {
     this.playerSprite.setTexture(playerTex);
     this.allySprite.setTexture(allyTex);
 
-    this.playerSprite.setOrigin(0.5, this.player.id === 'thomas' ? 0.9 : 1.0);
-    this.allySprite.setOrigin(0.5, this.allyChar.id === 'thomas' ? 0.9 : 1.0);
+    this.normalizeSprite(this.playerSprite, 58, 72, 0.5, this.player.id === 'thomas' ? 0.9 : 1.0);
+    this.normalizeSprite(this.allySprite, 58, 72, 0.5, this.allyChar.id === 'thomas' ? 0.9 : 1.0);
 
     this.triggerShalemBalloon(
       `Shalem: «¡Ahora juegas como ${this.player.name}! ${this.player.id === 'khaterine' ? '¡Purifica las sombras con tus rezos!' : '¡Avanza con tu espada y tus puños!' }»`,
@@ -1496,6 +1514,27 @@ export class GameScene extends Phaser.Scene {
         this.tweens.add({ targets: sprite, x: knockX, duration: 120, ease: 'Cubic.easeOut' });
       }
     }
+  }
+
+  /**
+   * Normalizes sprite dimensions to prevent oversized external textures
+   * (e.g. 1254x1254 raw illustrations) from covering the screen or breaking depth.
+   */
+  private normalizeSprite<T extends Phaser.GameObjects.Sprite | Phaser.GameObjects.Image>(
+    sprite: T,
+    maxW: number,
+    maxH: number,
+    originX = 0.5,
+    originY = 1.0
+  ): T {
+    sprite.setOrigin(originX, originY);
+    const nativeW = sprite.width;
+    const nativeH = sprite.height;
+    if (nativeW > maxW || nativeH > maxH) {
+      const scale = Math.min(maxW / nativeW, maxH / nativeH);
+      sprite.setScale(scale);
+    }
+    return sprite;
   }
 
   private spawnDamageNumber(x: number, y: number, amount: number | string, isCritical: boolean, customColor?: string): void {
@@ -2913,12 +2952,12 @@ export class GameScene extends Phaser.Scene {
     this.enemyShadows.set(e1.id, s1);
     this.enemyShadows.set(e2.id, s2);
 
-    this.enemySprites.set(e1.id, this.add.image(e1.position.x, e1.position.y, 'ash_prowler').setOrigin(0.5, 1).setDepth(245));
-    this.enemySprites.set(e2.id, this.add.image(e2.position.x, e2.position.y, 'fanatic_monk').setOrigin(0.5, 1).setDepth(280));
+    this.enemySprites.set(e1.id, this.normalizeSprite(this.add.image(e1.position.x, e1.position.y, 'ash_prowler'), 75, 48).setDepth(245));
+    this.enemySprites.set(e2.id, this.normalizeSprite(this.add.image(e2.position.x, e2.position.y, 'fanatic_monk'), 52, 70).setDepth(280));
 
     this.currentBoss = Boss.createMadreMorwenna();
     this.bossShadow = this.add.ellipse(530, 260, 32, 9, 0x000000, 0.5).setDepth(259);
-    this.bossSprite = this.add.image(530, 260, 'boss_morwenna').setOrigin(0.5, 1).setDepth(260);
+    this.bossSprite = this.normalizeSprite(this.add.image(530, 260, 'boss_morwenna'), 72, 86).setDepth(260);
     this.createBossMarker('Madre Morwenna', 530, 260);
   }
 
@@ -3058,7 +3097,7 @@ export class GameScene extends Phaser.Scene {
 
       // Spawn Elowen NPC near the garden fence
       this.elowenShadow = this.add.ellipse(270, 225, 24, 7, 0x000000, 0.45).setDepth(224);
-      this.elowenSprite = this.add.image(270, 225, 'elowen_npc').setOrigin(0.5, 1).setDepth(225);
+      this.elowenSprite = this.normalizeSprite(this.add.image(270, 225, 'elowen_npc'), 48, 68).setDepth(225);
 
       this.tweens.add({
         targets: this.elowenSprite,
@@ -3071,7 +3110,7 @@ export class GameScene extends Phaser.Scene {
 
       // Spawn Padre Cedric NPC holding torch
       this.cedricShadow = this.add.ellipse(160, 225, 24, 7, 0x000000, 0.45).setDepth(224);
-      this.cedricSprite = this.add.image(160, 225, 'padre_cedric').setOrigin(0.5, 1).setDepth(225);
+      this.cedricSprite = this.normalizeSprite(this.add.image(160, 225, 'padre_cedric'), 48, 68).setDepth(225);
 
       this.tweens.add({
         targets: this.cedricSprite,
@@ -3097,7 +3136,7 @@ export class GameScene extends Phaser.Scene {
 
       // Spawn Elowen NPC in Belltower cell (using canonical pixel art sprite 27x72)
       this.elowenShadow = this.add.ellipse(220, 225, 24, 7, 0x000000, 0.45).setDepth(224);
-      this.elowenSprite = this.add.image(220, 225, 'elowen_npc').setOrigin(0.5, 1).setDepth(225);
+      this.elowenSprite = this.normalizeSprite(this.add.image(220, 225, 'elowen_npc'), 48, 68).setDepth(225);
 
       this.tweens.add({
         targets: this.elowenSprite,
@@ -3118,17 +3157,14 @@ export class GameScene extends Phaser.Scene {
       this.enemyShadows.set(e1.id, s1);
       this.enemyShadows.set(e2.id, s2);
 
-      this.enemySprites.set(e1.id, this.add.image(e1.position.x, e1.position.y, 'inquisitor_torre').setOrigin(0.5, 1).setDepth(255));
-      this.enemySprites.set(e2.id, this.add.image(e2.position.x, e2.position.y, 'ash_prowler').setOrigin(0.5, 1).setDepth(280));
+      this.enemySprites.set(e1.id, this.normalizeSprite(this.add.image(e1.position.x, e1.position.y, 'inquisitor_torre'), 52, 70).setDepth(255));
+      this.enemySprites.set(e2.id, this.normalizeSprite(this.add.image(e2.position.x, e2.position.y, 'ash_prowler'), 75, 48).setDepth(280));
 
       // Boss Guardián del Crisol (pixel art scaled for battlefield balance)
       this.currentBoss = Boss.createGuardianCrisol();
       this.bossShadow = this.add.ellipse(520, 260, 32, 9, 0x000000, 0.5).setDepth(259);
       const bossTexKey = this.textures.exists('boss_guardian_crisol') ? 'boss_guardian_crisol' : 'boss_morwenna';
-      this.bossSprite = this.add.image(520, 260, bossTexKey).setOrigin(0.5, 1).setDepth(260);
-      if (this.bossSprite.height > 90) {
-        this.bossSprite.setDisplaySize(60, 85);
-      }
+      this.bossSprite = this.normalizeSprite(this.add.image(520, 260, bossTexKey), 72, 86).setDepth(260);
       this.createBossMarker('Inquisidor Mayor (Crisol)', 520, 260);
 
       const introText = introLines[0] ? `${introLines[0].speaker}: ${introLines[0].text}` : "Shalem: «Acto II: El Campanario y Granero»";
@@ -3141,7 +3177,7 @@ export class GameScene extends Phaser.Scene {
 
       // Spawn Elowen NPC escorting refugees
       this.elowenShadow = this.add.ellipse(170, 255, 24, 7, 0x000000, 0.45).setDepth(254);
-      this.elowenSprite = this.add.image(170, 255, 'elowen_npc').setOrigin(0.5, 1).setDepth(255);
+      this.elowenSprite = this.normalizeSprite(this.add.image(170, 255, 'elowen_npc'), 48, 68).setDepth(255);
 
       this.tweens.add({
         targets: this.elowenSprite,
@@ -3162,13 +3198,13 @@ export class GameScene extends Phaser.Scene {
       this.enemyShadows.set(g1.id, s1);
       this.enemyShadows.set(k1.id, s2);
 
-      this.enemySprites.set(g1.id, this.add.image(g1.position.x, g1.position.y, 'golden_guard').setOrigin(0.5, 1).setDepth(255));
-      this.enemySprites.set(k1.id, this.add.image(k1.position.x, k1.position.y, 'shield_knight').setOrigin(0.5, 1).setDepth(280));
+      this.enemySprites.set(g1.id, this.normalizeSprite(this.add.image(g1.position.x, g1.position.y, 'golden_guard'), 54, 72).setDepth(255));
+      this.enemySprites.set(k1.id, this.normalizeSprite(this.add.image(k1.position.x, k1.position.y, 'shield_knight'), 56, 72).setDepth(280));
 
       // Boss Capitán Áureo Vane
       this.currentBoss = Boss.createCapitanAureo();
       this.bossShadow = this.add.ellipse(520, 260, 32, 9, 0x000000, 0.5).setDepth(259);
-      this.bossSprite = this.add.image(520, 260, 'boss_capitan_aureo').setOrigin(0.5, 1).setDepth(260);
+      this.bossSprite = this.normalizeSprite(this.add.image(520, 260, 'boss_capitan_aureo'), 76, 88).setDepth(260);
       this.createBossMarker('Capitán Áureo Vane', 520, 260);
 
       const introText = introLines[0] ? `${introLines[0].speaker}: ${introLines[0].text}` : "Shalem: «Acto III: El Gran Puente de Piedra»";
@@ -3184,12 +3220,12 @@ export class GameScene extends Phaser.Scene {
       this.enemies.push(g1);
       const s1 = this.add.ellipse(400, 255, 24, 7, 0x000000, 0.45).setDepth(254);
       this.enemyShadows.set(g1.id, s1);
-      this.enemySprites.set(g1.id, this.add.image(g1.position.x, g1.position.y, 'golden_guard').setOrigin(0.5, 1).setDepth(255));
+      this.enemySprites.set(g1.id, this.normalizeSprite(this.add.image(g1.position.x, g1.position.y, 'golden_guard'), 54, 72).setDepth(255));
 
       // Boss Rex Malphas
       this.currentBoss = Boss.createRexMalphas();
       this.bossShadow = this.add.ellipse(520, 260, 32, 9, 0x000000, 0.5).setDepth(259);
-      this.bossSprite = this.add.image(520, 260, 'boss_malphas').setOrigin(0.5, 1).setDepth(260);
+      this.bossSprite = this.normalizeSprite(this.add.image(520, 260, 'boss_malphas'), 76, 88).setDepth(260);
       this.createBossMarker('Rex Malphas', 520, 260);
 
       const introText = introLines[0] ? `${introLines[0].speaker}: ${introLines[0].text}` : "Shalem: «Acto IV: Londinium»";
@@ -3197,7 +3233,7 @@ export class GameScene extends Phaser.Scene {
 
       // Spawn Elowen NPC — imprisoned near the dungeon gate in Londinium
       this.elowenShadow = this.add.ellipse(185, 268, 22, 6, 0x000000, 0.4).setDepth(267);
-      this.elowenSprite = this.add.image(185, 268, 'elowen_npc').setOrigin(0.5, 1).setDepth(268).setTint(0x9988aa);
+      this.elowenSprite = this.normalizeSprite(this.add.image(185, 268, 'elowen_npc'), 48, 68).setDepth(268).setTint(0x9988aa);
 
       this.tweens.add({
         targets: this.elowenSprite,
@@ -3220,12 +3256,12 @@ export class GameScene extends Phaser.Scene {
       this.enemies.push(sh1);
       const s1 = this.add.ellipse(390, 255, 24, 7, 0x000000, 0.45).setDepth(254);
       this.enemyShadows.set(sh1.id, s1);
-      this.enemySprites.set(sh1.id, this.add.image(sh1.position.x, sh1.position.y, 'abyssal_shadow').setOrigin(0.5, 1).setDepth(255));
+      this.enemySprites.set(sh1.id, this.normalizeSprite(this.add.image(sh1.position.x, sh1.position.y, 'abyssal_shadow'), 54, 72).setDepth(255));
 
       // Boss Astaroth (Entidad Primordial del Abismo)
       this.currentBoss = Boss.createAstaroth();
       this.bossShadow = this.add.ellipse(520, 260, 48, 12, 0x000000, 0.6).setDepth(259);
-      this.bossSprite = this.add.image(520, 260, 'boss_astaroth').setOrigin(0.5, 1).setDepth(260);
+      this.bossSprite = this.normalizeSprite(this.add.image(520, 260, 'boss_astaroth'), 96, 110).setDepth(260);
       this.createBossMarker('Astaroth', 520, 260);
 
       this.tweens.add({
@@ -3243,7 +3279,7 @@ export class GameScene extends Phaser.Scene {
 
       // Spawn Elowen NPC — weakened, offering her Gota de Luz Divina to forge Alba Gris
       this.elowenShadow = this.add.ellipse(150, 265, 22, 6, 0x000000, 0.35).setDepth(264);
-      this.elowenSprite = this.add.image(150, 265, 'elowen_npc').setOrigin(0.5, 1).setDepth(265).setAlpha(0.9);
+      this.elowenSprite = this.normalizeSprite(this.add.image(150, 265, 'elowen_npc'), 48, 68).setDepth(265).setAlpha(0.9);
 
       this.tweens.add({
         targets: this.elowenSprite,

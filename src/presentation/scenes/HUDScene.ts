@@ -52,24 +52,25 @@ export class HUDScene extends Phaser.Scene {
       fontFamily: 'monospace',
       fontSize: '8px',
       color: '#ffd700',
-      fontStyle: 'bold'
+      fontStyle: 'bold',
+      resolution: 2
     }).setDepth(45);
 
     // 1. Health Bar
-    this.add.text(12, 10, 'SALUD', { fontFamily: 'monospace', fontSize: '9px', color: '#ffaaaa' });
+    this.add.text(12, 10, 'SALUD', { fontFamily: 'monospace', fontSize: '9px', color: '#ffaaaa', resolution: 2 });
     this.playerHealthBg = this.add.rectangle(70, 14, 110, 10, 0x331111).setOrigin(0, 0.5);
     this.playerHealthBg.setStrokeStyle(1, 0x883333);
     this.playerHealthFill = this.add.rectangle(70, 14, 110, 10, 0x22cc44).setOrigin(0, 0.5);
-    this.playerHealthText = this.add.text(185, 10, '100/100', { fontFamily: 'monospace', fontSize: '9px', color: '#ffffff' });
+    this.playerHealthText = this.add.text(185, 10, '100/100', { fontFamily: 'monospace', fontSize: '9px', color: '#ffffff', resolution: 2 });
 
     // 2. Posture Bar
-    this.add.text(12, 24, 'GUARDIA', { fontFamily: 'monospace', fontSize: '9px', color: '#aaaaff' });
+    this.add.text(12, 24, 'GUARDIA', { fontFamily: 'monospace', fontSize: '9px', color: '#aaaaff', resolution: 2 });
     this.playerPostureBg = this.add.rectangle(70, 28, 110, 6, 0x111133).setOrigin(0, 0.5);
     this.playerPostureBg.setStrokeStyle(1, 0x333388);
     this.playerPostureFill = this.add.rectangle(70, 28, 110, 6, 0x4488ff).setOrigin(0, 0.5);
 
     // 3. Level Up Bar (Shalem Minigame Indicator)
-    this.add.text(12, 36, 'LVL UP', { fontFamily: 'monospace', fontSize: '9px', color: '#ddaaff' });
+    this.add.text(12, 36, 'LVL UP', { fontFamily: 'monospace', fontSize: '9px', color: '#ddaaff', resolution: 2 });
     this.levelUpBg = this.add.rectangle(70, 40, 110, 6, 0x221133).setOrigin(0, 0.5);
     this.levelUpBg.setStrokeStyle(1, 0x663399);
     this.levelUpFill = this.add.rectangle(70, 40, 0, 6, 0xaa44ff).setOrigin(0, 0.5);
@@ -79,7 +80,8 @@ export class HUDScene extends Phaser.Scene {
       fontSize: '8.5px',
       color: '#ffd700',
       backgroundColor: '#3b1d5c',
-      padding: { x: 4, y: 2 }
+      padding: { x: 4, y: 2 },
+      resolution: 2
     }).setVisible(false);
 
     // 4. Equipped Weapon Badge
@@ -88,32 +90,41 @@ export class HUDScene extends Phaser.Scene {
       fontSize: '9px',
       color: '#e2d4f0',
       stroke: '#000000',
-      strokeThickness: 2
+      strokeThickness: 2,
+      resolution: 2
     });
 
-    // 4.1 Story & Scenario Progress Bar
-    this.storyTitleText = this.add.text(12, 85, 'HISTORIA: ACTO I — OAKHAVEN (0%)', {
-      fontFamily: 'Cinzel, monospace',
-      fontSize: '8.5px',
-      color: '#ffd700',
-      fontStyle: 'bold'
-    });
+    // 4.1 Story & Immediate Objective Box (Prominent Gothic Ribbon)
+    this.add.rectangle(12, 87, 215, 20, 0x120a1f, 0.92)
+      .setOrigin(0, 0.5)
+      .setStrokeStyle(1.5, 0xd4af37)
+      .setDepth(45);
 
-    this.add.rectangle(12, 98, 168, 6, 0x140c24).setOrigin(0, 0.5).setStrokeStyle(1, 0x6e4b8a);
-    this.storyProgressFill = this.add.rectangle(12, 98, 0, 6, 0xffd700).setOrigin(0, 0.5);
-
-    this.storyObjectiveText = this.add.text(12, 106, 'OBJETIVO: Purga la guardia de la pira', {
-      fontFamily: 'sans-serif',
+    this.storyObjectiveText = this.add.text(18, 87, 'OBJETIVO: Purga la guardia de la pira', {
+      fontFamily: 'Cinzel, Georgia, serif',
       fontSize: '8px',
-      color: '#bbaacc'
-    });
+      color: '#ffd700',
+      fontStyle: 'bold',
+      resolution: 2
+    }).setOrigin(0, 0.5).setDepth(46);
+
+    this.storyTitleText = this.add.text(12, 102, 'HISTORIA: ACTO I — OAKHAVEN (0%)', {
+      fontFamily: 'Cinzel, monospace',
+      fontSize: '7.5px',
+      color: '#c5b0d6',
+      resolution: 2
+    }).setDepth(45);
+
+    this.add.rectangle(12, 110, 168, 3, 0x140c24).setOrigin(0, 0.5).setStrokeStyle(1, 0x5a3b75).setDepth(45);
+    this.storyProgressFill = this.add.rectangle(12, 110, 0, 3, 0xffd700).setOrigin(0, 0.5).setDepth(46);
 
     this.disarmWarningText = this.add.text(12, 122, '⚠ ¡DESARMADO! Pulsa [E] cerca de tu arma o ataca a puños', {
       fontFamily: 'sans-serif',
       fontSize: '9px',
       color: '#ff4444',
       backgroundColor: 'rgba(50,0,0,0.85)',
-      padding: { x: 4, y: 2 }
+      padding: { x: 4, y: 2 },
+      resolution: 2
     }).setVisible(false);
 
     // 5. Combo Text — Dedicated Arcade Position (Center-Top, below Boss Bar)
@@ -122,7 +133,8 @@ export class HUDScene extends Phaser.Scene {
       fontSize: '13px',
       color: '#ffd700',
       stroke: '#000000',
-      strokeThickness: 3
+      strokeThickness: 3,
+      resolution: 2
     }).setOrigin(0.5).setDepth(40);
 
     // 5.1 Top-Right Control Buttons with 100% Opaque Solid Background (Prevents any text overlap)
@@ -142,7 +154,8 @@ export class HUDScene extends Phaser.Scene {
       fontFamily: 'monospace',
       fontSize: '8px',
       color: audioAdapter.getIsMuted() ? '#ff7777' : '#aaffaa',
-      fontStyle: 'bold'
+      fontStyle: 'bold',
+      resolution: 2
     }).setOrigin(0.5).setDepth(47);
 
     audioBtnBg.on('pointerdown', () => {
@@ -164,7 +177,8 @@ export class HUDScene extends Phaser.Scene {
       fontFamily: 'Cinzel, monospace',
       fontSize: '8px',
       color: '#ffd700',
-      fontStyle: 'bold'
+      fontStyle: 'bold',
+      resolution: 2
     }).setOrigin(0.5).setDepth(47);
 
     dialogBtnBg.on('pointerover', () => {
@@ -197,7 +211,8 @@ export class HUDScene extends Phaser.Scene {
       fontFamily: 'Cinzel, monospace',
       fontSize: '8px',
       color: '#ffd700',
-      fontStyle: 'bold'
+      fontStyle: 'bold',
+      resolution: 2
     }).setOrigin(0.5).setDepth(47);
 
     menuBtnBg.on('pointerover', () => {
@@ -231,7 +246,8 @@ export class HUDScene extends Phaser.Scene {
       color: '#ffddaa',
       stroke: '#000',
       strokeThickness: 3,
-      fontStyle: 'bold'
+      fontStyle: 'bold',
+      resolution: 2
     }).setOrigin(0.5);
 
     this.bossHealthText = this.add.text(0, 0, '350 / 350 HP', {
@@ -239,7 +255,8 @@ export class HUDScene extends Phaser.Scene {
       fontSize: '7.5px',
       color: '#ffffff',
       stroke: '#000',
-      strokeThickness: 2
+      strokeThickness: 2,
+      resolution: 2
     }).setOrigin(0.5);
 
     this.bossContainer.add([bossBg, this.bossHealthFill, this.bossTitleText, this.bossHealthText]);
@@ -251,7 +268,8 @@ export class HUDScene extends Phaser.Scene {
       fontSize: '28px',
       color: '#ff0044',
       stroke: '#ffffff',
-      strokeThickness: 4
+      strokeThickness: 4,
+      resolution: 2
     }).setOrigin(0.5).setDepth(101).setVisible(false);
 
     // 8. Bottom Proximity Interaction Prompt
@@ -260,7 +278,8 @@ export class HUDScene extends Phaser.Scene {
       fontSize: '9.5px',
       color: '#ffd700',
       backgroundColor: 'rgba(11, 7, 18, 0.92)',
-      padding: { x: 10, y: 3 }
+      padding: { x: 10, y: 3 },
+      resolution: 2
     }).setOrigin(0.5).setDepth(50).setVisible(false);
 
     // 9. Bottom Arcade Controls Legend Bar (Fluid 2.5D Belt-Scroll Legend)
@@ -270,7 +289,8 @@ export class HUDScene extends Phaser.Scene {
     this.add.text(320, 351, 'WASD: 2.5D | J: Ataque/Magia | K: Fuerte | L: Guardia/Parry | Espacio: Esquivar | Tab: Cambiar | E: Hablar/Recoger | P: Códice & Menú', {
       fontFamily: 'monospace',
       fontSize: '7.5px',
-      color: '#d6c5eb'
+      color: '#d6c5eb',
+      resolution: 2
     }).setOrigin(0.5).setDepth(49);
 
     // Listen to Domain Events
