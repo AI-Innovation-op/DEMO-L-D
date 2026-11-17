@@ -13,6 +13,8 @@ import { StoryProgress } from '../../domain/story/StoryProgress';
 import { ProphecyRepository } from '../../domain/mission/Mission';
 import { Weapon } from '../../domain/weapon/Weapon';
 import { SessionStateStore } from '../../domain/save/SessionStateStore';
+import { EventBus } from '../../domain/shared/DomainEvent';
+import { FinisherStyle, FinisherTriggeredEvent } from '../../domain/combat/CombatTypes';
 
 export class GameScene extends Phaser.Scene {
   // Dual Characters (Thomas & Khaterine)
@@ -83,8 +85,16 @@ export class GameScene extends Phaser.Scene {
 
   // Proximity Interaction
   private activeInteractionTarget?: string;
-  private activeInteractionType?: 'elowen' | 'cedric' | 'censer' | 'shalem' | 'ally' | 'weapon';
+  private activeInteractionType?: 'finisher' | 'elowen' | 'cedric' | 'censer' | 'shalem' | 'ally' | 'weapon';
   private floatingPromptBadge?: Phaser.GameObjects.Text;
+
+  // Finisher & Hit-Stop Mechanics
+  private isFinisherActive: boolean = false;
+  private finisherTarget?: { isBoss: boolean; enemy?: Enemy; boss?: Boss; sprite: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image };
+  private isHitStopped: boolean = false;
+  private hitStopTimer: number = 0;
+  private hitStopTargetSprite?: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image;
+  private hitStopOriginalX: number = 0;
 
   // Environment & Scenarios
   private currentScenario: number = 1;
@@ -389,6 +399,24 @@ export class GameScene extends Phaser.Scene {
   }
 
   public update(_time: number, delta: number): void {
+    // 1. Arcade Hit-Stop Processing (Crunchy physical impact pause)
+    if (this.isHitStopped) {
+      this.hitStopTimer -= delta;
+      if (this.hitStopTargetSprite && this.hitStopTargetSprite.active) {
+        this.hitStopTargetSprite.x = this.hitStopOriginalX + (Math.random() * 4 - 2);
+      }
+      if (this.hitStopTimer <= 0) {
+        this.isHitStopped = false;
+        this.clearHitStopJitter();
+      }
+      return;
+    }
+
+    // 2. Cinematic Finisher lock
+    if (this.isFinisherActive) {
+      return;
+    }
+
     if (this.isTransitioningAct || this.player.state === CharacterState.DEAD) {
       if (this.player.state === CharacterState.DEAD) {
         if (!this.isGameOverModalOpen) {
@@ -731,7 +759,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   private executeContextInteraction(): void {
-    if (this.activeInteractionType === 'elowen') {
+    if (this.activeInteractionType === 'finisher') {
+      this.executeFinisherSequence();
+    } else if (this.activeInteractionType === 'elowen') {
       this.interactWithElowen();
     } else if (this.activeInteractionType === 'cedric') {
       this.interactWithCedric();
@@ -891,10 +921,49 @@ export class GameScene extends Phaser.Scene {
     const py = this.playerSprite.y;
 
     let closestDist = Infinity;
-    let targetType: 'elowen' | 'cedric' | 'censer' | 'shalem' | 'ally' | 'weapon' | undefined = undefined;
+    let targetType: 'finisher' | 'elowen' | 'cedric' | 'censer' | 'shalem' | 'ally' | 'weapon' | undefined = undefined;
     let targetLabel: string | undefined = undefined;
     let targetX = 0;
     let targetY = 0;
+
+    // 0. PRIORITY 1: Stunned / Broken Posture Enemies or Boss for Finisher [E]
+    this.finisherTarget = undefined;
+    if (!this.isActCleared && !this.isTransitioningAct && !this.isFinisherActive) {
+      // Check current Boss first
+      if (this.currentBoss && this.bossSprite && this.currentBoss.health > 0) {
+        const isVulnerable = this.currentBoss.posture <= 0 || this.currentBoss.state === 'STUNNED';
+        if (isVulnerable) {
+          const dist = Math.hypot(px - this.bossSprite.x, py - this.bossSprite.y);
+          if (dist < 80 && dist < closestDist) {
+            closestDist = dist;
+            targetType = 'finisher';
+            targetLabel = `¡REMATAR A ${this.currentBoss.name.toUpperCase()}!`;
+            targetX = this.bossSprite.x;
+            targetY = this.bossSprite.y - 55;
+            this.finisherTarget = { isBoss: true, boss: this.currentBoss, sprite: this.bossSprite };
+          }
+        }
+      }
+
+      // Check standard enemies
+      for (const enemy of this.enemies) {
+        if (!enemy.isAlive()) continue;
+        const sprite = this.enemySprites.get(enemy.id);
+        if (!sprite) continue;
+        const isVulnerable = enemy.posture <= 0 || enemy.state === 'STUNNED';
+        if (isVulnerable) {
+          const dist = Math.hypot(px - sprite.x, py - sprite.y);
+          if (dist < 75 && dist < closestDist) {
+            closestDist = dist;
+            targetType = 'finisher';
+            targetLabel = `¡REMATAR A ${enemy.name.toUpperCase()}!`;
+            targetX = sprite.x;
+            targetY = sprite.y - 45;
+            this.finisherTarget = { isBoss: false, enemy: enemy, sprite: sprite };
+          }
+        }
+      }
+    }
 
     // 0. Check Dropped Censer (Lamento de Oakhaven)
     if (this.droppedCenserSprite) {
@@ -968,11 +1037,26 @@ export class GameScene extends Phaser.Scene {
     this.activeInteractionTarget = targetLabel;
 
     if (targetType && targetLabel && this.floatingPromptBadge) {
-      const verb = (targetType === 'weapon' || targetType === 'censer') ? 'RECOGER' : 'HABLAR';
-      this.floatingPromptBadge
-        .setPosition(targetX, targetY)
-        .setText(`[E] ${verb}`)
-        .setVisible(true);
+      if (targetType === 'finisher') {
+        this.floatingPromptBadge
+          .setPosition(targetX, targetY)
+          .setText('⚡ [E] ¡REMATAR!')
+          .setColor('#ffd700')
+          .setBackgroundColor('rgba(65, 12, 38, 0.95)')
+          .setFontSize('9.5px')
+          .setStroke('#000000', 3)
+          .setVisible(true);
+      } else {
+        const verb = (targetType === 'weapon' || targetType === 'censer') ? 'RECOGER' : 'HABLAR';
+        this.floatingPromptBadge
+          .setPosition(targetX, targetY)
+          .setText(`[E] ${verb}`)
+          .setColor('#ffd700')
+          .setBackgroundColor('rgba(15, 8, 26, 0.9)')
+          .setFontSize('8px')
+          .setStroke('#000000', 0)
+          .setVisible(true);
+      }
     } else if (this.floatingPromptBadge) {
       this.floatingPromptBadge.setVisible(false);
     }
@@ -1070,6 +1154,9 @@ export class GameScene extends Phaser.Scene {
 
         const sprite = this.enemySprites.get(enemy.id);
         if (sprite) {
+          if (isHeavy) {
+            this.triggerHitStop(70, sprite);
+          }
           sprite.setTint(0xff3333);
           this.time.delayedCall(120, () => sprite.clearTint());
 
@@ -1149,6 +1236,7 @@ export class GameScene extends Phaser.Scene {
         if (this.currentBoss.isFlameShieldActive && isHeavy) {
           this.destroyBossShieldAura();
           this.audio.playSfx('shield_break');
+          this.triggerHitStop(110, this.bossSprite);
           this.cameras.main.shake(220, 0.02);
           this.spawnDamageNumber(this.currentBoss.position.x, this.currentBoss.position.y - 65, '¡ESCUDO ROTO!', true, '#ffd700');
           this.currentBoss.interruptAttack(1400);
@@ -1156,6 +1244,10 @@ export class GameScene extends Phaser.Scene {
         }
 
         const res = CombatUseCases.executeAttackOnBoss(this.player, this.currentBoss, isHeavy, false);
+
+        if (isHeavy) {
+          this.triggerHitStop(75, this.bossSprite);
+        }
 
         this.cameras.main.shake(isHeavy ? 200 : 140, isHeavy ? 0.016 : 0.01);
         this.spawnDamageNumber(this.currentBoss.position.x, this.currentBoss.position.y - 50, res.damageDealt, true);
@@ -1452,6 +1544,7 @@ export class GameScene extends Phaser.Scene {
   private triggerPerfectParry(sourceX: number, sourceY: number, isBoss: boolean, enemy?: Enemy): void {
     this.audio.playSfx('block');
     this.audio.playFinisherSound(false);
+    this.triggerHitStop(110);
 
     // Screen Flash & Camera Shake
     this.cameras.main.flash(200, 255, 240, 160);
@@ -1494,6 +1587,9 @@ export class GameScene extends Phaser.Scene {
 
     if (isBoss && this.currentBoss && this.bossSprite) {
       this.currentBoss.posture = Math.max(0, this.currentBoss.posture - 45);
+      if (this.currentBoss.posture === 0) {
+        this.currentBoss.interruptAttack(2000);
+      }
       this.currentBoss.health = Math.max(0, this.currentBoss.health - counterDamage);
       this.spawnDamageNumber(sourceX, sourceY - 45, counterDamage, true, '#ffd700');
       this.bossSprite.setTint(0xffeedd);
@@ -1503,6 +1599,9 @@ export class GameScene extends Phaser.Scene {
       }
     } else if (enemy) {
       enemy.posture = Math.max(0, enemy.posture - 50);
+      if (enemy.posture === 0) {
+        enemy.interruptAttack(2000);
+      }
       enemy.health = Math.max(0, enemy.health - counterDamage);
       this.spawnDamageNumber(sourceX, sourceY - 45, counterDamage, true, '#ffd700');
       const sprite = this.enemySprites.get(enemy.id);
@@ -1514,6 +1613,234 @@ export class GameScene extends Phaser.Scene {
         this.tweens.add({ targets: sprite, x: knockX, duration: 120, ease: 'Cubic.easeOut' });
       }
     }
+  }
+
+  // ==========================================
+  // FINISHER & HIT-STOP SYSTEM
+  // ==========================================
+  private triggerHitStop(durationMs: number, targetSprite?: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image): void {
+    this.isHitStopped = true;
+    this.hitStopTimer = durationMs;
+    this.hitStopTargetSprite = targetSprite;
+    if (targetSprite) {
+      this.hitStopOriginalX = targetSprite.x;
+    }
+  }
+
+  private clearHitStopJitter(): void {
+    if (this.hitStopTargetSprite && this.hitStopTargetSprite.active) {
+      this.hitStopTargetSprite.x = this.hitStopOriginalX;
+    }
+    this.hitStopTargetSprite = undefined;
+  }
+
+  private spawnFinisherSlash(x: number, y: number, angleDeg: number, tintColor: number, scaleMultiplier: number = 1.3): void {
+    const slash = this.add.image(x, y, 'particle_slash_heavy')
+      .setAngle(angleDeg)
+      .setScale(scaleMultiplier)
+      .setTint(tintColor)
+      .setAlpha(0.95)
+      .setDepth(y + 20);
+
+    this.tweens.add({
+      targets: slash,
+      scaleX: scaleMultiplier * 1.5,
+      scaleY: scaleMultiplier * 1.5,
+      alpha: 0,
+      duration: 220,
+      ease: 'Quad.easeOut',
+      onComplete: () => slash.destroy()
+    });
+  }
+
+  private spawnAshExplosion(x: number, y: number): void {
+    const ring = this.add.circle(x, y, 8, 0xffd700, 0.85).setDepth(y + 10);
+    this.tweens.add({
+      targets: ring,
+      radius: 65,
+      alpha: 0,
+      duration: 320,
+      ease: 'Quad.easeOut',
+      onComplete: () => ring.destroy()
+    });
+
+    for (let i = 0; i < 14; i++) {
+      const angle = (i / 14) * Math.PI * 2 + (Math.random() * 0.4 - 0.2);
+      const speed = Phaser.Math.Between(45, 110);
+      const isGold = Math.random() > 0.45;
+      const col = isGold ? 0xffd700 : 0x241133;
+      const r = Phaser.Math.Between(3, 5);
+
+      const p = this.add.circle(x, y, r, col, 0.9).setDepth(y + 11);
+      this.tweens.add({
+        targets: p,
+        x: x + Math.cos(angle) * speed,
+        y: y + Math.sin(angle) * speed * 0.7,
+        alpha: 0,
+        scale: 0.3,
+        duration: Phaser.Math.Between(260, 420),
+        ease: 'Cubic.easeOut',
+        onComplete: () => p.destroy()
+      });
+    }
+  }
+
+  private executeFinisherSequence(): void {
+    if (!this.finisherTarget || this.isFinisherActive) return;
+    this.isFinisherActive = true;
+    this.isInvulnerable = true;
+
+    const target = this.finisherTarget;
+    const isBoss = target.isBoss;
+    const targetSprite = target.sprite;
+    const targetObj = isBoss ? target.boss! : target.enemy!;
+    if (!targetObj || (isBoss ? target.boss!.health <= 0 : !target.enemy!.isAlive())) {
+      this.isFinisherActive = false;
+      this.isInvulnerable = false;
+      return;
+    }
+
+    // 1. Lock player state and face target
+    this.player.state = CharacterState.ATTACKING;
+    this.player.move(0, 0);
+    const facing = targetSprite.x >= this.playerSprite.x ? 1 : -1;
+    this.player.facingDirection = facing;
+    this.playerSprite.setScale(facing * Math.abs(this.playerSprite.scaleX), this.playerSprite.scaleY);
+
+    // 2. Play Finisher Audio
+    this.audio.playFinisherSound(true);
+
+    // 3. Cinematic Camera Zoom & Dramatic Flash
+    this.cameras.main.zoomTo(1.22, 140, 'Quad.easeOut');
+    this.cameras.main.flash(180, 255, 230, 100);
+
+    // 4. Notify HUD via Domain Event
+    EventBus.getInstance().publish(
+      new FinisherTriggeredEvent(
+        isBoss ? target.boss!.id : target.enemy!.id,
+        FinisherStyle.CINEMATIC_COMBO,
+        isBoss ? 95 : target.enemy!.health
+      )
+    );
+
+    // 5. Dash step right in front of target
+    const strikeTargetX = Phaser.Math.Clamp(targetSprite.x - facing * 28, 35, 605);
+    const strikeTargetY = targetSprite.y;
+    this.tweens.add({
+      targets: this.playerSprite,
+      x: strikeTargetX,
+      y: strikeTargetY,
+      duration: 80,
+      ease: 'Cubic.easeOut'
+    });
+    this.player.position = new Vector2(strikeTargetX, strikeTargetY);
+
+    // Strike 1 (t = 90ms): Crimson Abyssal Slash
+    this.time.delayedCall(90, () => {
+      if (!this.scene.isActive()) return;
+      this.audio.playCombatHit(true);
+      this.cameras.main.shake(120, 0.012);
+      this.spawnFinisherSlash(targetSprite.x, targetSprite.y - 20, 40, 0xff3355, 1.3);
+      this.spawnDamageNumber(targetSprite.x, targetSprite.y - 45, '⚡ TINTA NEGRA', true, '#ff5577');
+      targetSprite.setTint(0xff5555);
+      this.time.delayedCall(70, () => targetSprite.clearTint());
+    });
+
+    // Strike 2 (t = 210ms): Rising Abyssal Purple Slash
+    this.time.delayedCall(210, () => {
+      if (!this.scene.isActive()) return;
+      this.audio.playCombatHit(true);
+      this.cameras.main.shake(160, 0.016);
+      this.spawnFinisherSlash(targetSprite.x, targetSprite.y - 25, -45, 0xbb33ff, 1.4);
+      this.spawnDamageNumber(targetSprite.x, targetSprite.y - 50, '⚡ FILO DEL ABISMO', true, '#ddaaff');
+      targetSprite.setTint(0xdd55ff);
+      this.time.delayedCall(70, () => targetSprite.clearTint());
+    });
+
+    // Strike 3 (t = 340ms): Climax Finisher Impact
+    this.time.delayedCall(340, () => {
+      if (!this.scene.isActive()) return;
+      this.audio.playFinisherSound(false);
+      this.cameras.main.shake(300, 0.025);
+      this.cameras.main.flash(200, 255, 255, 255);
+      this.spawnFinisherSlash(targetSprite.x, targetSprite.y - 20, 0, 0xffd700, 2.0);
+      this.spawnAshExplosion(targetSprite.x, targetSprite.y - 25);
+
+      if (isBoss && target.boss) {
+        const bossDmg = 95;
+        target.boss.health = Math.max(0, target.boss.health - bossDmg);
+        target.boss.recoverPosture();
+        this.spawnDamageNumber(targetSprite.x, targetSprite.y - 55, bossDmg, true, '#ffd700');
+
+        const knockX = Phaser.Math.Clamp(targetSprite.x + facing * 40, 40, 600);
+        target.boss.position = new Vector2(knockX, target.boss.position.y);
+        this.tweens.add({ targets: targetSprite, x: knockX, duration: 200, ease: 'Quad.easeOut' });
+
+        if (target.boss.health <= 0) {
+          this.handleBossDefeated();
+        }
+      } else if (target.enemy) {
+        target.enemy.health = 0;
+        target.enemy.state = 'DEAD';
+        this.spawnDamageNumber(targetSprite.x, targetSprite.y - 55, '💀 ¡REMATADO!', true, '#ff3344');
+
+        this.tweens.add({
+          targets: targetSprite,
+          alpha: 0,
+          scaleX: targetSprite.scaleX * 1.35,
+          scaleY: targetSprite.scaleY * 0.65,
+          duration: 320,
+          ease: 'Cubic.easeOut',
+          onComplete: () => {
+            targetSprite.destroy();
+            this.clearEnemyWarning(target.enemy!.id);
+          }
+        });
+
+        const remainingEnemies = this.enemies.filter(e => e.isAlive());
+        if (remainingEnemies.length === 0) {
+          this.storyProgress.completeMilestone('act1_monks');
+          this.storyProgress.completeMilestone('act1_beast');
+          this.storyProgress.addProgress(25);
+          this.triggerShalemBalloon("Shalem: «¡Los acechadores han caído! ¡Ahora avanza hacia la derecha y destruye a la Madre Morwenna junto a la pira!»", 5000);
+        }
+      }
+
+      // Rewards
+      this.player.heal(20);
+      this.player.stats.restorePosture(this.player.stats.maxPosture);
+      this.player.gainExperience(30);
+      this.spawnDamageNumber(this.playerSprite.x, this.playerSprite.y - 45, '+20 HP', false, '#77ff77');
+
+      const banner = this.add.text(320, 110, '⚡ ¡EJECUCIÓN PERFECTA! ⚡', {
+        fontFamily: 'Cinzel, Georgia, serif',
+        fontSize: '13px',
+        color: '#ffd700',
+        stroke: '#000000',
+        strokeThickness: 4,
+        fontStyle: 'bold'
+      }).setOrigin(0.5).setDepth(450);
+
+      this.tweens.add({
+        targets: banner,
+        y: 85,
+        alpha: 0,
+        duration: 1800,
+        ease: 'Cubic.easeOut',
+        onComplete: () => banner.destroy()
+      });
+
+      this.triggerShalemBalloon("Shalem: «¡Brutal, monaguillo! ¡Ese es el verdadero filo de las sombras!»", 3200);
+
+      // Return camera and player state
+      this.cameras.main.zoomTo(1.0, 300, 'Quad.easeInOut');
+      this.time.delayedCall(300, () => {
+        this.player.state = CharacterState.IDLE;
+        this.isInvulnerable = false;
+        this.isFinisherActive = false;
+        this.finisherTarget = undefined;
+      });
+    });
   }
 
   /**

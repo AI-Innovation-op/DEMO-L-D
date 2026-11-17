@@ -603,7 +603,7 @@ export class MenuModalScene extends Phaser.Scene {
       { key: 'ESPACIO', desc: 'Esquiva / Dash: Evasión acrobática con invulnerabilidad.' },
       { key: 'TAB', desc: 'Cambiar Héroe: Alterna entre Thomas y Khaterine en combate.' },
       { key: 'T / Q', desc: 'Lanzar Arma (Opción B): Desarme táctico para noquear a distancia.' },
-      { key: 'E', desc: 'Recoger / Hablar: Toma armas del suelo o dialoga con aliados.' },
+      { key: 'E', desc: 'Rematar / Hablar: Ejecuta objetivos aturdidos o interactúa con el mundo.' },
       { key: 'C', desc: 'Charlas de Lore: Diálogos canónicos con Elowen y Cedric.' },
       { key: 'P / ESC', desc: 'Menú & Códice: Arsenal, profecía, crónicas y pausa.' }
     ];
