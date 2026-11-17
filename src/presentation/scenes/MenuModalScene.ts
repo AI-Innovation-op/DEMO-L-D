@@ -653,7 +653,23 @@ export class MenuModalScene extends Phaser.Scene {
       muteToggleText.setText(mutedNow ? '🔇 AUDIO: SILENCIADO (Clic para activar)' : '🔊 AUDIO: ACTIVADO (Clic para silenciar)');
     });
 
-    this.contentContainer.add([muteTogglePill, muteToggleText]);
+    const proto3dBtn = this.add.rectangle(0, 120, 260, 20, 0x1a243d)
+      .setStrokeStyle(1, 0x5599ff)
+      .setInteractive({ useHandCursor: true });
+
+    const proto3dText = this.add.text(0, 120, '🏛️ PROBAR PROTOTIPO 3D (OAKHAVEN)', {
+      fontFamily: 'Cinzel, monospace',
+      fontSize: '8px',
+      color: '#99ddff',
+      fontStyle: 'bold'
+    }).setOrigin(0.5);
+
+    proto3dBtn.on('pointerdown', () => {
+      this.closeMenu();
+      (window as unknown as { launch3DPrototype?: () => void }).launch3DPrototype?.();
+    });
+
+    this.contentContainer.add([muteTogglePill, muteToggleText, proto3dBtn, proto3dText]);
   }
 
   private returnToMainMenu(): void {

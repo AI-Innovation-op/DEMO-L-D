@@ -10,6 +10,77 @@ import { MenuModalScene } from './presentation/scenes/MenuModalScene';
 import { InventoryScene } from './presentation/scenes/InventoryScene';
 import { CharacterDialogueScene } from './presentation/scenes/CharacterDialogueScene';
 import { CinematicScene } from './presentation/scenes/CinematicScene';
+import { Oakhaven3DExperience } from './presentation/three/Oakhaven3DExperience';
+
+let phaserGame: Phaser.Game | null = null;
+let three3dExperience: Oakhaven3DExperience | null = null;
+
+export function launch3DPrototype(): void {
+  const container = document.getElementById('game-container');
+  if (!container) return;
+
+  const canvas = container.querySelector('canvas');
+  if (canvas) {
+    canvas.style.display = 'none';
+  }
+
+  if (phaserGame) {
+    phaserGame.scene.scenes.forEach(s => {
+      if (s.scene.isActive()) {
+        s.scene.pause();
+      }
+    });
+  }
+
+  // Create 3D sub-wrapper
+  let threeWrapper = document.getElementById('three-wrapper') as HTMLElement;
+  if (!threeWrapper) {
+    threeWrapper = document.createElement('div');
+    threeWrapper.id = 'three-wrapper';
+    threeWrapper.style.position = 'relative';
+    threeWrapper.style.width = '100%';
+    threeWrapper.style.height = '100%';
+    threeWrapper.style.overflow = 'hidden';
+    container.appendChild(threeWrapper);
+  }
+  threeWrapper.style.display = 'block';
+
+  three3dExperience = new Oakhaven3DExperience(threeWrapper, () => {
+    exit3DPrototype();
+  });
+  three3dExperience.init();
+}
+
+export function exit3DPrototype(): void {
+  const threeWrapper = document.getElementById('three-wrapper');
+  if (threeWrapper) {
+    threeWrapper.style.display = 'none';
+  }
+  if (three3dExperience) {
+    three3dExperience.destroy();
+    three3dExperience = null;
+  }
+
+  const container = document.getElementById('game-container');
+  if (container) {
+    const canvas = container.querySelector('canvas');
+    if (canvas) {
+      canvas.style.display = 'block';
+    }
+  }
+
+  if (phaserGame) {
+    phaserGame.scene.scenes.forEach(s => {
+      if (s.scene.isPaused()) {
+        s.scene.resume();
+      }
+    });
+  }
+}
+
+// Expose globally for UI handlers
+(window as unknown as { launch3DPrototype: typeof launch3DPrototype; exit3DPrototype: typeof exit3DPrototype }).launch3DPrototype = launch3DPrototype;
+(window as unknown as { launch3DPrototype: typeof launch3DPrototype; exit3DPrototype: typeof exit3DPrototype }).exit3DPrototype = exit3DPrototype;
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -39,5 +110,12 @@ const config: Phaser.Types.Core.GameConfig = {
 };
 
 window.addEventListener('DOMContentLoaded', () => {
-  new Phaser.Game(config);
+  phaserGame = new Phaser.Game(config);
+
+  // Check URL hash for direct 3D preview
+  if (window.location.hash === '#3d' || window.location.search.includes('mode=3d')) {
+    setTimeout(() => {
+      launch3DPrototype();
+    }, 400);
+  }
 });

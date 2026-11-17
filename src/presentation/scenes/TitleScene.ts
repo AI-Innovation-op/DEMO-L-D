@@ -284,6 +284,13 @@ export class TitleScene extends Phaser.Scene {
         }
       },
       {
+        label: '🏛️ Prototipo 3D (Oakhaven)',
+        action: () => {
+          this.audio.playSfx('menu_select');
+          (window as unknown as { launch3DPrototype?: () => void }).launch3DPrototype?.();
+        }
+      },
+      {
         label: 'Opciones',
         action: () => this.showOptionsModal()
       },
@@ -297,8 +304,8 @@ export class TitleScene extends Phaser.Scene {
       }
     ];
 
-    let startY = -36;
-    const spacingY = 32;
+    let startY = -40;
+    const spacingY = 28;
 
     items.forEach((item, index) => {
       const y = startY + index * spacingY;
