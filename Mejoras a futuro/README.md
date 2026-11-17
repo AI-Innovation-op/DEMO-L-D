@@ -8,15 +8,19 @@ Bienvenido a la carpeta central de **Mejoras a Futuro** para el desarrollo de *T
 
 ```
 Mejoras a futuro/
-├── README.md
+├── README.md                                   # Índice general del directorio
 ├── Seguimiento/
-│   ├── REPORTE_HISTORICO_ENTREGAS.md       # Crónica de entregas 1, 2, 3, 4 y 5 completadas
-│   ├── REPORTE_OAKHAVEN_3D_COMPLETO.md      # Detalles del sistema 3D, héroes duales y jefa Morwenna
-│   └── PLAN_Y_ROADMAP_FUTURO.md             # Hoja de ruta técnica a corto, medio y largo plazo
+│   ├── REPORTE_HISTORICO_ENTREGAS.md           # Crónica de entregas 1 a 8 completadas (38 tests)
+│   ├── REPORTE_OAKHAVEN_3D_COMPLETO.md          # Entrega 5: Sistema 3D, héroes duales y jefa Morwenna
+│   ├── REPORTE_ENTREGA_INVENTARIO_Y_PATRULLAS.md # Entrega 6: Inventario, reliquias y patrullas FSM
+│   ├── REPORTE_FLAGELANTE_HABILIDADES_Y_GUARDADO.md # Entrega 7: Flagelante, Códice EXP y Altar
+│   ├── REPORTE_MORWENNA_FASE_2_Y_CEMENTERIO.md # Entrega 8: Morwenna Fase 2, Llave Criptas y Cementerio
+│   ├── PLAN_Y_ROADMAP_FUTURO.md                 # Hoja de ruta técnica a corto, medio y largo plazo
+│   └── capturas/                               # Capturas de pantalla reales en alta resolución
 └── Mejoras visuales/
-    ├── ESPECIFICACION_SPRITES_2D.md        # Lista detallada de spritesheets, frames y dimensiones para 2D
-    ├── ESPECIFICACION_MODELOS_Y_TEXTURAS_3D.md # Guía de modelos GLTF/GLB, polígonos y texturas 3D
-    └── GUIA_ESTILO_Y_PALETAS.md            # Paleta de colores canónicos, siluetas e iluminación gótica
+    ├── ESPECIFICACION_SPRITES_2D.md            # Lista completa de spritesheets, frames y celdas para 2D
+    ├── ESPECIFICACION_MODELOS_Y_TEXTURAS_3D.md # Guía técnica de modelos GLTF/GLB, polígonos y rigs 3D
+    └── GUIA_ESTILO_Y_PALETAS.md                # Paletas cromáticas HEX, siluetas e iluminación gótica
 ```
 
 ---

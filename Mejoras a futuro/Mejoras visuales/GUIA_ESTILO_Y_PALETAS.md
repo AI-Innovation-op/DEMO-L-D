@@ -55,6 +55,14 @@ La atmósfera de Oakhaven y el mundo del juego se basa en el **contraste entre l
 | **Lino Penitente** | `#ede8f5` | (237, 232, 245) | Delantal de Elowen, cordón franciscano del Padre Cedric. |
 | **Ámbar de Farol** | `#ffaa33` | (255, 170, 51) | Luz acogedora de farolas victorianas y velas del altar. |
 
+### 5. Tonos Espectrales, Criptas & Penitencia
+| Nombre del Tono | Código HEX | RGB | Uso Principal |
+| :--- | :---: | :---: | :--- |
+| **Fuego Espectral Cian** | `#00e5ff` | (0, 229, 255) | Pebeteros de alma de las criptas, cuencas oculares del esqueleto guardián, portal del mausoleo. |
+| **Carmesí del Flagelante** | `#8a121f` | (138, 18, 31) | Túnica de penitente del Flagelante con Cadena, vendas manchadas de ceniza y sangre. |
+| **Hueso Ancestral** | `#d6cfc7` | (214, 207, 199) | Costillas y cráneo del Penitente de la Cripta, reliquias óseas. |
+| **Hierro Herrumbroso** | `#4a4440` | (74, 68, 64) | Verjas de hierro forjado del cementerio, claymore oxidada, eslabones del mangual. |
+
 ---
 
 ## 👁️ Siluetas & Legibilidad en Juego

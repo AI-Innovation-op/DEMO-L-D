@@ -80,29 +80,58 @@ Esta guía técnica define los requerimientos para la integración de modelos tr
 
 ## 👑 3. Jefa: Madre Morwenna (`morwenna_boss.glb`)
 
-- **Malla**:
+- **Malla Base**:
   - Túnica ceremonial inquisitorial de color vino tinto/carmesí con ribetes de oro envejecido.
-  - Alto capirote/tocado ceremonial que oscurece su rostro, dejando ver únicamente dos ojos rojos incandescentes.
+  - Alto capirote/tocado ceremonial que oscurece su rostro, dejando ver dos ojos rojos incandescentes (o plasma blanco en Fase 2).
   - Mano izquierda libre con mangas amplias.
-  - Mano derecha sosteniendo el **Crisol de Fuego Sagrado**: recipiente de bronce con orificios por los que emana fuego volumétrico.
+  - Mano derecha sosteniendo el **Crisol de Fuego Sagrado** en Fase 1, intercambiable al **Gran Mandoble Flamígero** en Fase 2.
+- **Accesorios y Sockets para Fase 2 ("Pira del Abismo Desatada")**:
+  - `socket_back`: **Alas de Ceniza y Fuego** (`morwenna_wings.glb`) compuestas por 12 plumas angulares ardientes con rig para aleteo.
+  - `hand.R`: **Gran Mandoble de la Pira** (`morwenna_flame_sword.glb`), espada a dos manos de 1.9m con textura emisiva animada de fuego.
+  - `socket_head`: **Corona de Espinas de Oro Candente** (`morwenna_thorn_halo.glb`), aro flotante con rotación continua.
 - **Clips de Animación Requeridos**:
   - `Float_Idle`: Levitación oscilante arriba y abajo (`y += sin(t)`).
-  - `Chase_Glide`: Deslizamiento hacia el jugador con la túnica arrastrándose por el aire.
-  - `Crucible_Windup`: Gira el crisol hacia atrás mientras el fuego brilla intensamente.
-  - `Crucible_Slam`: Azota el crisol hacia el frente desatando una llamarada.
-  - `Stunned`: Se inclina desestabilizada con el crisol en el suelo.
-  - `Purification`: Cae de rodillas pacíficamente mientras el fuego se extingue.
+  - `Chase_Glide`: Deslizamiento hacia el jugador a 2.2 m/s (Fase 1) o 3.4 m/s (Fase 2).
+  - `Crucible_Windup` & `Crucible_Slam`: Ataques con crisol de Fase 1.
+  - `Phase2_Transition`: Bramido cinemático al 50% HP elevándose y desplegando alas con onda de choque.
+  - `Whirlwind_360`: Giro letal barriendo con el mandoble y despidiendo proyectiles de fuego.
+  - `Geysers_Cast`: Hunde el mandoble en el pavimento invocando 3 erupciones de plasma.
+  - `Infernal_Lunge`: Embestida frontal a 7.5 m/s telegrafiada con estocada recta.
+  - `Stunned`: Se inclina desestabilizada con postura rota.
+  - `Purification`: Cae de rodillas pacíficamente mientras el fuego se disuelve en ceniza blanca.
 
 ---
 
-## 🛢️ 4. Props Destructibles & Entorno
+## 👹 4. Enemigos Comunes & Patrullas
 
-### Mallas Fragmentadas Pre-Rotas (*Fracture Meshes*)
-Para que la destrucción en Three.js sea impactante, cada prop destructible se compone de:
+| Modelo | Archivo GLTF | Triángulos | Sockets / Huesos Especiales | Animaciones Requeridas |
+| :--- | :--- | :---: | :--- | :--- |
+| **Sabueso de Ceniza** | `hound_ash.glb` | 800 - 1,200 | Ojos emisivos rojos, fauces con dientes afilados. | `Patrol_Walk`, `Alert`, `Bite_Windup`, `Bite_Lunge`, `Stagger`, `Death_Ash`. |
+| **Cultista con Incensario** | `cultist_censer.glb` | 1,000 - 1,500 | `hand.R` con cadena e incensario oscilante con luz puntual. Máscara de cuervo. | `Patrol_Walk`, `Alert`, `Censer_Swing`, `Stagger`, `Death`. |
+| **Flagelante con Cadena** | `chain_zealot.glb` | 1,200 - 1,800 | `hand.R` con mangual de púas y cadena de 3 eslabones independientes. Venda en los ojos. | `Patrol_Walk`, `Alert`, `Whip_Swipe_AoE`, `Overhead_Smash`, `Stagger`, `Death`. |
+| **Penitente de la Cripta** | `crypt_penitent.glb` | 1,400 - 2,000 | Cuencas de ojos cian emisivas (`#00e5ff`). Ropajes funerarios harapientos. Claymore a dos manos en `hand.R`/`hand.L`. | `Skeleton_Walk`, `Alert_Draw`, `Claymore_Slash`, `Parried_Recoil`, `Shatter_Death`. |
+
+---
+
+## 🛢️ 5. Props Destructibles, Entorno & Cementerio
+
+### A. Mallas Fragmentadas Pre-Rotas (*Fracture Meshes*)
+Para que la física de destrucción en Three.js sea inmediata y sin lag:
 1. **Malla Intacta**: El modelo completo optimizado para la escena en reposo.
-2. **Mallas de Fragmentos (`debris_pieces`)**: 5 a 8 submallas individuales que forman el objeto roto:
-   - **Barril de Madera**: 4 duelas laterales astilladas, 2 tapas circulares rotas, 2 fragmentos de aro de hierro.
-   - **Caja de Madera**: 4 tablas laterales con esquinas rotas, 2 tapas con clavos doblados.
+2. **Mallas de Fragmentos (`debris_pieces`)**: Submallas individuales con masa y velocidad inicial al romperse:
+   - **Barril de Madera**: 4 duelas laterales astilladas, 2 tapas circulares rotas, 2 aros de hierro.
+   - **Caja de Madera**: 4 tablas laterales con clavos, 2 tapas astilladas.
+   - **Lápida Celta de San Jude**: 1 base de pedestal, 1 cruz superior partida, 4 cascotes de granito grabados.
+   - **Gran Sarcófago Monumental**: 1 caja fúnebre inferior intacta, 2 mitades de tapa de piedra partida.
+
+### B. Elementos de Arquitectura & Cementerio
+| Prop | Archivo GLTF | Triángulos | Características Técnicas |
+| :--- | :--- | :---: | :--- |
+| **Verja de Hierro del Cementerio** | `cemetery_gate.glb` | 800 - 1,200 | 2 pilares de piedra laterales y 2 hojas batientes con huesos pivote `door_left_pivot` y `door_right_pivot` para rotación de 80°. |
+| **Pebetero de Almas de la Cripta** | `soul_brazier.glb` | 400 - 600 | Trípode de hierro forjado gótico con nodo `flame_socket` para sistema de partículas o shader cian (`#00e5ff`). |
+| **Fachada Mausoleo de San Jude** | `mausoleum_crypt.glb` | 1,800 - 2,600 | Fachada gótica con arco ojival, cruces en relieve y plano de portal abisal con textura animada de niebla. |
+| **Cruz y Altar de San Jude** | `sanctuary_altar.glb` | 1,000 - 1,500 | Cruz monumental con tallas de oraciones, mesa de altar de piedra y 4 velas con fuego parpadeante. |
+| **Farola Victoriana de Oakhaven** | `street_lamp.glb` | 350 - 500 | Poste esbelto de hierro forjado con farol acristalado y bombilla de aceite cálida (`#ffaa33`). |
 
 ---
 
