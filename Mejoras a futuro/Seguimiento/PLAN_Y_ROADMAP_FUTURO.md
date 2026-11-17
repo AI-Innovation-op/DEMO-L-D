@@ -26,22 +26,48 @@ Este documento establece las prioridades de desarrollo, mecánicas planeadas y e
   - Barra de salud dedicada `#p3d-cultist-hud`, vulnerable a parry y rematable con `[E]`.
   - Botín de consumibles al ser purificado.
 
+### 3. Flagelante con Cadena y Mangual [COMPLETADO ✅]
+- [x] **Enemigo Especializado de Rango Medio**:
+  - Modelo 3D con túnica carmesí, capucha penitente y mangual de púas.
+  - Ataque de látigo horizontal en abanico (4.2m de alcance).
+  - Barra de salud propia `#p3d-zealot-hud`, aviso telegrafiado de ataque y remate especial con botín de *Ceniza Consagrada*.
+
+### 4. Árbol de Habilidades y EXP de Héroes [COMPLETADO ✅]
+- [x] **Dominio de Progresión (`src/domain/progression/`)**:
+  - Acumulación de EXP en tiempo real (+15 por prop, +40 a +250 por enemigos).
+  - Modal interactivo del **Códice del Alma** (`[H]`) con visualización de árbol para Thomas y Khaterine.
+  - Habilidades funcionales con desbloqueo y modificadores activos:
+    - *Golpe de Escudo Santo* (+35% impacto en postura).
+    - *Filo Consagrado* (+20% daño espada).
+    - *Tenacidad Inquebrantable* (+25 Max HP a 125).
+    - *Disparo Abisal Perforante* (+25% daño de flechas).
+    - *Paso Espectral* (+30% distancia de esquiva).
+    - *Sagrario del Sauce* (reduce daño de guardia al 50%).
+
+### 5. Sistema de Guardado Persistente en el Santuario [COMPLETADO ✅]
+- [x] **Punto de Checkpoint en el Altar de San Jude (`[G]`)**:
+  - Consagración junto al Padre Cedric y la cruz dorada luminosa.
+  - Restauración completa de Salud y Postura.
+  - Pulso sagrado de luz y bendición pastoral.
+  - Persistencia en `localStorage` con serialización limpia y recarga automática al iniciar.
+
 ---
 
 ## 🚀 Próximas Prioridades (Siguiente Sprint)
 
-### 1. Segundo Enemigo Especializado: Flagelante con Cadena
-- Ataques de látigo con rango extendido (4.5m) que barren en semicírculo horizontal.
-- Exige esquiva con `[ESPACIO]` o bloqueo firme para evitar derribo.
+### 1. Fase 2 de Jefa Madre Morwenna (Pira Sagrada Desatada)
+- Cuando su salud baja del 50%, entra en modo de frenesí con espada imbuida en llamas.
+- Ataques de torbellino de fuego y mayor velocidad de desplazamiento.
+- Transición con diálogo exclusivo y explosión de brasas.
 
-### 2. Árbol de Habilidades y EXP de Héroes
-- Inversión de los puntos de EXP acumulados al romper barriles (+15) o derrotar cultistas (+100):
-  - **Thomas**: *Golpe de Escudo Santo*, *Corte Doble Ascendente*, *Tenacidad Inquebrantable*.
-  - **Khaterine**: *Disparo Abisal Perforante*, *Paso Umbrío*, *Lluvia de Flechas*.
+### 2. Expansión del Cementerio de Oakhaven y Criptas
+- Apertura de las puertas de reja de hierro al norte del pueblo.
+- Tumbas góticas con lápidas destruibles y criptas subterráneas.
+- Nuevo tipo de enemigo: *Penitente Resucitado* (esqueleto con manto funerario).
 
-### 3. Sistema de Guardado Persistente (Checkpoints en Santuario)
-- Guardado en `localStorage` al rezar con el Padre Cedric o beber del pozo sagrado.
-- Serialización de inventario, reliquias equipadas y progreso de misiones.
+### 3. Sistema de Fabricación / Alquimia Básica
+- Combinar cenizas sagradas con agua bendita para crear bálsamos mejorados.
+- Menú de altar de alquimia cerca de Elowen.
 
 ---
 

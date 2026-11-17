@@ -101,10 +101,36 @@ Este documento consolida el progreso completo de desarrollo del videojuego **The
 
 ---
 
+### ✦ Entrega 7: Flagelante con Cadena, Árbol de Habilidades & Guardado en el Santuario
+- **Enemigo 3 Especializado — Flagelante con Cadena (Chain Zealot)**:
+  - Modelo 3D con túnica carmesí oscuro, capucha penitente con ojos vendados, mangual de eslabones de hierro y bola de acero con púas.
+  - Máquina de estados avanzada (`PATROL`, `ALERT`, `CHASE`, `WINDUP`, `ATTACK`, `RECOVERY`, `STUNNED`, `RETURNING`, `DEAD`).
+  - Ataque de látigo en abanico horizontal de 4.2 metros de alcance, esquivable con rodar `[ESPACIO]` o desviable con parry sincronizado `[L]`.
+  - Barra de salud dedicada `#p3d-zealot-hud` que se activa en proximidad (<13m) y remate cinemático `[E]` que otorga +150 EXP y suelta *Ceniza Consagrada*.
+- **Árbol de Habilidades & Sistema de Progresión (`src/domain/progression/`)**:
+  - Dominio limpio de progresión con acumulación de EXP al romper props (+15) o derrotar enemigos (+40 Sabueso, +60 Cultista, +150 Flagelante, +250 Morwenna).
+  - Modal del **Códice del Alma** (`#p3d-skills-modal`) accesible con tecla `[H]` y botón de HUD en tiempo real con contador de EXP.
+  - Ramas dedicadas para ambos héroes:
+    - **Thomas**: *Golpe de Escudo Santo* (+35% impacto en postura), *Filo Consagrado* (+20% daño de espada), *Tenacidad Inquebrantable* (+25 Max HP a 125).
+    - **Khaterine**: *Disparo Abisal Perforante* (+25% daño de flechas), *Paso Espectral* (+30% distancia de esquiva), *Sagrario del Sauce* (reduce daño de guardia al 50%).
+  - Desbloqueo progresivo con control de dependencias, consumo de EXP y activación inmediata de modificadores de combate.
+- **Sistema de Guardado en el Santuario (`src/infrastructure/storage/GameSaveManager.ts`)**:
+  - Checkpoint sagrado junto a la Cruz de San Jude y el Padre Cedric (`x: -8, z: 2`).
+  - Tecla de guardado rápido `[G]` y botón de HUD `💾 [G] SANTUARIO`.
+  - Al consagrar en el altar del Santuario:
+    - Pulso de luz dorada en la cruz del santuario (`intensity: 5.0`).
+    - Restauración completa de Salud y Postura al 100%.
+    - Bendición del Padre Cedric y texto flotante dorado.
+    - Persistencia en `localStorage` (con fallback transparente en memoria para entornos de test) de héroe activo, vida, postura, inventario y habilidades.
+    - Carga automática del estado guardado al iniciar la experiencia 3D.
+- **Batería de Tests Unitarios**: 35 pruebas vitest automatizadas aprobadas al 100% (añadidas 10 nuevas pruebas para `Progression` y `GameSaveManager`).
+
+---
+
 ## 📊 Métricas del Proyecto
 - **Lenguaje**: TypeScript 100% estricto.
 - **Framework Gráfico 2D**: HTML5 Canvas nativo de alto rendimiento (60 FPS sin caídas).
 - **Framework Gráfico 3D**: Three.js con sombras suaves PCFSoft, ACESFilmic Tone Mapping y niebla exponencial.
 - **Audio**: Web Audio API nativo sin dependencias de archivos externos.
-- **Tests**: 25 pruebas unitarias vitest aprobadas (incluye suite de inventario y reliquias).
+- **Tests**: 35 pruebas unitarias vitest aprobadas (incluye dominios de combate, historia, shalem, inventario, reliquias, progresión y guardado).
 - **Repositorio**: Sincronizado en GitHub (`main`).

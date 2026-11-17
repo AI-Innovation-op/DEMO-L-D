@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { WebAudioSoundAdapter } from '../../infrastructure/audio/WebAudioSoundAdapter';
 import { Inventory } from '../../domain/inventory/Inventory';
+import { Progression } from '../../domain/progression/Progression';
+import { GameSaveManager } from '../../infrastructure/storage/GameSaveManager';
 
 export interface CombatStats3D {
   health: number;
@@ -120,6 +122,28 @@ export class Oakhaven3DExperience {
   private cultistHpBarContainer?: HTMLDivElement;
   private cultistHpBarFill?: HTMLDivElement;
 
+  // Enemy 3: Chain Zealot Flagellant (Flagelante con Cadena y Mangual)
+  private zealotGroup!: THREE.Group;
+  private zealotHealth: number = 130;
+  private zealotMaxHealth: number = 130;
+  private zealotState: 'PATROL' | 'ALERT' | 'CHASE' | 'WINDUP' | 'ATTACK' | 'RECOVERY' | 'STUNNED' | 'DEAD' | 'RETURNING' = 'PATROL';
+  private zealotTimer: number = 0;
+  private zealotWarningMesh!: THREE.Mesh;
+  private zealotChainGroup!: THREE.Group;
+  private zealotFlailBallMesh!: THREE.Mesh;
+  private zealotWaypoints: THREE.Vector3[] = [new THREE.Vector3(-2.8, 0, -16.0), new THREE.Vector3(2.8, 0, -19.5)];
+  private zealotCurrentWaypointIndex: number = 0;
+  private zealotHpBarContainer?: HTMLDivElement;
+  private zealotHpBarFill?: HTMLDivElement;
+
+  // Progression & Skill Tree System
+  private progression: Progression = Progression.createDefault();
+  private isSkillTreeOpen: boolean = false;
+  private skillTreeModalEl?: HTMLDivElement;
+
+  // Sanctuary Checkpoint Altar Light
+  private sanctuaryCrossLight?: THREE.PointLight;
+
   // Shalem 3D (Gato Guía)
   private shalemGroup!: THREE.Group;
   private shalemTail!: THREE.Mesh;
@@ -211,6 +235,7 @@ export class Oakhaven3DExperience {
     this.createPlayer();
     this.createEnemy();
     this.createCultistEnemy();
+    this.createZealotEnemy();
     this.createShalem();
     this.createElowen();
     this.createCedric();
@@ -220,6 +245,7 @@ export class Oakhaven3DExperience {
 
     // 6. Build 3D UI Overlay
     this.createUIOverlay();
+    this.loadSavedSanctuaryState();
 
     // 7. Bind Inputs
     this.bindInputs();
@@ -916,6 +942,77 @@ export class Oakhaven3DExperience {
   }
 
   // =========================================================================
+  // ENEMY 3: CHAIN ZEALOT FLAGELLANT 3D (FLAGELANTE CON CADENA Y MANGUAL)
+  // =========================================================================
+  private createZealotEnemy(): void {
+    this.zealotGroup = new THREE.Group();
+    this.zealotGroup.position.copy(this.zealotWaypoints[0]);
+
+    const crimsonRobeMat = new THREE.MeshStandardMaterial({ color: 0x3d1015, roughness: 0.85 });
+    const darkLeatherMat = new THREE.MeshStandardMaterial({ color: 0x1f1412, roughness: 0.9 });
+    const ironMat = new THREE.MeshStandardMaterial({ color: 0x666677, metalness: 0.85, roughness: 0.25 });
+    const bandageMat = new THREE.MeshStandardMaterial({ color: 0xd8c8b8, roughness: 0.95 });
+
+    // Lower Robe / Skirt
+    const robeLower = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.25, 7), crimsonRobeMat);
+    robeLower.position.y = 0.62;
+    robeLower.castShadow = true;
+    this.zealotGroup.add(robeLower);
+
+    // Torso with iron straps
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.6, 0.3), darkLeatherMat);
+    torso.position.y = 1.35;
+    torso.castShadow = true;
+    this.zealotGroup.add(torso);
+
+    // Hood & Head
+    const hood = new THREE.Mesh(new THREE.SphereGeometry(0.26, 7, 7), crimsonRobeMat);
+    hood.position.set(0, 1.82, 0);
+    this.zealotGroup.add(hood);
+
+    // White Penitential Eye Bandages
+    const bandage = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.1, 0.18), bandageMat);
+    bandage.position.set(0, 1.84, 0.18);
+    this.zealotGroup.add(bandage);
+
+    // Chain & Spiked Flail Ball Group
+    this.zealotChainGroup = new THREE.Group();
+    this.zealotChainGroup.position.set(0.5, 1.35, 0.2);
+
+    // Chain links shaft
+    const chainShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.1, 5), ironMat);
+    chainShaft.position.y = -0.55;
+    this.zealotChainGroup.add(chainShaft);
+
+    // Spiked Flail Ball
+    this.zealotFlailBallMesh = new THREE.Mesh(new THREE.DodecahedronGeometry(0.18), ironMat);
+    this.zealotFlailBallMesh.position.y = -1.15;
+    this.zealotFlailBallMesh.castShadow = true;
+
+    // Add 6 iron spikes to ball
+    for (let i = 0; i < 6; i++) {
+      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.14, 4), ironMat);
+      const angle = (i / 6) * Math.PI * 2;
+      spike.position.set(Math.cos(angle) * 0.18, -1.15, Math.sin(angle) * 0.18);
+      spike.rotation.z = Math.PI / 2;
+      spike.rotation.y = angle;
+      this.zealotChainGroup.add(spike);
+    }
+    this.zealotChainGroup.add(this.zealotFlailBallMesh);
+    this.zealotGroup.add(this.zealotChainGroup);
+
+    // Telegraphed Warning Octahedron above Zealot
+    const warnGeo = new THREE.OctahedronGeometry(0.26);
+    const warnMat = new THREE.MeshBasicMaterial({ color: 0xff1122 });
+    this.zealotWarningMesh = new THREE.Mesh(warnGeo, warnMat);
+    this.zealotWarningMesh.position.set(0, 2.35, 0);
+    this.zealotWarningMesh.visible = false;
+    this.zealotGroup.add(this.zealotWarningMesh);
+
+    this.scene.add(this.zealotGroup);
+  }
+
+  // =========================================================================
   // SHALEM THE BLACK CAT 3D
   // =========================================================================
   private createShalem(): void {
@@ -1082,6 +1179,23 @@ export class Oakhaven3DExperience {
     this.cedricLanternLight = new THREE.PointLight(0xff9922, 1.8, 5);
     this.cedricLanternLight.position.set(0.42, 1.55, 0.3);
     this.cedricGroup.add(this.cedricLanternLight);
+
+    // Stone Altar & Sanctuary Cross beacon beside Cedric
+    const altarMat = new THREE.MeshStandardMaterial({ color: 0x241d2e, roughness: 0.85 });
+    const altar = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 0.5), altarMat);
+    altar.position.set(0.95, 0.35, 0);
+    this.cedricGroup.add(altar);
+
+    const crossMat = new THREE.MeshStandardMaterial({ color: 0xffd700, roughness: 0.3, metalness: 0.8 });
+    const crossV = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.52, 0.04), crossMat);
+    crossV.position.set(0.95, 0.96, 0);
+    const crossH = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.06, 0.04), crossMat);
+    crossH.position.set(0.95, 1.06, 0);
+    this.cedricGroup.add(crossV, crossH);
+
+    this.sanctuaryCrossLight = new THREE.PointLight(0xffd700, 2.2, 6);
+    this.sanctuaryCrossLight.position.set(0.95, 1.15, 0);
+    this.cedricGroup.add(this.sanctuaryCrossLight);
 
     // Face street
     this.cedricGroup.rotation.y = Math.PI / 2;
@@ -1257,6 +1371,14 @@ export class Oakhaven3DExperience {
             </button>
           </div>
           <div style="display: flex; gap: 4px;">
+            <button id="btn-toggle-skills" style="background: #28183c; color: #ffd700; border: 1px solid #b8860b; padding: 3px 7px; border-radius: 4px; font-family: monospace; font-size: 7.5px; cursor: pointer; font-weight: bold;">
+              🌟 [H] HABILIDADES
+            </button>
+            <button id="btn-save-sanctuary" style="background: #1c2538; color: #99ddff; border: 1px solid #3b6b99; padding: 3px 7px; border-radius: 4px; font-family: monospace; font-size: 7.5px; cursor: pointer; font-weight: bold;">
+              💾 [G] SANTUARIO
+            </button>
+          </div>
+          <div style="display: flex; gap: 4px;">
             <button id="btn-toggle-hero" style="background: #2b143d; color: #e6b8ff; border: 1px solid #8e44ad; padding: 3px 7px; border-radius: 4px; font-family: monospace; font-size: 7.5px; cursor: pointer;">
               🔄 [TAB] HÉROE: THOMAS
             </button>
@@ -1290,8 +1412,18 @@ export class Oakhaven3DExperience {
         </div>
       </div>
 
+      <!-- Center: Enemy 3 Target HUD (Flagelante con Cadena) -->
+      <div id="p3d-zealot-hud" style="position: absolute; top: 56px; left: 50%; transform: translateX(-50%); background: rgba(30, 10, 14, 0.94); border: 1.2px solid #c0392b; border-radius: 4px; padding: 4px 10px; width: 195px; text-align: center; box-shadow: 0 4px 15px rgba(192, 57, 43, 0.5); display: none;">
+        <div style="font-size: 7.5px; font-weight: bold; color: #ff9999; margin-bottom: 2px;">
+          ⚠ FLAGELANTE CON CADENA (PATRULLA) ⚠
+        </div>
+        <div style="width: 100%; height: 5px; background: #330b10; border: 1px solid #8b1824; border-radius: 2px; overflow: hidden;">
+          <div id="p3d-zealot-hp-fill" style="width: 100%; height: 100%; background: #c0392b; transition: width 0.1s ease;"></div>
+        </div>
+      </div>
+
       <!-- Boss Morwenna 3D Target HUD (Top Center) -->
-      <div id="p3d-boss-hud" style="position: absolute; top: 56px; left: 50%; transform: translateX(-50%); background: rgba(30, 8, 12, 0.95); border: 1.2px solid #ff3344; border-radius: 4px; padding: 4px 12px; width: 215px; text-align: center; box-shadow: 0 4px 20px rgba(255, 0, 0, 0.45); display: none;">
+      <div id="p3d-boss-hud" style="position: absolute; top: 80px; left: 50%; transform: translateX(-50%); background: rgba(30, 8, 12, 0.95); border: 1.2px solid #ff3344; border-radius: 4px; padding: 4px 12px; width: 215px; text-align: center; box-shadow: 0 4px 20px rgba(255, 0, 0, 0.45); display: none;">
         <div style="font-size: 7.5px; font-weight: bold; color: #ffbbbb; margin-bottom: 2px; letter-spacing: 0.5px;">
           👑 MADRE MORWENNA — VIGÍA DE LA PIRA 👑
         </div>
@@ -1329,6 +1461,33 @@ export class Oakhaven3DExperience {
         </div>
       </div>
 
+      <!-- Gothic 3D Skills & Progression Modal -->
+      <div id="p3d-skills-modal" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(14, 8, 26, 0.98); border: 2px solid #ffd700; border-radius: 6px; padding: 12px 16px; max-width: 580px; width: 92%; box-shadow: 0 12px 50px rgba(0,0,0,0.98); display: none; z-index: 120; pointer-events: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #482f5e; padding-bottom: 6px; margin-bottom: 8px;">
+          <div style="font-size: 9.5px; font-weight: bold; color: #ffd700; letter-spacing: 0.8px;">
+            🌟 CÓDICE DEL ALMA: ÁRBOL DE HABILIDADES & EXP 🌟
+          </div>
+          <button id="p3d-skills-close" style="background: #2a1440; color: #ffaaaa; border: 1px solid #7a2222; border-radius: 3px; padding: 2px 7px; font-size: 8px; cursor: pointer; font-weight: bold;">[X] CERRAR</button>
+        </div>
+        <div id="p3d-skills-status" style="font-family: monospace; font-size: 7.5px; color: #dcd0ea; margin-bottom: 8px; background: rgba(30, 16, 45, 0.6); padding: 4px 8px; border-radius: 3px; border: 1px solid #5a3d78;">
+          ✦ EXP Disponible: 0 EXP
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; max-height: 250px; overflow-y: auto;">
+          <div>
+            <div style="font-size: 8px; font-weight: bold; color: #ffd700; border-bottom: 1px solid #d4af37; padding-bottom: 2px; margin-bottom: 6px;">
+              ⚔ THOMAS (DEFENSA & FILO SANTO)
+            </div>
+            <div id="p3d-skills-thomas-grid" style="display: flex; flex-direction: column; gap: 6px;"></div>
+          </div>
+          <div>
+            <div style="font-size: 8px; font-weight: bold; color: #e6b8ff; border-bottom: 1px solid #8e44ad; padding-bottom: 2px; margin-bottom: 6px;">
+              🏹 KHATERINE (ARCO ABISAL & SOMBRAS)
+            </div>
+            <div id="p3d-skills-khaterine-grid" style="display: flex; flex-direction: column; gap: 6px;"></div>
+          </div>
+        </div>
+      </div>
+
       <!-- Dialogue Toast (Bottom Center) -->
       <div id="p3d-dialogue-toast" style="position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); background: rgba(14, 9, 23, 0.96); border: 1.2px solid #d4af37; border-radius: 4px; padding: 4px 12px; max-width: 520px; width: 82%; text-align: center; box-shadow: 0 6px 25px rgba(0,0,0,0.9); font-size: 8px; color: #e6dcfa; line-height: 1.35;">
         <span style="color: #ffd700; font-weight: bold;">Shalem:</span> «¡Bienvenido a Oakhaven! Pulsa <span style="color:#ffd7aa;">[I]</span> para abrir el inventario o <span style="color:#a3ffc7;">[Q]</span> para usar un bálsamo curativo rápido.»
@@ -1336,7 +1495,7 @@ export class Oakhaven3DExperience {
 
       <!-- Bottom Controls Bar -->
       <div style="position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); background: rgba(8, 4, 14, 0.95); border: 1px solid #3d2852; border-radius: 3px; padding: 2px 10px; font-family: monospace; font-size: 7px; color: #c5b4db; white-space: nowrap;">
-        WASD: Moverse 3D | TAB: Héroe | I: Inventario | Q: Curar | J: Ligero/Flecha | K: Fuerte | L: Guardia | Espacio: Esquivar | T: Lanzar | E: Hablar/Recoger | M: Audio | C: Cámara
+        WASD: Moverse 3D | TAB: Héroe | I: Inventario | H: Habilidades | Q: Curar | G: Guardar Santuario | J/K: Ataque | L: Guardia | Espacio: Esquivar | T: Lanzar | E: Hablar/Recoger | M: Audio | C: Cámara
       </div>
     `;
 
@@ -1366,6 +1525,16 @@ export class Oakhaven3DExperience {
       btnQuickBalm.addEventListener('click', () => this.useQuickConsumable());
     }
 
+    const btnSkills = this.uiOverlay.querySelector('#btn-toggle-skills') as HTMLButtonElement;
+    if (btnSkills) {
+      btnSkills.addEventListener('click', () => this.toggleSkillTreeModal());
+    }
+
+    const btnSanctuary = this.uiOverlay.querySelector('#btn-save-sanctuary') as HTMLButtonElement;
+    if (btnSanctuary) {
+      btnSanctuary.addEventListener('click', () => this.executeSanctuarySave());
+    }
+
     const btnCam = this.uiOverlay.querySelector('#btn-toggle-cam') as HTMLButtonElement;
     btnCam.addEventListener('click', () => {
       this.toggleCameraMode();
@@ -1377,6 +1546,9 @@ export class Oakhaven3DExperience {
 
     this.cultistHpBarContainer = this.uiOverlay.querySelector('#p3d-cultist-hud') as HTMLDivElement;
     this.cultistHpBarFill = this.uiOverlay.querySelector('#p3d-cultist-hp-fill') as HTMLDivElement;
+
+    this.zealotHpBarContainer = this.uiOverlay.querySelector('#p3d-zealot-hud') as HTMLDivElement;
+    this.zealotHpBarFill = this.uiOverlay.querySelector('#p3d-zealot-hp-fill') as HTMLDivElement;
 
     this.proximityBadgeEl = this.uiOverlay.querySelector('#p3d-proximity-badge') as HTMLDivElement;
     if (this.proximityBadgeEl) {
@@ -1393,6 +1565,12 @@ export class Oakhaven3DExperience {
     const btnInvClose = this.uiOverlay.querySelector('#p3d-inv-close') as HTMLButtonElement;
     if (btnInvClose) {
       btnInvClose.addEventListener('click', () => this.toggleInventoryModal());
+    }
+
+    this.skillTreeModalEl = this.uiOverlay.querySelector('#p3d-skills-modal') as HTMLDivElement;
+    const btnSkillsClose = this.uiOverlay.querySelector('#p3d-skills-close') as HTMLButtonElement;
+    if (btnSkillsClose) {
+      btnSkillsClose.addEventListener('click', () => this.toggleSkillTreeModal());
     }
 
     this.morwennaHpBarContainer = this.uiOverlay.querySelector('#p3d-boss-hud') as HTMLDivElement;
@@ -1455,6 +1633,27 @@ export class Oakhaven3DExperience {
     }
 
     if (this.isInventoryOpen) {
+      return;
+    }
+
+    // Toggle Skill Tree Modal with [H] or dismiss with [ESC]
+    if (this.isSkillTreeOpen && (e.key === 'Escape' || e.key.toLowerCase() === 'h')) {
+      this.toggleSkillTreeModal();
+      return;
+    }
+
+    if (e.key.toLowerCase() === 'h') {
+      this.toggleSkillTreeModal();
+      return;
+    }
+
+    if (this.isSkillTreeOpen) {
+      return;
+    }
+
+    // Save Game at Sanctuary with [G]
+    if (e.key.toLowerCase() === 'g') {
+      this.executeSanctuarySave();
       return;
     }
 
@@ -1537,8 +1736,9 @@ export class Oakhaven3DExperience {
       this.thomasNpcGroup.visible = true;
 
       // Adjust combat parameters for Khaterine (High Agility / Mystic Ranged)
-      this.playerStats.maxHealth = 90;
-      this.playerStats.health = Math.min(this.playerStats.health, 90);
+      const kHealthBonus = this.progression.getMaxHealthBonus('khaterine');
+      this.playerStats.maxHealth = 90 + kHealthBonus;
+      this.playerStats.health = Math.min(this.playerStats.health, this.playerStats.maxHealth);
       this.playerStats.maxPosture = 70;
       this.playerStats.posture = 70;
       this.playerStats.isArmed = true;
@@ -1557,7 +1757,8 @@ export class Oakhaven3DExperience {
       this.thomasNpcGroup.visible = false;
 
       // Adjust combat parameters for Thomas (Melee Defender / Ash Seal)
-      this.playerStats.maxHealth = 100;
+      const tHealthBonus = this.progression.getMaxHealthBonus('thomas');
+      this.playerStats.maxHealth = 100 + tHealthBonus;
       this.playerStats.maxPosture = 50;
 
       if (this.droppedSwordGroup) {
@@ -1657,7 +1858,8 @@ export class Oakhaven3DExperience {
 
       if (this.enemyHealth <= 0) {
         this.enemyState = 'DEAD';
-        this.spawnFloatingText(this.enemyGroup.position, '¡PURIFICADO!', '#ffd700');
+        this.spawnFloatingText(this.enemyGroup.position, '¡PURIFICADO! (+40 EXP)', '#ffd700');
+        this.progression.addExp(40);
         this.audio.playFinisherSound(true);
         this.enemyGroup.position.y = -0.3;
       }
@@ -1668,7 +1870,8 @@ export class Oakhaven3DExperience {
 
     if (distToCultist <= reach && this.cultistState !== 'DEAD') {
       const baseDmg = this.playerStats.isArmed ? (isHeavy ? 36 : 24) : (isHeavy ? 18 : 12);
-      const dmg = Math.round(baseDmg * this.attackBuffMultiplier);
+      const skillBonus = 1.0 + (this.progression.getDamageBonusPct(this.activeHero) / 100);
+      const dmg = Math.round(baseDmg * this.attackBuffMultiplier * skillBonus);
       this.cultistHealth = Math.max(0, this.cultistHealth - dmg);
       this.spawnFloatingText(this.cultistGroup.position, `-${dmg}`, isHeavy ? '#ffd700' : '#a3ffc7');
 
@@ -1682,7 +1885,8 @@ export class Oakhaven3DExperience {
 
       if (this.cultistHealth <= 0) {
         this.cultistState = 'DEAD';
-        this.spawnFloatingText(this.cultistGroup.position, '¡PORTADOR DE CENIZA PURIFICADO!', '#ffd700');
+        this.spawnFloatingText(this.cultistGroup.position, '¡PORTADOR DE CENIZA PURIFICADO! (+60 EXP)', '#ffd700');
+        this.progression.addExp(60);
         this.audio.playFinisherSound(true);
         this.cultistGroup.position.y = -0.3;
         this.cultistCenserLight.intensity = 0;
@@ -1702,11 +1906,52 @@ export class Oakhaven3DExperience {
       }
     }
 
+    // Hit Detection against Chain Zealot Enemy
+    const distToZealot = this.playerGroup.position.distanceTo(this.zealotGroup.position);
+
+    if (distToZealot <= reach && this.zealotState !== 'DEAD') {
+      const baseDmg = this.playerStats.isArmed ? (isHeavy ? 44 : 28) : (isHeavy ? 24 : 14);
+      const skillBonus = 1.0 + (this.progression.getDamageBonusPct(this.activeHero) / 100);
+      const dmg = Math.round(baseDmg * this.attackBuffMultiplier * skillBonus);
+      this.zealotHealth = Math.max(0, this.zealotHealth - dmg);
+      this.spawnFloatingText(this.zealotGroup.position, `-${dmg}`, isHeavy ? '#ffd700' : '#ff7788');
+
+      if (isHeavy) {
+        this.zealotState = 'STUNNED';
+        this.zealotTimer = 1.0;
+        this.spawnFloatingText(this.zealotGroup.position, '¡ATURDIDO! [E] ¡REMATAR!', '#ffaa44');
+      }
+
+      this.updateHUD();
+
+      if (this.zealotHealth <= 0) {
+        this.zealotState = 'DEAD';
+        this.spawnFloatingText(this.zealotGroup.position, '¡FLAGELANTE PURIFICADO! (+80 EXP)', '#ffd700');
+        this.progression.addExp(80);
+        this.audio.playFinisherSound(true);
+        this.zealotGroup.position.y = -0.3;
+        this.inventory.addItem({
+          id: 'consecrated_ash',
+          name: 'Ceniza Consagrada',
+          description: 'Cenizas de santos de Londinium. Imbuye las armas con +25% de daño sagrado.',
+          category: 'consumable',
+          quantity: 1,
+          maxQuantity: 5,
+          effectType: 'buff_attack',
+          effectValue: 25,
+          icon: '✨'
+        });
+        this.spawnFloatingText(this.playerGroup.position, '🎒 ¡Ceniza Consagrada obtenida!', '#ffd7aa');
+        this.updateHUD();
+      }
+    }
+
     // Hit Detection against Boss Morwenna
     const distToMorwenna = this.playerGroup.position.distanceTo(this.morwennaGroup.position);
     if (distToMorwenna <= reach && this.morwennaState !== 'DORMANT' && this.morwennaState !== 'DEAD') {
       const baseDmg = this.playerStats.isArmed ? (isHeavy ? 38 : 22) : (isHeavy ? 18 : 12);
-      const dmg = Math.round(baseDmg * this.attackBuffMultiplier);
+      const skillBonus = 1.0 + (this.progression.getDamageBonusPct(this.activeHero) / 100);
+      const dmg = Math.round(baseDmg * this.attackBuffMultiplier * skillBonus);
       this.morwennaHealth = Math.max(0, this.morwennaHealth - dmg);
       this.spawnFloatingText(this.morwennaGroup.position, `-${dmg}`, isHeavy ? '#ffd700' : '#ff88aa');
 
@@ -1720,7 +1965,8 @@ export class Oakhaven3DExperience {
 
       if (this.morwennaHealth <= 0) {
         this.morwennaState = 'DEAD';
-        this.spawnFloatingText(this.morwennaGroup.position, '👑 ¡MADRE MORWENNA PURIFICADA! 👑', '#ffd700');
+        this.spawnFloatingText(this.morwennaGroup.position, '👑 ¡MADRE MORWENNA PURIFICADA! (+250 EXP) 👑', '#ffd700');
+        this.progression.addExp(250);
         this.audio.playFinisherSound(true);
         if (this.morwennaHpBarContainer) {
           this.morwennaHpBarContainer.style.borderColor = '#ffd700';
@@ -1775,13 +2021,15 @@ export class Oakhaven3DExperience {
     this.scene.add(arrowGroup);
 
     const speed = isHeavy ? 22 : 18;
+    const arrowBonus = 1.0 + (this.progression.getArrowDamageBonusPct() / 100);
+    const baseDamage = isHeavy ? 48 : 28;
     this.projectiles.push({
       mesh: arrowGroup,
       light,
       velocity: forward.multiplyScalar(speed),
       life: 1.8,
       maxLife: 1.8,
-      damage: Math.round((isHeavy ? 48 : 28) * this.attackBuffMultiplier),
+      damage: Math.round(baseDamage * this.attackBuffMultiplier * arrowBonus),
       isHeavy
     });
   }
@@ -1810,7 +2058,8 @@ export class Oakhaven3DExperience {
 
           if (this.enemyHealth <= 0) {
             this.enemyState = 'DEAD';
-            this.spawnFloatingText(this.enemyGroup.position, '¡PURIFICADO!', '#ffd700');
+            this.spawnFloatingText(this.enemyGroup.position, '¡PURIFICADO! (+40 EXP)', '#ffd700');
+            this.progression.addExp(40);
             this.audio.playFinisherSound(true);
             this.enemyGroup.position.y = -0.3;
           }
@@ -1835,7 +2084,8 @@ export class Oakhaven3DExperience {
 
           if (this.cultistHealth <= 0) {
             this.cultistState = 'DEAD';
-            this.spawnFloatingText(this.cultistGroup.position, '¡PORTADOR DE CENIZA PURIFICADO!', '#ffd700');
+            this.spawnFloatingText(this.cultistGroup.position, '¡PORTADOR DE CENIZA PURIFICADO! (+60 EXP)', '#ffd700');
+            this.progression.addExp(60);
             this.audio.playFinisherSound(true);
             this.cultistGroup.position.y = -0.3;
             this.cultistCenserLight.intensity = 0;
@@ -1856,7 +2106,45 @@ export class Oakhaven3DExperience {
         }
       }
 
-      // 2. Check Morwenna collision
+      // 3. Check chain zealot enemy collision
+      if (!collided && this.zealotState !== 'DEAD') {
+        const dZealot = p.mesh.position.distanceTo(this.zealotGroup.position.clone().add(new THREE.Vector3(0, 0.9, 0)));
+        if (dZealot <= 1.6) {
+          collided = true;
+          this.zealotHealth = Math.max(0, this.zealotHealth - p.damage);
+          this.spawnFloatingText(this.zealotGroup.position, `-${p.damage} (FLECHA ABISAL)`, p.isHeavy ? '#ffd700' : '#ff7788');
+          this.audio.playCombatHit(p.isHeavy);
+
+          if (p.isHeavy) {
+            this.zealotState = 'STUNNED';
+            this.zealotTimer = 1.1;
+            this.spawnFloatingText(this.zealotGroup.position, '¡ATURDIDO! [E] ¡REMATAR!', '#ffaa44');
+          }
+
+          if (this.zealotHealth <= 0) {
+            this.zealotState = 'DEAD';
+            this.spawnFloatingText(this.zealotGroup.position, '¡FLAGELANTE PURIFICADO! (+80 EXP)', '#ffd700');
+            this.progression.addExp(80);
+            this.audio.playFinisherSound(true);
+            this.zealotGroup.position.y = -0.3;
+            this.inventory.addItem({
+              id: 'consecrated_ash',
+              name: 'Ceniza Consagrada',
+              description: 'Cenizas de santos de Londinium.',
+              category: 'consumable',
+              quantity: 1,
+              maxQuantity: 5,
+              effectType: 'buff_attack',
+              effectValue: 25,
+              icon: '✨'
+            });
+            this.spawnFloatingText(this.playerGroup.position, '🎒 ¡Ceniza Consagrada obtenida!', '#ffd7aa');
+          }
+          this.updateHUD();
+        }
+      }
+
+      // 4. Check Morwenna collision
       if (!collided && this.morwennaState !== 'DORMANT' && this.morwennaState !== 'DEAD') {
         const dMorw = p.mesh.position.distanceTo(this.morwennaGroup.position.clone().add(new THREE.Vector3(0, 1.2, 0)));
         if (dMorw <= 1.8) {
@@ -1873,7 +2161,8 @@ export class Oakhaven3DExperience {
 
           if (this.morwennaHealth <= 0) {
             this.morwennaState = 'DEAD';
-            this.spawnFloatingText(this.morwennaGroup.position, '👑 ¡MADRE MORWENNA PURIFICADA! 👑', '#ffd700');
+            this.spawnFloatingText(this.morwennaGroup.position, '👑 ¡MADRE MORWENNA PURIFICADA! (+250 EXP) 👑', '#ffd700');
+            this.progression.addExp(250);
             this.audio.playFinisherSound(true);
             if (this.morwennaHpBarContainer) {
               this.morwennaHpBarContainer.style.borderColor = '#ffd700';
@@ -1885,7 +2174,7 @@ export class Oakhaven3DExperience {
         }
       }
 
-      // 3. Check Destructibles collision
+      // 5. Check Destructibles collision
       if (!collided) {
         for (const prop of this.destructibles) {
           if (!prop.isDestroyed) {
@@ -1912,7 +2201,9 @@ export class Oakhaven3DExperience {
     this.scene.remove(prop.mesh);
     this.audio.playWoodBreak();
     this.createDebrisExplosion(prop.position);
+    this.progression.addExp(15);
     this.spawnFloatingText(prop.position, `+15 EXP (${prop.name})`, '#ffd700');
+    this.updateHUD();
   }
 
   private createDebrisExplosion(pos: THREE.Vector3): void {
@@ -1968,11 +2259,14 @@ export class Oakhaven3DExperience {
     this.dodgeTimer = 0.55;
     this.audio.playSfx('dodge');
 
-    // Propel player in forward direction
-    const forward = new THREE.Vector3(0, 0, -1).applyEuler(this.playerGroup.rotation);
-    this.playerVelocity.copy(forward.multiplyScalar(9.5));
+    // Propel player in forward direction (with Shadow Step boost if unlocked for Khaterine)
+    const isShadowStep = this.activeHero === 'khaterine' && this.progression.isSkillUnlocked('khaterine_shadow_step');
+    const speed = isShadowStep ? 9.5 * 1.3 : 9.5;
 
-    this.spawnFloatingText(this.playerGroup.position, '¡ESQUIVADO!', '#88ffaa');
+    const forward = new THREE.Vector3(0, 0, -1).applyEuler(this.playerGroup.rotation);
+    this.playerVelocity.copy(forward.multiplyScalar(speed));
+
+    this.spawnFloatingText(this.playerGroup.position, isShadowStep ? '¡PASO ESPECTRAL (+30%)!' : '¡ESQUIVADO!', '#88ffaa');
 
     setTimeout(() => {
       this.playerStats.isDodging = false;
@@ -2151,7 +2445,8 @@ export class Oakhaven3DExperience {
       this.enemyHealth = 0;
       this.enemyState = 'DEAD';
       this.audio.playFinisherSound(true);
-      this.spawnFloatingText(this.enemyGroup.position, '⚡ ¡REMATADO! (+120 DAÑO CRÍTICO)', '#ffd700');
+      this.spawnFloatingText(this.enemyGroup.position, '⚡ ¡REMATADO! (+120 DAÑO & 75 EXP)', '#ffd700');
+      this.progression.addExp(75);
       this.enemyGroup.position.y = -0.3;
       this.playerLight.intensity = 4.0;
       setTimeout(() => { if (this.playerLight) this.playerLight.intensity = 1.4; }, 300);
@@ -2167,7 +2462,8 @@ export class Oakhaven3DExperience {
       this.cultistCenserLight.intensity = 0;
       this.cultistGroup.position.y = -0.3;
       this.audio.playFinisherSound(true);
-      this.spawnFloatingText(this.cultistGroup.position, '⚡ ¡CULTISTA REMATADO! (+110 DAÑO CRÍTICO)', '#ffd700');
+      this.spawnFloatingText(this.cultistGroup.position, '⚡ ¡CULTISTA REMATADO! (+110 DAÑO & 100 EXP)', '#ffd700');
+      this.progression.addExp(100);
       this.inventory.addItem({
         id: 'holy_water_posture',
         name: 'Agua Bendita de Jude',
@@ -2186,6 +2482,33 @@ export class Oakhaven3DExperience {
       return;
     }
 
+    // Check if Chain Zealot is stunned
+    const distToZealot = this.playerGroup.position.distanceTo(this.zealotGroup.position);
+    if (this.zealotState === 'STUNNED' && distToZealot <= 3.4) {
+      this.zealotHealth = 0;
+      this.zealotState = 'DEAD';
+      this.zealotGroup.position.y = -0.3;
+      this.audio.playFinisherSound(true);
+      this.spawnFloatingText(this.zealotGroup.position, '⚡ ¡FLAGELANTE REMATADO! (+140 DAÑO & 150 EXP)', '#ffd700');
+      this.progression.addExp(150);
+      this.inventory.addItem({
+        id: 'consecrated_ash',
+        name: 'Ceniza Consagrada',
+        description: 'Cenizas de santos de Londinium. Imbuye las armas con daño sagrado.',
+        category: 'consumable',
+        quantity: 1,
+        maxQuantity: 5,
+        effectType: 'buff_attack',
+        effectValue: 25,
+        icon: '✨'
+      });
+      this.spawnFloatingText(this.playerGroup.position, '🎒 ¡Ceniza Consagrada obtenida!', '#ffd7aa');
+      this.playerLight.intensity = 4.0;
+      setTimeout(() => { if (this.playerLight) this.playerLight.intensity = 1.4; }, 300);
+      this.updateHUD();
+      return;
+    }
+
     // Check if Morwenna is stunned
     const distToMorwenna = this.playerGroup.position.distanceTo(this.morwennaGroup.position);
     if (this.morwennaState === 'STUNNED' && distToMorwenna <= 3.6) {
@@ -2193,12 +2516,14 @@ export class Oakhaven3DExperience {
       this.morwennaHealth = Math.max(0, this.morwennaHealth - finisherDmg);
       this.audio.playFinisherSound(true);
       this.spawnFloatingText(this.morwennaGroup.position, `⚡ ¡REMATADA! -${finisherDmg} DAÑO SAGRADO`, '#ffd700');
+      this.progression.addExp(80);
       this.playerLight.intensity = 4.0;
       setTimeout(() => { if (this.playerLight) this.playerLight.intensity = 1.4; }, 300);
 
       if (this.morwennaHealth <= 0) {
         this.morwennaState = 'DEAD';
-        this.spawnFloatingText(this.morwennaGroup.position, '👑 ¡MADRE MORWENNA PURIFICADA! 👑', '#ffd700');
+        this.spawnFloatingText(this.morwennaGroup.position, '👑 ¡MADRE MORWENNA PURIFICADA! (+250 EXP) 👑', '#ffd700');
+        this.progression.addExp(250);
         if (this.morwennaHpBarContainer) {
           this.morwennaHpBarContainer.style.borderColor = '#ffd700';
           const title = this.morwennaHpBarContainer.querySelector('div') as HTMLDivElement;
@@ -2256,6 +2581,7 @@ export class Oakhaven3DExperience {
     // 1. Finisher priority
     const distToEnemy = pPos.distanceTo(this.enemyGroup.position);
     const distToCultist = pPos.distanceTo(this.cultistGroup.position);
+    const distToZealot = pPos.distanceTo(this.zealotGroup.position);
     if (this.enemyState === 'STUNNED' && distToEnemy <= 3.0) {
       targetFound = 'finisher';
       badgeText = '⚡ [E] ¡REMATAR SABUESO ATURDIDO!';
@@ -2264,6 +2590,10 @@ export class Oakhaven3DExperience {
       targetFound = 'finisher';
       badgeText = '⚡ [E] ¡REMATAR CULTISTA ATURDIDO!';
       badgeColor = '#ffd700';
+    } else if (this.zealotState === 'STUNNED' && distToZealot <= 3.2) {
+      targetFound = 'finisher';
+      badgeText = '⚡ [E] ¡REMATAR FLAGELANTE ATURDIDO!';
+      badgeColor = '#ff4444';
     } else {
       const distToMorwenna = pPos.distanceTo(this.morwennaGroup.position);
       if (this.morwennaState === 'STUNNED' && distToMorwenna <= 3.5) {
@@ -2483,6 +2813,7 @@ export class Oakhaven3DExperience {
     this.updatePlayer(delta);
     this.updateEnemy(delta);
     this.updateCultist(delta);
+    this.updateZealot(delta);
     this.updateBossMorwenna(delta);
     this.updateProjectiles(delta);
     this.updateDebris(delta);
@@ -2912,6 +3243,192 @@ export class Oakhaven3DExperience {
   }
 
   // =========================================================================
+  // ENEMY 3: CHAIN ZEALOT FLAGELLANT AI (PATROL, ALERT, CHASE, FLAGELLUM COMBAT)
+  // =========================================================================
+  private updateZealot(delta: number): void {
+    if (this.zealotState === 'DEAD') return;
+    if (this.isDialogueOpen) return;
+
+    // Chain & Flail ball swinging physics
+    if (this.zealotChainGroup) {
+      this.zealotChainGroup.rotation.z = Math.sin(this.clock.elapsedTime * 5.0) * 0.45;
+      this.zealotChainGroup.rotation.x = Math.cos(this.clock.elapsedTime * 4.2) * 0.25;
+    }
+
+    const toPlayer = this.playerGroup.position.clone().sub(this.zealotGroup.position);
+    toPlayer.y = 0;
+    const distToPlayer = toPlayer.length();
+
+    if (this.zealotState === 'PATROL') {
+      this.zealotWarningMesh.visible = false;
+      const targetWaypoint = this.zealotWaypoints[this.zealotCurrentWaypointIndex];
+      const toWaypoint = targetWaypoint.clone().sub(this.zealotGroup.position);
+      toWaypoint.y = 0;
+      const distToWaypoint = toWaypoint.length();
+
+      // Check player detection within 6.5m
+      if (distToPlayer <= 6.5) {
+        this.zealotState = 'ALERT';
+        this.zealotTimer = 0.55;
+        this.zealotWarningMesh.visible = true;
+        this.audio.playSfx('warning');
+        this.spawnFloatingText(this.zealotGroup.position, '⚠️ ¡FLAGELANTE ALERTA! (LATIGAZO)', '#ff3344');
+        return;
+      }
+
+      if (distToWaypoint <= 0.45) {
+        this.zealotCurrentWaypointIndex = (this.zealotCurrentWaypointIndex + 1) % this.zealotWaypoints.length;
+      } else {
+        toWaypoint.normalize();
+        this.zealotGroup.position.add(toWaypoint.multiplyScalar(1.3 * delta));
+        const targetAngle = Math.atan2(toWaypoint.x, toWaypoint.z);
+        this.zealotGroup.rotation.y = THREE.MathUtils.lerp(this.zealotGroup.rotation.y, targetAngle, 0.08);
+      }
+    } else if (this.zealotState === 'ALERT') {
+      this.zealotTimer -= delta;
+      this.zealotWarningMesh.rotation.y += delta * 8;
+      if (distToPlayer > 0.1) {
+        const targetAngle = Math.atan2(toPlayer.x, toPlayer.z);
+        this.zealotGroup.rotation.y = THREE.MathUtils.lerp(this.zealotGroup.rotation.y, targetAngle, 0.14);
+      }
+
+      if (distToPlayer > 11.0) {
+        this.zealotState = 'RETURNING';
+        this.zealotWarningMesh.visible = false;
+        return;
+      }
+
+      if (this.zealotTimer <= 0) {
+        this.zealotState = 'CHASE';
+        this.zealotWarningMesh.visible = false;
+      }
+    } else if (this.zealotState === 'CHASE') {
+      this.zealotWarningMesh.visible = false;
+
+      if (distToPlayer > 0.1) {
+        const targetAngle = Math.atan2(toPlayer.x, toPlayer.z);
+        this.zealotGroup.rotation.y = THREE.MathUtils.lerp(this.zealotGroup.rotation.y, targetAngle, 0.12);
+      }
+
+      if (distToPlayer > 12.0) {
+        this.zealotState = 'RETURNING';
+        return;
+      }
+
+      // Chain whip range is 3.8m!
+      if (distToPlayer > 3.8) {
+        toPlayer.normalize();
+        this.zealotGroup.position.add(toPlayer.multiplyScalar(2.4 * delta));
+        this.zealotGroup.position.z = THREE.MathUtils.clamp(this.zealotGroup.position.z, -22, -10);
+      } else {
+        // Prepare telegraphed chain sweep
+        this.zealotState = 'WINDUP';
+        this.zealotTimer = 0.58;
+        this.zealotWarningMesh.visible = true;
+        this.audio.playSfx('warning');
+      }
+    } else if (this.zealotState === 'RETURNING') {
+      this.zealotWarningMesh.visible = false;
+      const targetWaypoint = this.zealotWaypoints[this.zealotCurrentWaypointIndex];
+      const toWaypoint = targetWaypoint.clone().sub(this.zealotGroup.position);
+      toWaypoint.y = 0;
+      const distToWaypoint = toWaypoint.length();
+
+      if (distToPlayer <= 5.8) {
+        this.zealotState = 'ALERT';
+        this.zealotTimer = 0.45;
+        this.zealotWarningMesh.visible = true;
+        return;
+      }
+
+      if (distToWaypoint <= 0.6) {
+        this.zealotState = 'PATROL';
+      } else {
+        toWaypoint.normalize();
+        this.zealotGroup.position.add(toWaypoint.multiplyScalar(1.6 * delta));
+        const targetAngle = Math.atan2(toWaypoint.x, toWaypoint.z);
+        this.zealotGroup.rotation.y = THREE.MathUtils.lerp(this.zealotGroup.rotation.y, targetAngle, 0.08);
+      }
+    } else if (this.zealotState === 'WINDUP') {
+      this.zealotTimer -= delta;
+      this.zealotWarningMesh.rotation.y += delta * 9;
+      this.zealotWarningMesh.visible = Math.floor(this.clock.elapsedTime * 20) % 2 === 0;
+
+      // Spin chain above head
+      if (this.zealotChainGroup) {
+        this.zealotChainGroup.rotation.y += delta * 15;
+      }
+
+      if (this.zealotTimer <= 0) {
+        this.zealotState = 'ATTACK';
+        this.zealotWarningMesh.visible = false;
+        this.executeZealotAttack();
+      }
+    } else if (this.zealotState === 'RECOVERY') {
+      this.zealotTimer -= delta;
+      if (this.zealotTimer <= 0) {
+        this.zealotState = 'CHASE';
+      }
+    } else if (this.zealotState === 'STUNNED') {
+      this.zealotTimer -= delta;
+      this.zealotGroup.rotation.z = Math.sin(this.clock.elapsedTime * 24) * 0.15;
+      if (this.zealotTimer <= 0) {
+        this.zealotGroup.rotation.z = 0;
+        this.zealotState = 'RECOVERY';
+        this.zealotTimer = 0.45;
+      }
+    }
+  }
+
+  private executeZealotAttack(): void {
+    const dist = this.playerGroup.position.distanceTo(this.zealotGroup.position);
+
+    // Wide sweeping range: 4.2m!
+    if (dist <= 4.2) {
+      // Check Parry with relic bonus
+      const parryWindow = 280 + this.inventory.getParryBonusMs();
+      const isParry = this.playerStats.isGuarding && (performance.now() - this.lastGuardTime) <= parryWindow;
+      if (isParry) {
+        this.audio.playSfx('parry');
+        this.zealotState = 'STUNNED';
+        this.zealotTimer = 2.0; // 2.0s Stunned window for Finisher
+        const msg = this.inventory.getParryBonusMs() > 0 ? '¡PARRY DE CADENA SAGRADO (+70ms)!' : '¡PARRY DE CADENA!';
+        this.spawnFloatingText(this.playerGroup.position, msg, '#77aaff');
+        this.spawnFloatingText(this.zealotGroup.position, '⚡ ¡ATURDIDO! [E] ¡REMATAR!', '#ffd700');
+        return;
+      }
+
+      // Check Dodge
+      if (this.playerStats.isDodging) {
+        this.spawnFloatingText(this.playerGroup.position, '¡LATIGAZO ESQUIVADO!', '#88ffaa');
+        this.zealotState = 'RECOVERY';
+        this.zealotTimer = 0.6;
+        return;
+      }
+
+      // Impact damage (Heavy chain swipe)
+      const dmg = this.playerStats.isGuarding ? 6 : 20;
+      this.playerStats.health = Math.max(0, this.playerStats.health - dmg);
+      this.audio.playCombatHit(true);
+      this.spawnFloatingText(this.playerGroup.position, `-${dmg} (BARRIDO DE CADENA)`, '#ff3344');
+      this.updateHUD();
+
+      // Revive if fallen
+      if (this.playerStats.health <= 0) {
+        this.playerStats.health = 100;
+        this.playerStats.posture = 50;
+        this.playerGroup.position.set(0, 0, 4);
+        this.spawnFloatingText(this.playerGroup.position, '✝ BENDICIÓN: RESUCITADO EN EL SANTUARIO ✝', '#ffd700');
+        this.audio.playSfx('menu_select');
+        this.updateHUD();
+      }
+    }
+
+    this.zealotState = 'RECOVERY';
+    this.zealotTimer = 0.65;
+  }
+
+  // =========================================================================
   // INVENTORY & RELICS MANAGEMENT
   // =========================================================================
   public toggleInventoryModal(): void {
@@ -3089,6 +3606,236 @@ export class Oakhaven3DExperience {
     }
   }
 
+  // =========================================================================
+  // PROGRESSION & SKILL TREE MANAGEMENT
+  // =========================================================================
+  public toggleSkillTreeModal(): void {
+    this.isSkillTreeOpen = !this.isSkillTreeOpen;
+    if (!this.skillTreeModalEl) return;
+
+    if (this.isSkillTreeOpen) {
+      this.skillTreeModalEl.style.display = 'block';
+      this.renderSkillTreeItems();
+      this.audio.playSfx('menu_select');
+    } else {
+      this.skillTreeModalEl.style.display = 'none';
+      this.audio.playSfx('menu_select');
+    }
+  }
+
+  public unlockSkillFromTree(skillId: string): void {
+    const result = this.progression.unlockSkill(skillId);
+    if (result.success) {
+      this.audio.playSfx('parry');
+      this.spawnFloatingText(this.playerGroup.position, `🌟 ¡${result.skill?.name.toUpperCase()} CONSAGRADA!`, '#ffd700');
+
+      // If Thomas unlocked Iron Will, increase Max Health
+      if (skillId === 'thomas_iron_will') {
+        const bonus = this.progression.getMaxHealthBonus('thomas');
+        this.playerStats.maxHealth = 100 + bonus;
+        this.playerStats.health = Math.min(this.playerStats.maxHealth, this.playerStats.health + bonus);
+      }
+
+      this.updateHUD();
+      this.renderSkillTreeItems();
+    } else {
+      this.audio.playSfx('warning');
+      this.spawnFloatingText(this.playerGroup.position, result.message, '#ff6666');
+    }
+  }
+
+  private renderSkillTreeItems(): void {
+    if (!this.skillTreeModalEl) return;
+
+    const statusEl = this.skillTreeModalEl.querySelector('#p3d-skills-status') as HTMLDivElement;
+    const thomasGrid = this.skillTreeModalEl.querySelector('#p3d-skills-thomas-grid') as HTMLDivElement;
+    const khaterineGrid = this.skillTreeModalEl.querySelector('#p3d-skills-khaterine-grid') as HTMLDivElement;
+
+    const allSkills = this.progression.getSkills();
+    const unlockedCount = allSkills.filter(s => s.isUnlocked).length;
+    const exp = this.progression.getExp();
+
+    if (statusEl) {
+      statusEl.innerHTML = `✦ EXP Disponible: <span style="color:#ffd700; font-weight:bold;">${exp} EXP</span> | Bendiciones Consagradas: <span style="color:#a3ffc7; font-weight:bold;">${unlockedCount}/${allSkills.length}</span> | EXP Total: <span style="color:#66ccff;">${this.progression.getTotalExpEarned()} EXP</span>`;
+    }
+
+    const renderCard = (skill: typeof allSkills[0]) => {
+      const card = document.createElement('div');
+      card.style.background = skill.isUnlocked ? 'rgba(32, 48, 30, 0.9)' : 'rgba(25, 18, 38, 0.85)';
+      card.style.border = `1px solid ${skill.isUnlocked ? '#ffd700' : '#5a3d78'}`;
+      card.style.borderRadius = '4px';
+      card.style.padding = '6px';
+      card.style.display = 'flex';
+      card.style.flexDirection = 'column';
+      card.style.gap = '3px';
+
+      const topRow = document.createElement('div');
+      topRow.style.display = 'flex';
+      topRow.style.justifyContent = 'space-between';
+      topRow.style.alignItems = 'center';
+
+      const title = document.createElement('div');
+      title.style.fontSize = '8px';
+      title.style.fontWeight = 'bold';
+      title.style.color = skill.isUnlocked ? '#ffd700' : '#dcd0ea';
+      title.innerText = `${skill.icon} ${skill.name}`;
+
+      const costBadge = document.createElement('span');
+      costBadge.style.fontSize = '7px';
+      costBadge.style.fontFamily = 'monospace';
+      costBadge.style.fontWeight = 'bold';
+      costBadge.style.color = skill.isUnlocked ? '#88ffaa' : (exp >= skill.cost ? '#ffd700' : '#ff8888');
+      costBadge.innerText = skill.isUnlocked ? '✦ CONSAGRADA' : `${skill.cost} EXP`;
+
+      topRow.appendChild(title);
+      topRow.appendChild(costBadge);
+
+      const desc = document.createElement('div');
+      desc.style.fontSize = '7px';
+      desc.style.color = '#c5b4db';
+      desc.style.lineHeight = '1.25';
+      desc.innerText = skill.description;
+
+      const btn = document.createElement('button');
+      btn.style.width = '100%';
+      btn.style.padding = '3px 0';
+      btn.style.borderRadius = '3px';
+      btn.style.fontSize = '7.5px';
+      btn.style.fontWeight = 'bold';
+      btn.style.marginTop = '2px';
+      btn.style.cursor = skill.isUnlocked ? 'default' : 'pointer';
+
+      if (skill.isUnlocked) {
+        btn.innerText = '✓ ACTIVA';
+        btn.style.background = '#27ae60';
+        btn.style.color = '#fff';
+        btn.style.border = '1px solid #2ecc71';
+        btn.disabled = true;
+      } else {
+        const canAfford = exp >= skill.cost;
+        const parentOk = !skill.requiredSkillId || this.progression.isSkillUnlocked(skill.requiredSkillId);
+        if (!parentOk) {
+          btn.innerText = '🔒 BLOQUEADA (Requiere previa)';
+          btn.style.background = '#2a1a1a';
+          btn.style.color = '#888';
+          btn.style.border = '1px solid #444';
+          btn.disabled = true;
+        } else if (!canAfford) {
+          btn.innerText = `EXP INSUFICIENTE (${skill.cost} EXP)`;
+          btn.style.background = '#2a1420';
+          btn.style.color = '#ff9999';
+          btn.style.border = '1px solid #662233';
+          btn.disabled = true;
+        } else {
+          btn.innerText = `⚡ CONSAGRAR (${skill.cost} EXP)`;
+          btn.style.background = '#4a2d75';
+          btn.style.color = '#ffd700';
+          btn.style.border = '1px solid #ffd700';
+          btn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            this.unlockSkillFromTree(skill.id);
+          });
+        }
+      }
+
+      card.appendChild(topRow);
+      card.appendChild(desc);
+      card.appendChild(btn);
+      return card;
+    };
+
+    if (thomasGrid) {
+      thomasGrid.innerHTML = '';
+      const thomasSkills = this.progression.getSkillsForHero('thomas');
+      thomasSkills.forEach(s => thomasGrid.appendChild(renderCard(s)));
+    }
+
+    if (khaterineGrid) {
+      khaterineGrid.innerHTML = '';
+      const khaterineSkills = this.progression.getSkillsForHero('khaterine');
+      khaterineSkills.forEach(s => khaterineGrid.appendChild(renderCard(s)));
+    }
+  }
+
+  // =========================================================================
+  // SANCTUARY SAVE & RESTORATION
+  // =========================================================================
+  public executeSanctuarySave(): void {
+    const distToCedric = this.playerGroup.position.distanceTo(this.cedricGroup.position);
+    const isAtSanctuary = distToCedric < 6.5;
+
+    if (isAtSanctuary) {
+      // Full shrine restoration
+      this.playerStats.health = this.playerStats.maxHealth;
+      this.playerStats.posture = this.playerStats.maxPosture;
+
+      // Pulse sanctuary cross light
+      if (this.sanctuaryCrossLight) {
+        this.sanctuaryCrossLight.intensity = 5.0;
+        setTimeout(() => {
+          if (this.sanctuaryCrossLight) this.sanctuaryCrossLight.intensity = 1.8;
+        }, 1200);
+      }
+
+      this.audio.playSfx('parry');
+      this.spawnFloatingText(this.playerGroup.position, '💾 ¡SANTUARIO CONSAGRADO! Partida Guardada & Salud Restaurada', '#ffd700');
+
+      const toast = this.uiOverlay.querySelector('#p3d-dialogue-toast') as HTMLDivElement;
+      if (toast) {
+        toast.innerHTML = `<span style="color: #ffd700; font-weight: bold;">Padre Cedric:</span> «Que la gracia de San Jude guarde tu alma, hijo mío. Tu devoción ha quedado consagrada en este altar sagrado.»`;
+        toast.style.borderColor = '#ffd700';
+      }
+    } else {
+      this.audio.playSfx('menu_select');
+      this.spawnFloatingText(this.playerGroup.position, '💾 Partida Guardada en Punto de Control', '#a3ffc7');
+    }
+
+    GameSaveManager.saveGame({
+      activeHero: this.activeHero,
+      health: this.playerStats.health,
+      maxHealth: this.playerStats.maxHealth,
+      posture: this.playerStats.posture,
+      maxPosture: this.playerStats.maxPosture,
+      inventory: this.inventory.toJSON(),
+      progression: this.progression.toJSON(),
+      sanctuaryVisited: isAtSanctuary
+    });
+
+    this.updateHUD();
+  }
+
+  private loadSavedSanctuaryState(): void {
+    const save = GameSaveManager.loadGame();
+    if (!save) return;
+
+    try {
+      if (save.progression) {
+        this.progression = Progression.fromJSON(save.progression);
+      }
+      if (save.inventory) {
+        this.inventory = Inventory.fromJSON(save.inventory);
+      }
+      if (save.activeHero && save.activeHero !== this.activeHero) {
+        this.toggleHero();
+      }
+      if (save.maxHealth) {
+        this.playerStats.maxHealth = save.maxHealth;
+      }
+      if (save.health) {
+        this.playerStats.health = Math.min(this.playerStats.maxHealth, save.health);
+      }
+      if (save.maxPosture) {
+        this.playerStats.maxPosture = save.maxPosture;
+      }
+      if (save.posture) {
+        this.playerStats.posture = save.posture;
+      }
+      console.log('Sanctuary save loaded from:', save.dateStr);
+    } catch (err) {
+      console.warn('Error restoring sanctuary save data:', err);
+    }
+  }
+
   private updateCamera(_delta: number): void {
     if (this.cameraMode === 'isometric') {
       this.targetCameraPos.set(
@@ -3245,16 +3992,33 @@ export class Oakhaven3DExperience {
     if (this.enemyHpBarFill) {
       const ePct = Math.max(0, (this.enemyHealth / this.enemyMaxHealth) * 100);
       this.enemyHpBarFill.style.width = `${ePct}%`;
-      if (this.enemyHealth <= 0 && this.enemyHpBarContainer) {
-        this.enemyHpBarContainer.style.display = 'none';
+      const dist = this.playerGroup.position.distanceTo(this.enemyGroup.position);
+      if (this.enemyHealth > 0 && dist < 12) {
+        if (this.enemyHpBarContainer) this.enemyHpBarContainer.style.display = 'block';
+      } else {
+        if (this.enemyHpBarContainer) this.enemyHpBarContainer.style.display = 'none';
       }
     }
 
     if (this.cultistHpBarFill) {
       const cPct = Math.max(0, (this.cultistHealth / this.cultistMaxHealth) * 100);
       this.cultistHpBarFill.style.width = `${cPct}%`;
-      if (this.cultistHealth <= 0 && this.cultistHpBarContainer) {
-        this.cultistHpBarContainer.style.display = 'none';
+      const dist = this.playerGroup.position.distanceTo(this.cultistGroup.position);
+      if (this.cultistHealth > 0 && dist < 12) {
+        if (this.cultistHpBarContainer) this.cultistHpBarContainer.style.display = 'block';
+      } else {
+        if (this.cultistHpBarContainer) this.cultistHpBarContainer.style.display = 'none';
+      }
+    }
+
+    if (this.zealotHpBarFill) {
+      const zPct = Math.max(0, (this.zealotHealth / this.zealotMaxHealth) * 100);
+      this.zealotHpBarFill.style.width = `${zPct}%`;
+      const dist = this.playerGroup.position.distanceTo(this.zealotGroup.position);
+      if (this.zealotHealth > 0 && dist < 13) {
+        if (this.zealotHpBarContainer) this.zealotHpBarContainer.style.display = 'block';
+      } else {
+        if (this.zealotHpBarContainer) this.zealotHpBarContainer.style.display = 'none';
       }
     }
 
@@ -3271,6 +4035,11 @@ export class Oakhaven3DExperience {
       const balm = this.inventory.getItem('maiden_balm') || this.inventory.getItem('balm_health');
       const count = balm ? balm.quantity : 0;
       btnQuickBalm.innerText = `🌿 [Q] BÁLSAMO (${count})`;
+    }
+
+    const btnSkills = this.uiOverlay.querySelector('#btn-toggle-skills') as HTMLButtonElement;
+    if (btnSkills) {
+      btnSkills.innerText = `🌟 [H] HABILIDADES (${this.progression.getExp()} EXP)`;
     }
 
     if (this.attackBuffTimer > 0 && weaponBadge) {
