@@ -127,10 +127,40 @@ Este documento consolida el progreso completo de desarrollo del videojuego **The
 
 ---
 
+### ✦ Entrega 8: Madre Morwenna Fase 2 ("Pira Desatada") & Expansión de las Criptas
+- **Jefa Madre Morwenna — Fase 2 Cinemática (`<= 50% HP`)**:
+  - Transición cinemática al llegar a 140/280 HP: onda expansiva de fuego con repulsión física del jugador y grito litúrgico de condena.
+  - Transformación visual completa del modelo 3D:
+    - **Alas de Ceniza y Fuego** desplegadas en la espalda con aleteo continuo.
+    - **Gran Espada Llameante de la Pira** empuñada a dos manos con brillo ígneo parpadeante.
+    - **Aureola de Espinas Ígneas** flotando y rotando sobre la cogulla ceremonial.
+    - Ojos incandescentes de plasma blanco-dorado y aura de iluminación carmesí expandida (`7.0` de intensidad).
+  - Tres nuevos patrones de ataque avanzados:
+    1. **Torbellino de la Pira (Pyre Whirlwind)**: barrido giratorio de 360° en un radio de 4.4 metros con retroceso y dispersión de 4 ascuas balísticas.
+    2. **Columnas de Fuego del Crisol (Flame Geysers)**: invocación de 3 círculos rúnicos en el suelo que erupcionan en géiseres de llamas verticales con daño de área.
+    3. **Embestida Infernal (Blazing Lunge)**: carga a alta velocidad con rastro de fuego, susceptible a desvío con parry `[L]` (aturdimiento prolongado de 2.6s).
+- **Purificación y Llave de las Criptas (`oakhaven_crypt_key`)**:
+  - Al vaciar los 280 HP de Morwenna: concesión de `+350 EXP` y entrega automática en la bolsa de la *Llave de las Criptas de San Jude*.
+  - Diálogo de confirmación del Padre Cedric y desbloqueo sonoro de la verja.
+- **Expansión Territorial: Cementerio de Oakhaven y Criptas de San Jude (z: -24 a -48)**:
+  - Apertura física y cinemática de la gran verja gótica de hierro forjado al norte de la Pira.
+  - Expansión de los límites de movimiento del jugador de `z: -23` a `z: -46.5`.
+  - Terreno cementerial con niebla densa y suelo adoquinado oscuro.
+  - 4 lápidas góticas célticas destruibles y 1 sarcófago monumental de piedra (+20 a +30 EXP al romperlos).
+  - 2 antorchas espectrales de piedra con llama azul/cian (`0x00e5ff`).
+  - Mausoleo de la cripta con portal de descenso a las catacumbas.
+- **Enemigo 4: Penitente de la Cripta (Skeleton Guardian)**:
+  - Modelo 3D de esqueleto con caja torácica, cráneo con ojos cian brillantes, sotana rasgada y mandoble oxidado.
+  - Sistema de patrulla por waypoints en el cementerio, aviso de alerta ⚠️, ataques de tajo pesado y remate cinemático `[E]` que otorga +180 EXP y suelta *Bálsamo del Ocaso*.
+  - Barra de vida dedicada `#p3d-skeleton-hud`.
+- **Batería de Tests Unitarios**: 38 pruebas vitest automatizadas aprobadas al 100% (añadida suite `BossPhase.test.ts`).
+
+---
+
 ## 📊 Métricas del Proyecto
 - **Lenguaje**: TypeScript 100% estricto.
 - **Framework Gráfico 2D**: HTML5 Canvas nativo de alto rendimiento (60 FPS sin caídas).
 - **Framework Gráfico 3D**: Three.js con sombras suaves PCFSoft, ACESFilmic Tone Mapping y niebla exponencial.
 - **Audio**: Web Audio API nativo sin dependencias de archivos externos.
-- **Tests**: 35 pruebas unitarias vitest aprobadas (incluye dominios de combate, historia, shalem, inventario, reliquias, progresión y guardado).
+- **Tests**: 38 pruebas unitarias vitest aprobadas (incluye dominios de combate, historia, shalem, inventario, reliquias, progresión, guardado y fases de jefe).
 - **Repositorio**: Sincronizado en GitHub (`main`).

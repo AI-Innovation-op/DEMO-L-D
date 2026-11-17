@@ -51,23 +51,48 @@ Este documento establece las prioridades de desarrollo, mecánicas planeadas y e
   - Pulso sagrado de luz y bendición pastoral.
   - Persistencia en `localStorage` con serialización limpia y recarga automática al iniciar.
 
+### 6. Fase 2 de Jefa Madre Morwenna: Pira del Abismo Desatada [COMPLETADO ✅]
+- [x] **Transición Cinemática al 50% HP (<= 140/280 HP)**:
+  - Onda de choque flamígera con empuje radial de 6.0m y daño sagrado de fuego.
+  - Diálogo enfurecido de Madre Morwenna en banner superior.
+  - Transformación visual: Alas gigantescas de ceniza y fuego ardiente, Gran Mandoble Flamígero con hoja de fuego, Corona de Espinas Candente en su cabeza, ojos de plasma blanco incandescente y aura de fuego expandida a 12m.
+- [x] **Tríada de Ataques Avanzados**:
+  - *Torbellino de la Pira (360°)*: Giro letal con ráfaga de 4 proyectiles de fuego dispersos.
+  - *Columnas de Fuego del Crisol (AoE)*: 3 geiseres subterráneos telegrafiados en el suelo con erupción letal.
+  - *Embestida Infernal*: Carrera a 7.5 m/s con estocada flamígera, vulnerable a Parry perfecto.
+- [x] **Victoria y Botín Clave**:
+  - Recompensa de +350 EXP.
+  - Obtención de la *Llave de las Criptas de San Jude* (`oakhaven_crypt_key`) en el inventario.
+  - Desbloqueo y apertura automática de las rejas de hierro del Cementerio.
+
+### 7. Expansión del Cementerio y Criptas de San Jude [COMPLETADO ✅]
+- [x] **Ampliación del Territorio 3D (`z: -23.5` a `-48.0`)**:
+  - Portón gótico de hierro forjado que rota 80° al vencer a Morwenna o usar la llave.
+  - Expansión dinámica del límite de desplazamiento del jugador de `-23.0` a `-46.5`.
+  - 4 lápidas celtas destruibles (+20 EXP cada una) y un Gran Sarcófago Monumental (+30 EXP).
+  - 2 pebeteros de fuego espectral cian (`0x00e5ff`) con iluminación nocturna.
+  - Fachada del Mausoleo de las Criptas de San Jude con portal abisal a la mazmorra.
+- [x] **Enemigo 4: Penitente de la Cripta (Esqueleto Guardián)**:
+  - Guerrero esquelético animado con claymore herrumbrosa, ojos cian resplandecientes y manto fúnebre.
+  - Patrulla entre lápidas, FSM completa, barra de salud `#p3d-skeleton-hud`.
+  - Remate ejecutor `[E]` con +180 EXP y botín de consumibles.
+
 ---
 
 ## 🚀 Próximas Prioridades (Siguiente Sprint)
 
-### 1. Fase 2 de Jefa Madre Morwenna (Pira Sagrada Desatada)
-- Cuando su salud baja del 50%, entra en modo de frenesí con espada imbuida en llamas.
-- Ataques de torbellino de fuego y mayor velocidad de desplazamiento.
-- Transición con diálogo exclusivo y explosión de brasas.
+### 1. Sistema de Alquimia y Fabricación en el Caldero de Elowen
+- Puesto interactivo junto a la boticaria Elowen (`[E]` para abrir mesa de mezclas).
+- Recetas canónicas para sintetizar bálsamos mejorados, agua bendita bendecida y elixires de postura combinando restos botados por cultistas y cenizas consagradas.
 
-### 2. Expansión del Cementerio de Oakhaven y Criptas
-- Apertura de las puertas de reja de hierro al norte del pueblo.
-- Tumbas góticas con lápidas destruibles y criptas subterráneas.
-- Nuevo tipo de enemigo: *Penitente Resucitado* (esqueleto con manto funerario).
+### 2. Descenso a los Interiores de las Criptas de San Jude (Dungeon Crawler)
+- Transición interactiva en el portal del mausoleo para ingresar al nivel subterráneo.
+- Catacumbas con trampas de estacas, sarcófagos con penitentes durmientes y pasillos con antorchas.
+- Jefe secundario opcional: *Inquisidor de las Catacumbas*.
 
-### 3. Sistema de Fabricación / Alquimia Básica
-- Combinar cenizas sagradas con agua bendita para crear bálsamos mejorados.
-- Menú de altar de alquimia cerca de Elowen.
+### 3. Sistema de Audio Procedural / Web Audio API
+- Síntesis de sonido ambiental (viento tenebroso, crujido de fuego de las antorchas).
+- Efectos de impacto metálico de espadas, parry resonante, zumbido de flechas de plasma y rugido de fuego de Morwenna.
 
 ---
 

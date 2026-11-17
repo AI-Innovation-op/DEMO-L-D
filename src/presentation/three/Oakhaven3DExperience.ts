@@ -162,19 +162,53 @@ export class Oakhaven3DExperience {
   private hasTalkedToKhaterine3D: boolean = false;
   private hasTalkedToThomas3D: boolean = false;
 
-  // Boss 3D (Madre Morwenna en la Gran Pira)
+  // Boss 3D (Madre Morwenna en la Gran Pira & Fase 2 Desatada)
   private morwennaGroup!: THREE.Group;
   private morwennaHealth: number = 280;
   private morwennaMaxHealth: number = 280;
-  private morwennaState: 'DORMANT' | 'CHASE' | 'WINDUP' | 'ATTACK' | 'RECOVERY' | 'STUNNED' | 'DEAD' = 'DORMANT';
+  private morwennaPhase: 1 | 2 = 1;
+  private morwennaState:
+    | 'DORMANT'
+    | 'CHASE'
+    | 'WINDUP'
+    | 'ATTACK'
+    | 'RECOVERY'
+    | 'STUNNED'
+    | 'PHASE2_TRANSITION'
+    | 'DEAD' = 'DORMANT';
   private morwennaTimer: number = 0;
   private morwennaCrucibleLight!: THREE.PointLight;
   private morwennaWarningMesh!: THREE.Mesh;
   private morwennaHpBarContainer?: HTMLDivElement;
   private morwennaHpBarFill?: HTMLDivElement;
+  private morwennaFlameWingsGroup?: THREE.Group;
+  private morwennaFlameSwordMesh?: THREE.Mesh;
+  private morwennaThornHaloMesh?: THREE.Mesh;
+  private morwennaEyeL!: THREE.Mesh;
+  private morwennaEyeR!: THREE.Mesh;
+  private morwennaAttackPattern: 'CRUCIBLE_STRIKE' | 'WHIRLWIND' | 'FLAME_GEYSERS' | 'LUNGE' = 'CRUCIBLE_STRIKE';
+  private flameGeysers: Array<{ markerMesh: THREE.Mesh; pillarMesh: THREE.Mesh; pos: THREE.Vector3; timer: number; hasErupted: boolean }> = [];
+
+  // Cemetery & Crypts Expansion (North of Pyre)
+  private cemeteryGateLeft!: THREE.Group;
+  private cemeteryGateRight!: THREE.Group;
+  private cemeteryGateOpen: boolean = false;
+
+  // Enemy 4: Crypt Penitent (Penitente de la Cripta)
+  private skeletonGroup!: THREE.Group;
+  private skeletonHealth: number = 130;
+  private skeletonMaxHealth: number = 130;
+  private skeletonState: 'PATROL' | 'ALERT' | 'CHASE' | 'WINDUP' | 'ATTACK' | 'RECOVERY' | 'STUNNED' | 'DEAD' = 'PATROL';
+  private skeletonTimer: number = 0;
+  private skeletonWarningMesh!: THREE.Mesh;
+  private skeletonWaypoints: THREE.Vector3[] = [];
+  private skeletonCurrentWaypointIndex: number = 0;
+  private skeletonHpBarContainer?: HTMLDivElement;
+  private skeletonHpBarFill?: HTMLDivElement;
+  private skeletonSwordMesh!: THREE.Mesh;
 
   // 3D Proximity Interactions & Modals
-  private activeInteractTarget?: 'elowen' | 'cedric' | 'shalem' | 'khaterine' | 'thomas' | 'sword' | 'finisher';
+  private activeInteractTarget?: 'elowen' | 'cedric' | 'shalem' | 'khaterine' | 'thomas' | 'sword' | 'finisher' | 'cemetery_gate';
   private proximityBadgeEl?: HTMLDivElement;
   private dialogueModalEl?: HTMLDivElement;
   private inventoryModalEl?: HTMLDivElement;
@@ -242,6 +276,8 @@ export class Oakhaven3DExperience {
     this.createKhaterine();
     this.createThomasNPC();
     this.createBossMorwenna();
+    this.createCemeteryAndCrypts();
+    this.createSkeletonEnemy();
 
     // 6. Build 3D UI Overlay
     this.createUIOverlay();
@@ -1288,6 +1324,8 @@ export class Oakhaven3DExperience {
     eyeL.position.set(-0.11, 1.72, 0.24);
     const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.045, 4, 4), eyeMat);
     eyeR.position.set(0.11, 1.72, 0.24);
+    this.morwennaEyeL = eyeL;
+    this.morwennaEyeR = eyeR;
     this.morwennaGroup.add(eyeL, eyeR);
 
     // Sacred Bronze Crucible (Crisol de Fuego Sagrado) held in hand
@@ -1303,6 +1341,52 @@ export class Oakhaven3DExperience {
     this.morwennaCrucibleLight.position.set(0.55, 1.25, 0.35);
     this.morwennaGroup.add(this.morwennaCrucibleLight);
 
+    // Phase 2: Blazing Wings of Ashes
+    this.morwennaFlameWingsGroup = new THREE.Group();
+    const wingMat = new THREE.MeshBasicMaterial({ color: 0xff3300, side: THREE.DoubleSide });
+    const wingL = new THREE.Mesh(new THREE.ConeGeometry(0.35, 1.8, 3), wingMat);
+    wingL.position.set(-0.65, 1.3, -0.25);
+    wingL.rotation.set(0.3, 0.4, 0.85);
+    const wingR = new THREE.Mesh(new THREE.ConeGeometry(0.35, 1.8, 3), wingMat);
+    wingR.position.set(0.65, 1.3, -0.25);
+    wingR.rotation.set(0.3, -0.4, -0.85);
+    this.morwennaFlameWingsGroup.add(wingL, wingR);
+    this.morwennaFlameWingsGroup.visible = false;
+    this.morwennaGroup.add(this.morwennaFlameWingsGroup);
+
+    // Phase 2: Blazing Executioner Greatsword
+    const swordGroup = new THREE.Group();
+    swordGroup.position.set(-0.6, 1.05, 0.35);
+    swordGroup.rotation.set(0.2, 0, -0.3);
+    const bladeMat = new THREE.MeshBasicMaterial({ color: 0xff5500 });
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.5, 0.05), bladeMat);
+    blade.position.y = 0.65;
+    const guard = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.06, 0.08), goldTrimMat);
+    guard.position.y = -0.05;
+    const hilt = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.35, 6), bronzeMat);
+    hilt.position.y = -0.22;
+    swordGroup.add(blade, guard, hilt);
+    this.morwennaFlameSwordMesh = swordGroup as any;
+    swordGroup.visible = false;
+    this.morwennaGroup.add(swordGroup);
+
+    // Phase 2: Halo of Fiery Thorns
+    const haloGroup = new THREE.Group();
+    haloGroup.position.set(0, 2.65, -0.05);
+    const haloRing = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.03, 6, 16), fireMat);
+    haloRing.rotation.x = Math.PI / 2;
+    haloGroup.add(haloRing);
+    for (let i = 0; i < 6; i++) {
+      const thorn = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.18, 4), goldTrimMat);
+      const ang = (i / 6) * Math.PI * 2;
+      thorn.position.set(Math.cos(ang) * 0.42, 0, Math.sin(ang) * 0.42);
+      thorn.rotation.y = ang;
+      haloGroup.add(thorn);
+    }
+    this.morwennaThornHaloMesh = haloGroup as any;
+    haloGroup.visible = false;
+    this.morwennaGroup.add(haloGroup);
+
     // Telegraphed Warning Octahedron above Morwenna
     const warnGeo = new THREE.OctahedronGeometry(0.28);
     const warnMat = new THREE.MeshBasicMaterial({ color: 0xff0044 });
@@ -1312,6 +1396,214 @@ export class Oakhaven3DExperience {
     this.morwennaGroup.add(this.morwennaWarningMesh);
 
     this.scene.add(this.morwennaGroup);
+  }
+
+  // =========================================================================
+  // CEMETERY & CRYPTS EXPANSION (NORTH OF OAKHAVEN PYRE)
+  // =========================================================================
+  private createCemeteryAndCrypts(): void {
+    const stoneMat = new THREE.MeshStandardMaterial({ color: 0x1f1d26, roughness: 0.95 });
+    const darkIronMat = new THREE.MeshStandardMaterial({ color: 0x111116, metalness: 0.85, roughness: 0.35 });
+    const soulFlameMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff });
+
+    // 1. Cemetery Ground (Extending from z: -23.5 to z: -48)
+    const cemeteryGeo = new THREE.PlaneGeometry(16, 26);
+    const cemeteryMat = new THREE.MeshStandardMaterial({ color: 0x0c0b11, roughness: 0.9 });
+    const cemeteryGround = new THREE.Mesh(cemeteryGeo, cemeteryMat);
+    cemeteryGround.rotation.x = -Math.PI / 2;
+    cemeteryGround.position.set(0, 0.01, -36);
+    cemeteryGround.receiveShadow = true;
+    this.scene.add(cemeteryGround);
+
+    // 2. Iron Cemetery Gate at z: -23.5
+    // Left Stone Pillar
+    const pillarL = new THREE.Mesh(new THREE.BoxGeometry(0.8, 3.8, 0.8), stoneMat);
+    pillarL.position.set(-2.8, 1.9, -23.5);
+    pillarL.castShadow = true;
+    this.scene.add(pillarL);
+
+    // Right Stone Pillar
+    const pillarR = new THREE.Mesh(new THREE.BoxGeometry(0.8, 3.8, 0.8), stoneMat);
+    pillarR.position.set(2.8, 1.9, -23.5);
+    pillarR.castShadow = true;
+    this.scene.add(pillarR);
+
+    // Stone Crosses on top of pillars
+    [-2.8, 2.8].forEach(px => {
+      const cross = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.9, 0.16), stoneMat);
+      cross.position.set(px, 4.25, -23.5);
+      const crossH = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.16, 0.16), stoneMat);
+      crossH.position.set(px, 4.45, -23.5);
+      this.scene.add(cross, crossH);
+    });
+
+    // Side Fences connecting to village borders
+    const sideFenceL = new THREE.Mesh(new THREE.BoxGeometry(4.5, 2.4, 0.15), darkIronMat);
+    sideFenceL.position.set(-5.4, 1.2, -23.5);
+    const sideFenceR = new THREE.Mesh(new THREE.BoxGeometry(4.5, 2.4, 0.15), darkIronMat);
+    sideFenceR.position.set(5.4, 1.2, -23.5);
+    this.scene.add(sideFenceL, sideFenceR);
+
+    // Swinging Gate Wings
+    this.cemeteryGateLeft = new THREE.Group();
+    this.cemeteryGateLeft.position.set(-2.4, 0, -23.5);
+    const leftBars = new THREE.Mesh(new THREE.BoxGeometry(2.3, 2.8, 0.1), darkIronMat);
+    leftBars.position.set(1.15, 1.4, 0);
+    this.cemeteryGateLeft.add(leftBars);
+    this.scene.add(this.cemeteryGateLeft);
+
+    this.cemeteryGateRight = new THREE.Group();
+    this.cemeteryGateRight.position.set(2.4, 0, -23.5);
+    const rightBars = new THREE.Mesh(new THREE.BoxGeometry(2.3, 2.8, 0.1), darkIronMat);
+    rightBars.position.set(-1.15, 1.4, 0);
+    this.cemeteryGateRight.add(rightBars);
+    this.scene.add(this.cemeteryGateRight);
+
+    // 3. Destructible Gravestones in the Cemetery
+    const graveGeo = new THREE.BoxGeometry(0.55, 0.95, 0.2);
+    const gravePositions = [
+      { id: 'grave-1', x: -3.2, z: -27.5, name: 'Lápida de Penitente de Oakhaven' },
+      { id: 'grave-2', x: 3.5, z: -29.0, name: 'Lápida Devota de San Jude' },
+      { id: 'grave-3', x: -2.8, z: -35.0, name: 'Lápida Antigua de los Proscritos' },
+      { id: 'grave-4', x: 3.2, z: -37.5, name: 'Lápida Consagrada' }
+    ];
+
+    gravePositions.forEach(gp => {
+      const grave = new THREE.Mesh(graveGeo, stoneMat);
+      grave.position.set(gp.x, 0.48, gp.z);
+      grave.rotation.y = (Math.random() - 0.5) * 0.4;
+      grave.castShadow = true;
+      this.scene.add(grave);
+      this.destructibles.push({
+        id: gp.id,
+        mesh: grave,
+        position: grave.position,
+        radius: 0.75,
+        isDestroyed: false,
+        name: gp.name
+      });
+    });
+
+    // Destructible Ancient Sarcophagus
+    const sarcGeo = new THREE.BoxGeometry(1.2, 0.75, 2.2);
+    const sarcMesh = new THREE.Mesh(sarcGeo, stoneMat);
+    sarcMesh.position.set(0, 0.38, -33.5);
+    sarcMesh.castShadow = true;
+    this.scene.add(sarcMesh);
+    this.destructibles.push({
+      id: 'sarcophagus-1',
+      mesh: sarcMesh,
+      position: sarcMesh.position,
+      radius: 1.2,
+      isDestroyed: false,
+      name: 'Sarcófago de Piedra de San Jude'
+    });
+
+    // 4. Spectral Soul Torches
+    [-2.5, 2.5].forEach(tx => {
+      const torchBase = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.24, 1.2, 6), stoneMat);
+      torchBase.position.set(tx, 0.6, -31);
+      const flame = new THREE.Mesh(new THREE.DodecahedronGeometry(0.14), soulFlameMat);
+      flame.position.set(tx, 1.3, -31);
+      const light = new THREE.PointLight(0x00e5ff, 2.2, 7);
+      light.position.set(tx, 1.4, -31);
+      this.scene.add(torchBase, flame, light);
+    });
+
+    // 5. Crypt Mausoleum Entrance at z: -45
+    const cryptGroup = new THREE.Group();
+    cryptGroup.position.set(0, 0, -45);
+
+    const cryptArch = new THREE.Mesh(new THREE.BoxGeometry(7.5, 5.0, 2.5), stoneMat);
+    cryptArch.position.y = 2.5;
+    cryptArch.castShadow = true;
+    cryptGroup.add(cryptArch);
+
+    // Dark descending portal
+    const portalMat = new THREE.MeshBasicMaterial({ color: 0x020408 });
+    const portal = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 3.4), portalMat);
+    portal.position.set(0, 1.7, 1.26);
+    cryptGroup.add(portal);
+
+    // Crypt Soul Light from inside
+    const cryptLight = new THREE.PointLight(0x00e5ff, 3.0, 9);
+    cryptLight.position.set(0, 2.0, 0.5);
+    cryptGroup.add(cryptLight);
+
+    this.scene.add(cryptGroup);
+  }
+
+  // =========================================================================
+  // ENEMY 4: CRYPT PENITENT (SKELETON GUARDIAN)
+  // =========================================================================
+  private createSkeletonEnemy(): void {
+    this.skeletonGroup = new THREE.Group();
+    this.skeletonGroup.position.set(0, 0, -32);
+
+    const boneMat = new THREE.MeshStandardMaterial({ color: 0xd8ceb8, roughness: 0.7 });
+    const darkMetalMat = new THREE.MeshStandardMaterial({ color: 0x222228, metalness: 0.85, roughness: 0.4 });
+    const cyanEyeMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+    const tatteredMat = new THREE.MeshStandardMaterial({ color: 0x1f2228, roughness: 0.95 });
+
+    // Spine and Ribs
+    const spine = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 1.1, 6), boneMat);
+    spine.position.y = 1.0;
+    spine.castShadow = true;
+    this.skeletonGroup.add(spine);
+
+    // Ribcage
+    for (let r = 0; r < 3; r++) {
+      const rib = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.03, 4, 8, Math.PI), boneMat);
+      rib.position.set(0, 0.85 + r * 0.16, 0.05);
+      rib.rotation.x = Math.PI;
+      this.skeletonGroup.add(rib);
+    }
+
+    // Tattered Shroud / Cloak
+    const cloak = new THREE.Mesh(new THREE.ConeGeometry(0.44, 1.4, 6), tatteredMat);
+    cloak.position.y = 0.75;
+    this.skeletonGroup.add(cloak);
+
+    // Skull
+    const skull = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.32, 0.32), boneMat);
+    skull.position.set(0, 1.75, 0);
+    skull.castShadow = true;
+    this.skeletonGroup.add(skull);
+
+    // Glowing Cyan Eyes
+    const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.04, 4, 4), cyanEyeMat);
+    eyeL.position.set(-0.07, 1.76, 0.16);
+    const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.04, 4, 4), cyanEyeMat);
+    eyeR.position.set(0.07, 1.76, 0.16);
+    this.skeletonGroup.add(eyeL, eyeR);
+
+    // Greatsword (Rusted Claymore)
+    const swordGroup = new THREE.Group();
+    swordGroup.position.set(0.48, 1.1, 0.25);
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.4, 0.04), darkMetalMat);
+    blade.position.y = 0.6;
+    blade.castShadow = true;
+    const hilt = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.3, 6), darkMetalMat);
+    hilt.position.y = -0.2;
+    swordGroup.add(blade, hilt);
+    this.skeletonSwordMesh = swordGroup as any;
+    this.skeletonGroup.add(swordGroup);
+
+    // Warning Octahedron
+    const warnMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff });
+    this.skeletonWarningMesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.22), warnMat);
+    this.skeletonWarningMesh.position.set(0, 2.3, 0);
+    this.skeletonWarningMesh.visible = false;
+    this.skeletonGroup.add(this.skeletonWarningMesh);
+
+    // Waypoints in Cemetery
+    this.skeletonWaypoints = [
+      new THREE.Vector3(-2.0, 0, -28),
+      new THREE.Vector3(2.5, 0, -34),
+      new THREE.Vector3(-1.5, 0, -40)
+    ];
+
+    this.scene.add(this.skeletonGroup);
   }
 
   // =========================================================================
@@ -1413,7 +1705,7 @@ export class Oakhaven3DExperience {
       </div>
 
       <!-- Center: Enemy 3 Target HUD (Flagelante con Cadena) -->
-      <div id="p3d-zealot-hud" style="position: absolute; top: 56px; left: 50%; transform: translateX(-50%); background: rgba(30, 10, 14, 0.94); border: 1.2px solid #c0392b; border-radius: 4px; padding: 4px 10px; width: 195px; text-align: center; box-shadow: 0 4px 15px rgba(192, 57, 43, 0.5); display: none;">
+      <div id="p3d-zealot-hud" style="position: absolute; top: 52px; left: 50%; transform: translateX(-50%); background: rgba(30, 10, 14, 0.94); border: 1.2px solid #c0392b; border-radius: 4px; padding: 4px 10px; width: 195px; text-align: center; box-shadow: 0 4px 15px rgba(192, 57, 43, 0.5); display: none;">
         <div style="font-size: 7.5px; font-weight: bold; color: #ff9999; margin-bottom: 2px;">
           ⚠ FLAGELANTE CON CADENA (PATRULLA) ⚠
         </div>
@@ -1422,8 +1714,18 @@ export class Oakhaven3DExperience {
         </div>
       </div>
 
+      <!-- Center: Enemy 4 Target HUD (Penitente de la Cripta) -->
+      <div id="p3d-skeleton-hud" style="position: absolute; top: 74px; left: 50%; transform: translateX(-50%); background: rgba(10, 24, 28, 0.94); border: 1.2px solid #00e5ff; border-radius: 4px; padding: 4px 10px; width: 200px; text-align: center; box-shadow: 0 4px 15px rgba(0, 229, 255, 0.45); display: none;">
+        <div style="font-size: 7.5px; font-weight: bold; color: #a3f7ff; margin-bottom: 2px;">
+          ⚠ PENITENTE DE LA CRIPTA (GUARDIÁN) ⚠
+        </div>
+        <div style="width: 100%; height: 5px; background: #081d22; border: 1px solid #008899; border-radius: 2px; overflow: hidden;">
+          <div id="p3d-skeleton-hp-fill" style="width: 100%; height: 100%; background: #00e5ff; transition: width 0.1s ease;"></div>
+        </div>
+      </div>
+
       <!-- Boss Morwenna 3D Target HUD (Top Center) -->
-      <div id="p3d-boss-hud" style="position: absolute; top: 80px; left: 50%; transform: translateX(-50%); background: rgba(30, 8, 12, 0.95); border: 1.2px solid #ff3344; border-radius: 4px; padding: 4px 12px; width: 215px; text-align: center; box-shadow: 0 4px 20px rgba(255, 0, 0, 0.45); display: none;">
+      <div id="p3d-boss-hud" style="position: absolute; top: 98px; left: 50%; transform: translateX(-50%); background: rgba(30, 8, 12, 0.95); border: 1.2px solid #ff3344; border-radius: 4px; padding: 4px 12px; width: 220px; text-align: center; box-shadow: 0 4px 20px rgba(255, 0, 0, 0.45); display: none;">
         <div style="font-size: 7.5px; font-weight: bold; color: #ffbbbb; margin-bottom: 2px; letter-spacing: 0.5px;">
           👑 MADRE MORWENNA — VIGÍA DE LA PIRA 👑
         </div>
@@ -1549,6 +1851,9 @@ export class Oakhaven3DExperience {
 
     this.zealotHpBarContainer = this.uiOverlay.querySelector('#p3d-zealot-hud') as HTMLDivElement;
     this.zealotHpBarFill = this.uiOverlay.querySelector('#p3d-zealot-hp-fill') as HTMLDivElement;
+
+    this.skeletonHpBarContainer = this.uiOverlay.querySelector('#p3d-skeleton-hud') as HTMLDivElement;
+    this.skeletonHpBarFill = this.uiOverlay.querySelector('#p3d-skeleton-hp-fill') as HTMLDivElement;
 
     this.proximityBadgeEl = this.uiOverlay.querySelector('#p3d-proximity-badge') as HTMLDivElement;
     if (this.proximityBadgeEl) {
@@ -1946,16 +2251,55 @@ export class Oakhaven3DExperience {
       }
     }
 
+    // Hit Detection against Crypt Skeleton Enemy
+    const distToSkeleton = this.playerGroup.position.distanceTo(this.skeletonGroup.position);
+    if (distToSkeleton <= reach && this.skeletonState !== 'DEAD') {
+      const baseDmg = this.playerStats.isArmed ? (isHeavy ? 42 : 26) : (isHeavy ? 22 : 12);
+      const skillBonus = 1.0 + (this.progression.getDamageBonusPct(this.activeHero) / 100);
+      const dmg = Math.round(baseDmg * this.attackBuffMultiplier * skillBonus);
+      this.skeletonHealth = Math.max(0, this.skeletonHealth - dmg);
+      this.spawnFloatingText(this.skeletonGroup.position, `-${dmg}`, isHeavy ? '#ffd700' : '#00e5ff');
+
+      if (isHeavy) {
+        this.skeletonState = 'STUNNED';
+        this.skeletonTimer = 1.1;
+        this.spawnFloatingText(this.skeletonGroup.position, '¡ATURDIDO! [E] ¡REMATAR!', '#ffaa44');
+      }
+
+      this.updateHUD();
+
+      if (this.skeletonHealth <= 0) {
+        this.skeletonState = 'DEAD';
+        this.spawnFloatingText(this.skeletonGroup.position, '¡PENITENTE PURIFICADO! (+100 EXP)', '#00e5ff');
+        this.progression.addExp(100);
+        this.audio.playFinisherSound(true);
+        this.skeletonGroup.position.y = -0.3;
+        this.inventory.addItem({
+          id: 'balm_health',
+          name: 'Bálsamo del Ocaso',
+          description: 'Extracto aromático destilado por las Hermanas de Oakhaven.',
+          category: 'consumable',
+          quantity: 1,
+          maxQuantity: 5,
+          effectType: 'heal_health',
+          effectValue: 40,
+          icon: '🌿'
+        });
+        this.spawnFloatingText(this.playerGroup.position, '🎒 ¡Bálsamo del Ocaso obtenido!', '#a3ffc7');
+        this.updateHUD();
+      }
+    }
+
     // Hit Detection against Boss Morwenna
     const distToMorwenna = this.playerGroup.position.distanceTo(this.morwennaGroup.position);
-    if (distToMorwenna <= reach && this.morwennaState !== 'DORMANT' && this.morwennaState !== 'DEAD') {
+    if (distToMorwenna <= reach && this.morwennaState !== 'DORMANT' && this.morwennaState !== 'DEAD' && this.morwennaState !== 'PHASE2_TRANSITION') {
       const baseDmg = this.playerStats.isArmed ? (isHeavy ? 38 : 22) : (isHeavy ? 18 : 12);
       const skillBonus = 1.0 + (this.progression.getDamageBonusPct(this.activeHero) / 100);
       const dmg = Math.round(baseDmg * this.attackBuffMultiplier * skillBonus);
       this.morwennaHealth = Math.max(0, this.morwennaHealth - dmg);
       this.spawnFloatingText(this.morwennaGroup.position, `-${dmg}`, isHeavy ? '#ffd700' : '#ff88aa');
 
-      if (isHeavy) {
+      if (isHeavy && this.morwennaState !== 'STUNNED') {
         this.morwennaState = 'STUNNED';
         this.morwennaTimer = 1.2;
         this.spawnFloatingText(this.morwennaGroup.position, '¡ATURDIDA! [E] ¡REMATAR!', '#ffaa44');
@@ -1963,16 +2307,10 @@ export class Oakhaven3DExperience {
 
       this.updateHUD();
 
-      if (this.morwennaHealth <= 0) {
-        this.morwennaState = 'DEAD';
-        this.spawnFloatingText(this.morwennaGroup.position, '👑 ¡MADRE MORWENNA PURIFICADA! (+250 EXP) 👑', '#ffd700');
-        this.progression.addExp(250);
-        this.audio.playFinisherSound(true);
-        if (this.morwennaHpBarContainer) {
-          this.morwennaHpBarContainer.style.borderColor = '#ffd700';
-          const title = this.morwennaHpBarContainer.querySelector('div') as HTMLDivElement;
-          if (title) title.innerText = '👑 MADRE MORWENNA — ¡PURIFICADA! 👑';
-        }
+      if (this.morwennaHealth <= this.morwennaMaxHealth * 0.5 && this.morwennaPhase === 1 && this.morwennaHealth > 0) {
+        this.triggerMorwennaPhase2();
+      } else if (this.morwennaHealth <= 0) {
+        this.handleMorwennaDefeat();
       }
     }
   }
@@ -2144,8 +2482,46 @@ export class Oakhaven3DExperience {
         }
       }
 
-      // 4. Check Morwenna collision
-      if (!collided && this.morwennaState !== 'DORMANT' && this.morwennaState !== 'DEAD') {
+      // 4. Check Crypt Skeleton collision
+      if (!collided && this.skeletonState !== 'DEAD') {
+        const dSkel = p.mesh.position.distanceTo(this.skeletonGroup.position.clone().add(new THREE.Vector3(0, 1.0, 0)));
+        if (dSkel <= 1.5) {
+          collided = true;
+          this.skeletonHealth = Math.max(0, this.skeletonHealth - p.damage);
+          this.spawnFloatingText(this.skeletonGroup.position, `-${p.damage} (FLECHA ABISAL)`, p.isHeavy ? '#ffd700' : '#00e5ff');
+          this.audio.playCombatHit(p.isHeavy);
+
+          if (p.isHeavy) {
+            this.skeletonState = 'STUNNED';
+            this.skeletonTimer = 1.3;
+            this.spawnFloatingText(this.skeletonGroup.position, '¡ATURDIDO! [E] ¡REMATAR!', '#ffaa44');
+          }
+
+          if (this.skeletonHealth <= 0) {
+            this.skeletonState = 'DEAD';
+            this.spawnFloatingText(this.skeletonGroup.position, '¡PENITENTE PURIFICADO! (+100 EXP)', '#00e5ff');
+            this.progression.addExp(100);
+            this.audio.playFinisherSound(true);
+            this.skeletonGroup.position.y = -0.3;
+            this.inventory.addItem({
+              id: 'balm_health',
+              name: 'Bálsamo del Ocaso',
+              description: 'Extracto aromático destilado por las Hermanas de Oakhaven.',
+              category: 'consumable',
+              quantity: 1,
+              maxQuantity: 5,
+              effectType: 'heal_health',
+              effectValue: 40,
+              icon: '🌿'
+            });
+            this.spawnFloatingText(this.playerGroup.position, '🎒 ¡Bálsamo del Ocaso obtenido!', '#a3ffc7');
+          }
+          this.updateHUD();
+        }
+      }
+
+      // 5. Check Morwenna collision
+      if (!collided && this.morwennaState !== 'DORMANT' && this.morwennaState !== 'DEAD' && this.morwennaState !== 'PHASE2_TRANSITION') {
         const dMorw = p.mesh.position.distanceTo(this.morwennaGroup.position.clone().add(new THREE.Vector3(0, 1.2, 0)));
         if (dMorw <= 1.8) {
           collided = true;
@@ -2153,22 +2529,16 @@ export class Oakhaven3DExperience {
           this.spawnFloatingText(this.morwennaGroup.position, `-${p.damage} (DISPARO ABISAL)`, p.isHeavy ? '#ffd700' : '#ff88ee');
           this.audio.playCombatHit(p.isHeavy);
 
-          if (p.isHeavy) {
+          if (p.isHeavy && this.morwennaState !== 'STUNNED') {
             this.morwennaState = 'STUNNED';
             this.morwennaTimer = 1.4;
             this.spawnFloatingText(this.morwennaGroup.position, '¡ATURDIDA! [E] ¡REMATAR!', '#ffaa44');
           }
 
-          if (this.morwennaHealth <= 0) {
-            this.morwennaState = 'DEAD';
-            this.spawnFloatingText(this.morwennaGroup.position, '👑 ¡MADRE MORWENNA PURIFICADA! (+250 EXP) 👑', '#ffd700');
-            this.progression.addExp(250);
-            this.audio.playFinisherSound(true);
-            if (this.morwennaHpBarContainer) {
-              this.morwennaHpBarContainer.style.borderColor = '#ffd700';
-              const title = this.morwennaHpBarContainer.querySelector('div') as HTMLDivElement;
-              if (title) title.innerText = '👑 MADRE MORWENNA — ¡PURIFICADA! 👑';
-            }
+          if (this.morwennaHealth <= this.morwennaMaxHealth * 0.5 && this.morwennaPhase === 1 && this.morwennaHealth > 0) {
+            this.triggerMorwennaPhase2();
+          } else if (this.morwennaHealth <= 0) {
+            this.handleMorwennaDefeat();
           }
           this.updateHUD();
         }
@@ -2367,7 +2737,37 @@ export class Oakhaven3DExperience {
       case 'thomas':
         this.interactWithThomas();
         break;
+      case 'cemetery_gate':
+        this.interactWithCemeteryGate();
+        break;
     }
+  }
+
+  public interactWithCemeteryGate(): void {
+    if (this.cemeteryGateOpen) {
+      this.spawnFloatingText(this.playerGroup.position, 'La verja ya está abierta hacia las criptas.', '#00e5ff');
+      return;
+    }
+
+    const key = this.inventory.getItem('oakhaven_crypt_key');
+    if (key && key.quantity > 0) {
+      this.openCemeteryGate();
+    } else {
+      this.audio.playSfx('warning');
+      this.spawnFloatingText(this.playerGroup.position, '🔒 Requiere la Llave de las Criptas (Madre Morwenna)', '#ff6666');
+      const toast = this.uiOverlay.querySelector('#p3d-dialogue-toast') as HTMLDivElement;
+      if (toast) {
+        toast.innerHTML = `<span style="color: #ff6666; font-weight: bold;">Verja Sellada:</span> «El hierro negro está encadenado con los sellos del Crisol. Derrota a Madre Morwenna en la Gran Pira para obtener la Llave de las Criptas.»`;
+        toast.style.borderColor = '#ff6666';
+      }
+    }
+  }
+
+  public openCemeteryGate(): void {
+    if (this.cemeteryGateOpen) return;
+    this.cemeteryGateOpen = true;
+    this.audio.playSfx('parry');
+    this.spawnFloatingText(new THREE.Vector3(0, 2.5, -23.5), '🚪 ¡VERJA DEL CEMENTERIO ABIERTA!', '#00e5ff');
   }
 
   public interactWithThomas(): void {
@@ -2509,6 +2909,31 @@ export class Oakhaven3DExperience {
       return;
     }
 
+    // Check if Crypt Skeleton is stunned
+    const distToSkeleton = this.playerGroup.position.distanceTo(this.skeletonGroup.position);
+    if (this.skeletonState === 'STUNNED' && distToSkeleton <= 3.4) {
+      this.skeletonHealth = 0;
+      this.skeletonState = 'DEAD';
+      this.audio.playFinisherSound(true);
+      this.spawnFloatingText(this.skeletonGroup.position, '⚡ ¡PENITENTE REMATADO! (+180 EXP)', '#00e5ff');
+      this.progression.addExp(180);
+      this.skeletonGroup.position.y = -0.3;
+      this.inventory.addItem({
+        id: 'balm_health',
+        name: 'Bálsamo del Ocaso',
+        description: 'Extracto aromático destilado por las Hermanas de Oakhaven.',
+        category: 'consumable',
+        quantity: 1,
+        maxQuantity: 5,
+        effectType: 'heal_health',
+        effectValue: 40,
+        icon: '🌿'
+      });
+      this.spawnFloatingText(this.playerGroup.position, '🎒 ¡Bálsamo del Ocaso obtenido!', '#a3ffc7');
+      this.updateHUD();
+      return;
+    }
+
     // Check if Morwenna is stunned
     const distToMorwenna = this.playerGroup.position.distanceTo(this.morwennaGroup.position);
     if (this.morwennaState === 'STUNNED' && distToMorwenna <= 3.6) {
@@ -2520,15 +2945,10 @@ export class Oakhaven3DExperience {
       this.playerLight.intensity = 4.0;
       setTimeout(() => { if (this.playerLight) this.playerLight.intensity = 1.4; }, 300);
 
-      if (this.morwennaHealth <= 0) {
-        this.morwennaState = 'DEAD';
-        this.spawnFloatingText(this.morwennaGroup.position, '👑 ¡MADRE MORWENNA PURIFICADA! (+250 EXP) 👑', '#ffd700');
-        this.progression.addExp(250);
-        if (this.morwennaHpBarContainer) {
-          this.morwennaHpBarContainer.style.borderColor = '#ffd700';
-          const title = this.morwennaHpBarContainer.querySelector('div') as HTMLDivElement;
-          if (title) title.innerText = '👑 MADRE MORWENNA — ¡PURIFICADA! 👑';
-        }
+      if (this.morwennaHealth <= this.morwennaMaxHealth * 0.5 && this.morwennaPhase === 1 && this.morwennaHealth > 0) {
+        this.triggerMorwennaPhase2();
+      } else if (this.morwennaHealth <= 0) {
+        this.handleMorwennaDefeat();
       } else {
         this.morwennaState = 'RECOVERY';
         this.morwennaTimer = 0.8;
@@ -2574,7 +2994,7 @@ export class Oakhaven3DExperience {
     if (this.isDialogueOpen) return;
 
     const pPos = this.playerGroup.position;
-    let targetFound: 'elowen' | 'cedric' | 'shalem' | 'khaterine' | 'thomas' | 'sword' | 'finisher' | undefined;
+    let targetFound: 'elowen' | 'cedric' | 'shalem' | 'khaterine' | 'thomas' | 'sword' | 'finisher' | 'cemetery_gate' | undefined;
     let badgeText = '';
     let badgeColor = '#ffd700';
 
@@ -2594,6 +3014,10 @@ export class Oakhaven3DExperience {
       targetFound = 'finisher';
       badgeText = '⚡ [E] ¡REMATAR FLAGELANTE ATURDIDO!';
       badgeColor = '#ff4444';
+    } else if (this.skeletonState === 'STUNNED' && pPos.distanceTo(this.skeletonGroup.position) <= 3.2) {
+      targetFound = 'finisher';
+      badgeText = '⚡ [E] ¡REMATAR PENITENTE DE LA CRIPTA!';
+      badgeColor = '#00e5ff';
     } else {
       const distToMorwenna = pPos.distanceTo(this.morwennaGroup.position);
       if (this.morwennaState === 'STUNNED' && distToMorwenna <= 3.5) {
@@ -2663,6 +3087,24 @@ export class Oakhaven3DExperience {
       }
     }
 
+    // 8. Cemetery Gate Interaction
+    if (!targetFound && Math.abs(pPos.z - (-23.5)) < 2.5 && Math.abs(pPos.x) < 3.2) {
+      targetFound = 'cemetery_gate';
+      if (this.cemeteryGateOpen) {
+        badgeText = '🚪 CEMENTERIO DE SAN JUDE (ACCESO ABIERTO)';
+        badgeColor = '#00e5ff';
+      } else {
+        const hasKey = this.inventory.getItem('oakhaven_crypt_key');
+        if (hasKey && hasKey.quantity > 0) {
+          badgeText = '🗝️ [E] ABRIR VERJA DEL CEMENTERIO (LLAVE EN POSESIÓN)';
+          badgeColor = '#ffd700';
+        } else {
+          badgeText = '🔒 [E] VERJA SELLADA (REQUIERE LLAVE DE MORWENNA)';
+          badgeColor = '#ff6666';
+        }
+      }
+    }
+
     this.activeInteractTarget = targetFound;
     if (this.proximityBadgeEl) {
       if (targetFound) {
@@ -2677,7 +3119,7 @@ export class Oakhaven3DExperience {
   }
 
   // =========================================================================
-  // BOSS 3D: MOTHER MORWENNA LOGIC & COMBAT
+  // BOSS 3D: MOTHER MORWENNA LOGIC & COMBAT (PHASE 1 & PHASE 2 DESATADA)
   // =========================================================================
   private updateBossMorwenna(delta: number): void {
     if (this.morwennaState === 'DORMANT') {
@@ -2704,6 +3146,36 @@ export class Oakhaven3DExperience {
       return;
     }
 
+    // Phase 2 Cinematic Transition handling
+    if (this.morwennaState === 'PHASE2_TRANSITION') {
+      this.morwennaTimer -= delta;
+      this.morwennaGroup.position.y = 1.35 + Math.sin(this.clock.elapsedTime * 12) * 0.15;
+      this.morwennaCrucibleLight.intensity = 6.0 + Math.sin(this.clock.elapsedTime * 30) * 2.5;
+
+      if (this.morwennaFlameWingsGroup) {
+        this.morwennaFlameWingsGroup.rotation.y = Math.sin(this.clock.elapsedTime * 10) * 0.45;
+      }
+      if (this.morwennaThornHaloMesh) {
+        this.morwennaThornHaloMesh.rotation.z += delta * 6;
+      }
+
+      if (this.morwennaTimer <= 0) {
+        this.morwennaState = 'CHASE';
+        this.spawnFloatingText(this.morwennaGroup.position, '⚔ ¡COMIENZA EL FRENESÍ!', '#ff4400');
+      }
+      return;
+    }
+
+    // Phase 2 continuous cosmetic animations (Wings & Thorn Halo)
+    if (this.morwennaPhase === 2) {
+      if (this.morwennaFlameWingsGroup) {
+        this.morwennaFlameWingsGroup.rotation.y = Math.sin(this.clock.elapsedTime * 6) * 0.28;
+      }
+      if (this.morwennaThornHaloMesh) {
+        this.morwennaThornHaloMesh.rotation.z += delta * 2.5;
+      }
+    }
+
     // Orient toward player
     const toPlayer = this.playerGroup.position.clone().sub(this.morwennaGroup.position);
     toPlayer.y = 0;
@@ -2718,25 +3190,50 @@ export class Oakhaven3DExperience {
 
     if (this.morwennaState === 'CHASE') {
       this.morwennaWarningMesh.visible = false;
-      this.morwennaCrucibleLight.intensity = 3.2;
+      this.morwennaCrucibleLight.intensity = this.morwennaPhase === 2 ? 5.5 : 3.2;
+
+      const chaseSpeed = this.morwennaPhase === 2 ? 3.4 : 2.2;
+
+      // In Phase 2: chance to cast Flame Geysers at range!
+      if (this.morwennaPhase === 2 && dist > 4.5 && Math.random() < 0.015) {
+        this.morwennaAttackPattern = 'FLAME_GEYSERS';
+        this.morwennaState = 'WINDUP';
+        this.morwennaTimer = 0.6;
+        this.morwennaWarningMesh.visible = true;
+        this.audio.playSfx('warning');
+        return;
+      }
 
       if (dist > 3.0) {
         toPlayer.normalize();
-        this.morwennaGroup.position.add(toPlayer.multiplyScalar(2.2 * delta));
+        this.morwennaGroup.position.add(toPlayer.multiplyScalar(chaseSpeed * delta));
         this.morwennaGroup.position.x = THREE.MathUtils.clamp(this.morwennaGroup.position.x, -5, 5);
-        this.morwennaGroup.position.z = THREE.MathUtils.clamp(this.morwennaGroup.position.z, -22, -3);
+        this.morwennaGroup.position.z = THREE.MathUtils.clamp(this.morwennaGroup.position.z, -23, -3);
       } else {
-        // Prepare telegraphed Sacred Flame strike
+        // Choose attack pattern based on phase
+        if (this.morwennaPhase === 1) {
+          this.morwennaAttackPattern = 'CRUCIBLE_STRIKE';
+        } else {
+          const roll = Math.random();
+          if (roll < 0.45) {
+            this.morwennaAttackPattern = 'WHIRLWIND';
+          } else if (roll < 0.75) {
+            this.morwennaAttackPattern = 'LUNGE';
+          } else {
+            this.morwennaAttackPattern = 'CRUCIBLE_STRIKE';
+          }
+        }
+
         this.morwennaState = 'WINDUP';
-        this.morwennaTimer = 0.65;
+        this.morwennaTimer = this.morwennaAttackPattern === 'WHIRLWIND' ? 0.75 : 0.6;
         this.morwennaWarningMesh.visible = true;
         this.audio.playSfx('warning');
       }
     } else if (this.morwennaState === 'WINDUP') {
       this.morwennaTimer -= delta;
-      this.morwennaWarningMesh.rotation.y += delta * 8;
+      this.morwennaWarningMesh.rotation.y += delta * 10;
       this.morwennaWarningMesh.visible = Math.floor(this.clock.elapsedTime * 20) % 2 === 0;
-      this.morwennaCrucibleLight.intensity = 4.5 + Math.sin(this.clock.elapsedTime * 25) * 2.5;
+      this.morwennaCrucibleLight.intensity = 5.0 + Math.sin(this.clock.elapsedTime * 25) * 2.5;
 
       if (this.morwennaTimer <= 0) {
         this.morwennaState = 'ATTACK';
@@ -2762,8 +3259,171 @@ export class Oakhaven3DExperience {
     }
   }
 
+  private triggerMorwennaPhase2(): void {
+    if (this.morwennaPhase === 2) return;
+    this.morwennaPhase = 2;
+    this.morwennaState = 'PHASE2_TRANSITION';
+    this.morwennaTimer = 2.4;
+
+    // Visual transformations
+    if (this.morwennaFlameWingsGroup) this.morwennaFlameWingsGroup.visible = true;
+    if (this.morwennaFlameSwordMesh) this.morwennaFlameSwordMesh.visible = true;
+    if (this.morwennaThornHaloMesh) this.morwennaThornHaloMesh.visible = true;
+
+    if (this.morwennaEyeL && this.morwennaEyeR) {
+      (this.morwennaEyeL.material as THREE.MeshBasicMaterial).color.setHex(0xffffee);
+      (this.morwennaEyeR.material as THREE.MeshBasicMaterial).color.setHex(0xffffee);
+    }
+
+    this.morwennaCrucibleLight.color.setHex(0xff2200);
+    this.morwennaCrucibleLight.intensity = 7.0;
+    this.morwennaCrucibleLight.distance = 18;
+
+    // Repel player with flame burst shockwave
+    const pushDir = this.playerGroup.position.clone().sub(this.morwennaGroup.position).normalize();
+    pushDir.y = 0;
+    this.playerVelocity.copy(pushDir.multiplyScalar(12));
+
+    this.audio.playFinisherSound(true);
+    this.audio.playSfx('warning');
+
+    this.spawnFloatingText(this.morwennaGroup.position, '🔥 ¡FASE 2: PIRA DEL ABISMO DESATADA! 🔥', '#ff3300');
+    this.spawnFloatingText(this.playerGroup.position, '⚠ ¡ONDA EXPANSIVA DE FUEGO!', '#ffaa44');
+
+    const toast = this.uiOverlay.querySelector('#p3d-dialogue-toast') as HTMLDivElement;
+    if (toast) {
+      toast.innerHTML = `<span style="color: #ff3300; font-weight: bold;">Madre Morwenna:</span> «¡Insolente! ¡El Crisol juzgará tu alma con el fuego sagrado de la Pira! ¡NO QUEDARÁ NI CENIZA DE TI!»`;
+      toast.style.borderColor = '#ff3300';
+    }
+
+    if (this.morwennaHpBarContainer) {
+      this.morwennaHpBarContainer.style.borderColor = '#ff3300';
+      this.morwennaHpBarContainer.style.boxShadow = '0 0 25px rgba(255, 51, 0, 0.85)';
+      const title = this.morwennaHpBarContainer.querySelector('div') as HTMLDivElement;
+      if (title) {
+        title.innerHTML = '🔥 MADRE MORWENNA — FASE 2: FRENESÍ DE LA PIRA 🔥';
+        title.style.color = '#ffaa44';
+      }
+    }
+  }
+
+  private handleMorwennaDefeat(): void {
+    if (this.morwennaState === 'DEAD') return;
+    this.morwennaState = 'DEAD';
+    this.spawnFloatingText(this.morwennaGroup.position, '👑 ¡MADRE MORWENNA PURIFICADA! (+350 EXP) 👑', '#ffd700');
+    this.spawnFloatingText(this.playerGroup.position, '🗝️ ¡LLAVE DE LAS CRIPTAS OBTENIDA!', '#00e5ff');
+    this.progression.addExp(350);
+    this.audio.playFinisherSound(true);
+
+    this.inventory.addItem({
+      id: 'oakhaven_crypt_key',
+      name: 'Llave de las Criptas de San Jude',
+      description: 'Llave forjada en hierro negro. Abre la verja del cementerio antiguo y el acceso a las criptas.',
+      category: 'key_item',
+      icon: '🗝️',
+      quantity: 1,
+      maxQuantity: 1,
+      effectType: 'unlock_gate',
+      effectValue: 1
+    });
+
+    // Automatically open the cemetery gate
+    this.openCemeteryGate();
+
+    if (this.morwennaHpBarContainer) {
+      this.morwennaHpBarContainer.style.borderColor = '#ffd700';
+      const title = this.morwennaHpBarContainer.querySelector('div') as HTMLDivElement;
+      if (title) title.innerText = '👑 MADRE MORWENNA — ¡PURIFICADA! 👑';
+    }
+
+    const toast = this.uiOverlay.querySelector('#p3d-dialogue-toast') as HTMLDivElement;
+    if (toast) {
+      toast.innerHTML = `<span style="color: #ffd700; font-weight: bold;">Padre Cedric:</span> «¡La luz ha vencido sobre el fuego de la Pira! La verja de hierro del cementerio antiguo al norte se ha abierto. Ten cuidado con los penitentes de las criptas.»`;
+      toast.style.borderColor = '#ffd700';
+    }
+
+    this.updateHUD();
+  }
+
   private executeMorwennaAttack(): void {
     const dist = this.playerGroup.position.distanceTo(this.morwennaGroup.position);
+
+    if (this.morwennaAttackPattern === 'WHIRLWIND') {
+      // 360-degree Whirlwind Attack
+      this.spawnFloatingText(this.morwennaGroup.position, '🌪️ ¡TORBELLINO DE LA PIRA!', '#ff3300');
+      this.audio.playSfx('dodge');
+
+      if (dist <= 4.4) {
+        if (this.playerStats.isDodging) {
+          this.spawnFloatingText(this.playerGroup.position, '¡ESQUIVA DE TORBELLINO!', '#88ffaa');
+        } else {
+          const dmg = this.playerStats.isGuarding ? 14 : 34;
+          this.playerStats.health = Math.max(0, this.playerStats.health - dmg);
+          this.audio.playCombatHit(true);
+          this.spawnFloatingText(this.playerGroup.position, `-${dmg} (TORBELLINO ÍGNEO)`, '#ff3344');
+          // Knockback player away from Morwenna
+          const push = this.playerGroup.position.clone().sub(this.morwennaGroup.position).normalize();
+          this.playerVelocity.copy(push.multiplyScalar(8));
+          this.updateHUD();
+        }
+      }
+
+      this.morwennaState = 'RECOVERY';
+      this.morwennaTimer = 0.95;
+      return;
+    }
+
+    if (this.morwennaAttackPattern === 'FLAME_GEYSERS') {
+      // Spawn 3 Flame Geysers at Player's area
+      this.spawnFloatingText(this.morwennaGroup.position, '🌋 ¡COLUMNAS DEL CRISOL!', '#ff5500');
+      this.audio.playSfx('warning');
+
+      const pPos = this.playerGroup.position;
+      this.spawnFlameGeyser(pPos.clone());
+      this.spawnFlameGeyser(pPos.clone().add(new THREE.Vector3(1.8, 0, 1.2)));
+      this.spawnFlameGeyser(pPos.clone().add(new THREE.Vector3(-1.8, 0, -1.2)));
+
+      this.morwennaState = 'RECOVERY';
+      this.morwennaTimer = 1.0;
+      return;
+    }
+
+    if (this.morwennaAttackPattern === 'LUNGE') {
+      // Fiery Lunge Forward
+      this.spawnFloatingText(this.morwennaGroup.position, '⚡ ¡EMBESTIDA INFERNAL!', '#ffaa22');
+      const lungeDir = this.playerGroup.position.clone().sub(this.morwennaGroup.position).normalize();
+      this.morwennaGroup.position.add(lungeDir.multiplyScalar(4.5));
+
+      const newDist = this.playerGroup.position.distanceTo(this.morwennaGroup.position);
+      if (newDist <= 3.2) {
+        const parryWindow = 280 + this.inventory.getParryBonusMs();
+        const isParry = this.playerStats.isGuarding && (performance.now() - this.lastGuardTime) <= parryWindow;
+        if (isParry) {
+          this.audio.playSfx('parry');
+          this.morwennaState = 'STUNNED';
+          this.morwennaTimer = 2.6;
+          this.spawnFloatingText(this.playerGroup.position, '¡PARRY DE EMBESTIDA!', '#66ccff');
+          this.spawnFloatingText(this.morwennaGroup.position, '⚡ ¡ATURDIDA! [E] ¡REMATAR!', '#ffd700');
+          return;
+        }
+
+        if (this.playerStats.isDodging) {
+          this.spawnFloatingText(this.playerGroup.position, '¡ESQUIVA PERFECTA!', '#88ffaa');
+        } else {
+          const dmg = this.playerStats.isGuarding ? 10 : 32;
+          this.playerStats.health = Math.max(0, this.playerStats.health - dmg);
+          this.audio.playCombatHit(true);
+          this.spawnFloatingText(this.playerGroup.position, `-${dmg} (EMBESTIDA)`, '#ff3344');
+          this.updateHUD();
+        }
+      }
+
+      this.morwennaState = 'RECOVERY';
+      this.morwennaTimer = 0.85;
+      return;
+    }
+
+    // Default: CRUCIBLE_STRIKE
     if (dist <= 3.8) {
       // Check for Parry
       const parryWindow = 280 + this.inventory.getParryBonusMs();
@@ -2798,6 +3458,214 @@ export class Oakhaven3DExperience {
     this.morwennaTimer = 0.8;
   }
 
+  // =========================================================================
+  // FLAME GEYSER HAZARDS (MORWENNA PHASE 2)
+  // =========================================================================
+  private updateFlameGeysers(delta: number): void {
+    for (let i = this.flameGeysers.length - 1; i >= 0; i--) {
+      const g = this.flameGeysers[i];
+      g.timer -= delta;
+
+      if (!g.hasErupted) {
+        // Pulse warning marker on floor
+        const pulse = 1.0 + Math.sin(this.clock.elapsedTime * 20) * 0.2;
+        g.markerMesh.scale.set(pulse, pulse, 1);
+
+        if (g.timer <= 0) {
+          g.hasErupted = true;
+          (g.pillarMesh.material as THREE.MeshBasicMaterial).opacity = 0.9;
+          this.audio.playCombatHit(true);
+
+          // Check player collision
+          const dPlayer = this.playerGroup.position.distanceTo(g.pos);
+          if (dPlayer <= 1.4) {
+            const isGuarding = this.playerStats.isGuarding;
+            const dmg = isGuarding ? 8 : 26;
+            this.playerStats.health = Math.max(0, this.playerStats.health - dmg);
+            this.audio.playCombatHit(true);
+            this.spawnFloatingText(this.playerGroup.position, `-${dmg} (COLUMNA DE FUEGO)`, '#ff4400');
+            this.updateHUD();
+          }
+        }
+      } else {
+        // Fade out erupted flame pillar
+        const mat = g.pillarMesh.material as THREE.MeshBasicMaterial;
+        mat.opacity -= delta * 2.5;
+        g.pillarMesh.scale.y += delta * 2;
+        if (mat.opacity <= 0) {
+          this.scene.remove(g.markerMesh);
+          this.scene.remove(g.pillarMesh);
+          this.flameGeysers.splice(i, 1);
+        }
+      }
+    }
+  }
+
+  private spawnFlameGeyser(pos: THREE.Vector3): void {
+    const markerMat = new THREE.MeshBasicMaterial({ color: 0xff3300, side: THREE.DoubleSide });
+    const markerGeo = new THREE.RingGeometry(0.3, 1.2, 16);
+    const markerMesh = new THREE.Mesh(markerGeo, markerMat);
+    markerMesh.rotation.x = -Math.PI / 2;
+    markerMesh.position.set(pos.x, 0.03, pos.z);
+    this.scene.add(markerMesh);
+
+    const pillarMat = new THREE.MeshBasicMaterial({ color: 0xff4400, transparent: true, opacity: 0 });
+    const pillarGeo = new THREE.CylinderGeometry(0.7, 0.9, 4.0, 8);
+    const pillarMesh = new THREE.Mesh(pillarGeo, pillarMat);
+    pillarMesh.position.set(pos.x, 2.0, pos.z);
+    this.scene.add(pillarMesh);
+
+    this.flameGeysers.push({
+      markerMesh,
+      pillarMesh,
+      pos: pos.clone(),
+      timer: 0.85,
+      hasErupted: false
+    });
+  }
+
+  // =========================================================================
+  // ENEMY 4: CRYPT PENITENT SKELETON PATROL & COMBAT
+  // =========================================================================
+  private updateSkeleton(delta: number): void {
+    if (this.skeletonState === 'DEAD') {
+      this.skeletonGroup.position.y = -0.3;
+      return;
+    }
+
+    const toPlayer = this.playerGroup.position.clone().sub(this.skeletonGroup.position);
+    toPlayer.y = 0;
+    const distToPlayer = toPlayer.length();
+
+    // Orient towards movement or player
+    if (this.skeletonState === 'CHASE' || this.skeletonState === 'WINDUP' || this.skeletonState === 'ATTACK') {
+      const targetAngle = Math.atan2(toPlayer.x, toPlayer.z);
+      this.skeletonGroup.rotation.y = THREE.MathUtils.lerp(this.skeletonGroup.rotation.y, targetAngle, 0.1);
+    }
+
+    // Floating idle breathing
+    this.skeletonGroup.position.y = Math.sin(this.clock.elapsedTime * 2.8) * 0.06;
+
+    if (this.skeletonState === 'PATROL') {
+      this.skeletonWarningMesh.visible = false;
+      const targetWp = this.skeletonWaypoints[this.skeletonCurrentWaypointIndex];
+      const toWp = targetWp.clone().sub(this.skeletonGroup.position);
+      toWp.y = 0;
+      const distWp = toWp.length();
+
+      if (distWp < 0.6) {
+        this.skeletonCurrentWaypointIndex = (this.skeletonCurrentWaypointIndex + 1) % this.skeletonWaypoints.length;
+      } else {
+        toWp.normalize();
+        this.skeletonGroup.position.add(toWp.multiplyScalar(1.4 * delta));
+        const moveAngle = Math.atan2(toWp.x, toWp.z);
+        this.skeletonGroup.rotation.y = THREE.MathUtils.lerp(this.skeletonGroup.rotation.y, moveAngle, 0.08);
+      }
+
+      // Detection: player must be past z <= -23 (in the cemetery) and within 8.5m
+      if (this.playerGroup.position.z <= -23 && distToPlayer < 8.5) {
+        this.skeletonState = 'ALERT';
+        this.skeletonTimer = 0.55;
+        this.audio.playSfx('warning');
+        this.spawnFloatingText(this.skeletonGroup.position, '⚠️ ¡PENITENTE ALERTA!', '#00e5ff');
+      }
+    } else if (this.skeletonState === 'ALERT') {
+      this.skeletonTimer -= delta;
+      this.skeletonWarningMesh.visible = true;
+      if (this.skeletonTimer <= 0) {
+        this.skeletonState = 'CHASE';
+        this.skeletonWarningMesh.visible = false;
+      }
+    } else if (this.skeletonState === 'CHASE') {
+      this.skeletonWarningMesh.visible = false;
+
+      // If player flees past z > -22, skeleton returns to patrol
+      if (this.playerGroup.position.z > -22 || distToPlayer > 12.0) {
+        this.skeletonState = 'PATROL';
+        return;
+      }
+
+      if (distToPlayer > 2.5) {
+        toPlayer.normalize();
+        this.skeletonGroup.position.add(toPlayer.multiplyScalar(2.6 * delta));
+      } else {
+        // Start attack windup
+        this.skeletonState = 'WINDUP';
+        this.skeletonTimer = 0.6;
+        this.skeletonWarningMesh.visible = true;
+        this.audio.playSfx('warning');
+      }
+    } else if (this.skeletonState === 'WINDUP') {
+      this.skeletonTimer -= delta;
+      this.skeletonWarningMesh.rotation.y += delta * 8;
+      this.skeletonWarningMesh.visible = Math.floor(this.clock.elapsedTime * 20) % 2 === 0;
+
+      // Raise rusted claymore
+      if (this.skeletonSwordMesh) {
+        this.skeletonSwordMesh.rotation.x = -1.2;
+      }
+
+      if (this.skeletonTimer <= 0) {
+        this.skeletonState = 'ATTACK';
+        this.skeletonWarningMesh.visible = false;
+        this.executeSkeletonAttack();
+      }
+    } else if (this.skeletonState === 'RECOVERY') {
+      this.skeletonTimer -= delta;
+      if (this.skeletonSwordMesh) {
+        this.skeletonSwordMesh.rotation.x = THREE.MathUtils.lerp(this.skeletonSwordMesh.rotation.x, 0, 0.1);
+      }
+      if (this.skeletonTimer <= 0) {
+        this.skeletonState = 'CHASE';
+      }
+    } else if (this.skeletonState === 'STUNNED') {
+      this.skeletonTimer -= delta;
+      this.skeletonWarningMesh.visible = false;
+      this.skeletonGroup.rotation.z = Math.sin(this.clock.elapsedTime * 25) * 0.15;
+      if (this.skeletonTimer <= 0) {
+        this.skeletonGroup.rotation.z = 0;
+        this.skeletonState = 'RECOVERY';
+        this.skeletonTimer = 0.5;
+      }
+    }
+  }
+
+  private executeSkeletonAttack(): void {
+    const dist = this.playerGroup.position.distanceTo(this.skeletonGroup.position);
+    if (this.skeletonSwordMesh) {
+      this.skeletonSwordMesh.rotation.x = 0.8;
+    }
+
+    if (dist <= 3.2) {
+      const parryWindow = 280 + this.inventory.getParryBonusMs();
+      const isParry = this.playerStats.isGuarding && (performance.now() - this.lastGuardTime) <= parryWindow;
+      if (isParry) {
+        this.audio.playSfx('parry');
+        this.skeletonState = 'STUNNED';
+        this.skeletonTimer = 2.4;
+        this.spawnFloatingText(this.playerGroup.position, '¡PARRY DE ESPADÓN (+70ms)!', '#66ccff');
+        this.spawnFloatingText(this.skeletonGroup.position, '⚡ ¡ATURDIDO! [E] ¡REMATAR!', '#ffd700');
+        return;
+      }
+
+      if (this.playerStats.isDodging) {
+        this.spawnFloatingText(this.playerGroup.position, '¡ESQUIVA PERFECTA!', '#88ffaa');
+        this.skeletonState = 'RECOVERY';
+        this.skeletonTimer = 0.8;
+        return;
+      }
+
+      const dmg = this.playerStats.isGuarding ? 7 : 24;
+      this.playerStats.health = Math.max(0, this.playerStats.health - dmg);
+      this.audio.playCombatHit(true);
+      this.spawnFloatingText(this.playerGroup.position, `-${dmg} (CORTE OXIDADO)`, '#ff6666');
+      this.updateHUD();
+    }
+
+    this.skeletonState = 'RECOVERY';
+    this.skeletonTimer = 0.75;
+  }
+
   private toggleCameraMode(): void {
     this.cameraMode = this.cameraMode === 'isometric' ? 'third_person' : 'isometric';
   }
@@ -2814,7 +3682,9 @@ export class Oakhaven3DExperience {
     this.updateEnemy(delta);
     this.updateCultist(delta);
     this.updateZealot(delta);
+    this.updateSkeleton(delta);
     this.updateBossMorwenna(delta);
+    this.updateFlameGeysers(delta);
     this.updateProjectiles(delta);
     this.updateDebris(delta);
     this.updateProximityInteractions();
@@ -2823,6 +3693,12 @@ export class Oakhaven3DExperience {
     this.updateEmbers(delta);
     this.updateFloatingTexts(delta);
     this.checkShalemProximity();
+
+    // Swing open cemetery gates smoothly if unlocked
+    if (this.cemeteryGateOpen && this.cemeteryGateLeft && this.cemeteryGateRight) {
+      this.cemeteryGateLeft.rotation.y = THREE.MathUtils.lerp(this.cemeteryGateLeft.rotation.y, -Math.PI * 0.45, 0.05);
+      this.cemeteryGateRight.rotation.y = THREE.MathUtils.lerp(this.cemeteryGateRight.rotation.y, Math.PI * 0.45, 0.05);
+    }
 
     if (this.wardBarrierMesh && this.wardBarrierMesh.visible) {
       this.wardBarrierMesh.rotation.y += delta * 2.5;
@@ -2872,7 +3748,8 @@ export class Oakhaven3DExperience {
     this.playerGroup.position.z += this.playerVelocity.z * delta;
 
     this.playerGroup.position.x = THREE.MathUtils.clamp(this.playerGroup.position.x, -5.2, 5.2);
-    this.playerGroup.position.z = THREE.MathUtils.clamp(this.playerGroup.position.z, -23, 11);
+    const minZ = this.cemeteryGateOpen ? -46.5 : -23;
+    this.playerGroup.position.z = THREE.MathUtils.clamp(this.playerGroup.position.z, minZ, 11);
 
     // Timers
     if (this.dodgeTimer > 0) this.dodgeTimer -= delta;
@@ -4019,6 +4896,17 @@ export class Oakhaven3DExperience {
         if (this.zealotHpBarContainer) this.zealotHpBarContainer.style.display = 'block';
       } else {
         if (this.zealotHpBarContainer) this.zealotHpBarContainer.style.display = 'none';
+      }
+    }
+
+    if (this.skeletonHpBarFill) {
+      const sPct = Math.max(0, (this.skeletonHealth / this.skeletonMaxHealth) * 100);
+      this.skeletonHpBarFill.style.width = `${sPct}%`;
+      const dist = this.playerGroup.position.distanceTo(this.skeletonGroup.position);
+      if (this.skeletonHealth > 0 && dist < 13) {
+        if (this.skeletonHpBarContainer) this.skeletonHpBarContainer.style.display = 'block';
+      } else {
+        if (this.skeletonHpBarContainer) this.skeletonHpBarContainer.style.display = 'none';
       }
     }
 

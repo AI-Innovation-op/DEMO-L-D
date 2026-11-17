@@ -7,7 +7,8 @@ export type ItemEffectType =
   | 'buff_speed'
   | 'relic_parry_window'
   | 'relic_dodge_cost'
-  | 'relic_danger_sense';
+  | 'relic_danger_sense'
+  | 'unlock_gate';
 
 export interface InventoryItem {
   id: string;
