@@ -48,6 +48,7 @@ export function launch3DPrototype(): void {
   three3dExperience = new Oakhaven3DExperience(threeWrapper, () => {
     exit3DPrototype();
   });
+  (window as unknown as { three3dExperience: Oakhaven3DExperience | null }).three3dExperience = three3dExperience;
   three3dExperience.init();
 }
 
@@ -59,6 +60,7 @@ export function exit3DPrototype(): void {
   if (three3dExperience) {
     three3dExperience.destroy();
     three3dExperience = null;
+    (window as unknown as { three3dExperience: Oakhaven3DExperience | null }).three3dExperience = null;
   }
 
   const container = document.getElementById('game-container');
