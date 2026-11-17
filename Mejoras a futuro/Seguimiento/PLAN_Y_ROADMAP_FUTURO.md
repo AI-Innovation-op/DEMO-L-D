@@ -4,24 +4,44 @@ Este documento establece las prioridades de desarrollo, mecánicas planeadas y e
 
 ---
 
-## 🎯 Prioridades a Corto Plazo (Sprint Inmediato)
+## 🎯 Estado de Entregas del Sprint Actual
 
-### 1. Sistema de Inventario y Reliquias
-- **Bolsa de Acolito**:
-  - Objetos consumibles: *Bálsamo de la Doncella* (cura 35 HP), *Rosario de Madera* (restaura postura), *Ceniza Consagrada* (añade daño sagrado a los ataques durante 15s).
-  - Menú de inventario accesible con `[I]` tanto en 2D como en 3D.
-- **Reliquias Equipables**:
-  - *Pluma del Sauce Negro* (reduce el coste de esquiva un 20%).
-  - *Cruz de Oakhaven* (aumenta la ventana de parry de 250ms a 320ms).
-  - *Amuleto de Shalem* (otorga aviso anticipado de ataques no bloqueables).
+### 1. Sistema de Inventario y Reliquias [COMPLETADO ✅]
+- [x] **Bolsa de Acólito**:
+  - Objetos consumibles: *Bálsamo de la Doncella* (cura 35 HP), *Rosario de San Jude* (restaura postura al 100%), *Ceniza Consagrada* (+25% daño por 20s), *Bálsamo del Ocaso*, *Agua Bendita de Jude*.
+  - Menú de inventario modal interactivo accesible con tecla `[I]` y botón en HUD.
+  - Consumo rápido de bálsamos con tecla `[Q]` y botón con contador de stock en tiempo real.
+- [x] **Reliquias Equipables**:
+  - *Cruz de Oakhaven* (+70ms de ventana de Parry, extendiendo a 350ms).
+  - *Pluma del Sauce Negro* (-20% de coste de fatiga de esquiva).
+  - Gestión de ranuras dinámicas (1/2, 2/2) con persistencia y estadísticas en vivo.
 
-### 2. Patrullas de Enemigos y Variedad de Cultistas
-- **Cultista Portador de Incensario**:
-  - Ataque en área con humo tóxico/abismal que reduce la postura si se permanece dentro.
-- **Flagelante con Cadena**:
-  - Ataques de látigo de largo alcance que exigen esquiva lateral en vez de parry directo.
-- **Sistema de Rutas de Patrulla**:
-  - Enemigos que caminan entre farolas y reaccionan al sonido de pasos o de barriles rotos.
+### 2. Patrullas de Enemigos y Variedad de Cultistas [COMPLETADO ✅]
+- [x] **Sistema de Rutas de Patrulla por Waypoints (FSM)**:
+  - Enemigos con estados `PATROL`, `ALERT` (0.55s de aviso con ⚠️), `CHASE`, `WINDUP`, `ATTACK`, `RECOVERY`, `STUNNED`, `RETURNING`, `DEAD`.
+  - Retorno automático a ruta si el héroe se aleja más de 10.5m.
+- [x] **Sabueso de Ceniza (Ash Prowler)** con patrulla activa entre farolas de la calle.
+- [x] **Cultista Portador de Incensario (Censer Bearer)**:
+  - Modelo 3D encapuchado con máscara, incensario oscilante con luz puntual y cadenas.
+  - Barra de salud dedicada `#p3d-cultist-hud`, vulnerable a parry y rematable con `[E]`.
+  - Botín de consumibles al ser purificado.
+
+---
+
+## 🚀 Próximas Prioridades (Siguiente Sprint)
+
+### 1. Segundo Enemigo Especializado: Flagelante con Cadena
+- Ataques de látigo con rango extendido (4.5m) que barren en semicírculo horizontal.
+- Exige esquiva con `[ESPACIO]` o bloqueo firme para evitar derribo.
+
+### 2. Árbol de Habilidades y EXP de Héroes
+- Inversión de los puntos de EXP acumulados al romper barriles (+15) o derrotar cultistas (+100):
+  - **Thomas**: *Golpe de Escudo Santo*, *Corte Doble Ascendente*, *Tenacidad Inquebrantable*.
+  - **Khaterine**: *Disparo Abisal Perforante*, *Paso Umbrío*, *Lluvia de Flechas*.
+
+### 3. Sistema de Guardado Persistente (Checkpoints en Santuario)
+- Guardado en `localStorage` al rezar con el Padre Cedric o beber del pozo sagrado.
+- Serialización de inventario, reliquias equipadas y progreso de misiones.
 
 ---
 

@@ -72,6 +72,33 @@ Este documento consolida el progreso completo de desarrollo del videojuego **The
   - Recompensa de `+15 EXP` con sonido crujiente procedural.
 - **Control de Audio**: Botón en pantalla y tecla `[M]` para silenciar o activar la música sacra.
 
+### ✦ Entrega 6: Sistema de Inventario & Reliquias + Patrullas de IA con Waypoints
+- **Dominio de Inventario Limpio (`src/domain/inventory/`)**:
+  - `InventoryItem`: Tipificación estricta de consumibles, reliquias pasivas y objetos clave.
+  - `Inventory`: Gestión completa de bolsa, consumo con efectos dinámicos (`heal_health`, `restore_posture`, `buff_attack`), gestión de ranuras de reliquia (máximo 2 activas), serialización a JSON.
+  - Consumibles integrados: *Bálsamo de la Doncella* (+35 HP), *Rosario de San Jude* (restaura postura al 100%), *Ceniza Consagrada* (+25% daño sagrado por 20s), *Bálsamo del Ocaso*, *Agua Bendita de Jude*.
+  - Reliquias integradas:
+    - *Cruz de Oakhaven*: +70 ms a la ventana de parry (de 280ms a 350ms).
+    - *Pluma del Sauce Negro*: -20% al coste de fatiga de esquiva.
+- **Integración en Oakhaven 3D**:
+  - Modal interactivo de la **Bolsa del Acólito & Reliquias** con tecla `[I]` y botón de HUD `🎒 [I] INVENTARIO`.
+  - Equipamiento y desequipamiento en tiempo real con recálculo dinámico de estadísticas y aviso sonoro.
+  - Botón de **Acceso Rápido a Bálsamo** con tecla `[Q]` y contador en tiempo real (`🌿 [Q] BÁLSAMO (x)`).
+  - Efectos visuales de texto flotante en 3D (`🌿 +35 SALUD`, `⚔ DAÑO +35%`, `✦ RELIQUIA EQUIPADA ✦`).
+- **Patrullas de IA Enemiga (Waypoint Navigation & FSM)**:
+  - **Sabueso de Ceniza (Ash Prowler)**:
+    - Patrulla entre waypoints a lo largo de la calle de Oakhaven.
+    - Detección por cono de visión y proximidad con estado `ALERT` (0.55s con ⚠️ y sfx de advertencia telegrafiada).
+    - Estados completos: `PATROL`, `ALERT`, `CHASE`, `WINDUP`, `ATTACK`, `RECOVERY`, `STUNNED`, `RETURNING`, `DEAD`.
+    - Si el jugador se aleja a más de 10.5m, el enemigo desiste y retorna a su ruta de patrulla original.
+  - **Nuevo Enemigo — Cultista Portador del Incensario (Censer Bearer)**:
+    - Modelo 3D con túnica larga, capucha con máscara cenicienta, incensario de bronce oscilante con luz dorada/púrpura y cadenas.
+    - Barra de salud dedicada `#p3d-cultist-hud` en la interfaz.
+    - Ataques telegrafiados con humo de incensario y balanceo rítmico.
+    - Vulnerable a Parry (con bonificación de reliquia) y rematable con `[E]` al aturdirse.
+    - Botín garantizado: Suelta consumibles (*Bálsamo del Ocaso* o *Agua Bendita*) al ser purificado o rematado.
+- **Batería de Tests Unitarios**: 25 pruebas vitest automatizadas aprobadas al 100%.
+
 ---
 
 ## 📊 Métricas del Proyecto
@@ -79,5 +106,5 @@ Este documento consolida el progreso completo de desarrollo del videojuego **The
 - **Framework Gráfico 2D**: HTML5 Canvas nativo de alto rendimiento (60 FPS sin caídas).
 - **Framework Gráfico 3D**: Three.js con sombras suaves PCFSoft, ACESFilmic Tone Mapping y niebla exponencial.
 - **Audio**: Web Audio API nativo sin dependencias de archivos externos.
-- **Tests**: 21 pruebas unitarias vitest aprobadas.
+- **Tests**: 25 pruebas unitarias vitest aprobadas (incluye suite de inventario y reliquias).
 - **Repositorio**: Sincronizado en GitHub (`main`).
