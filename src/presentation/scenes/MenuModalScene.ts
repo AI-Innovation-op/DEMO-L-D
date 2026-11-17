@@ -107,8 +107,8 @@ export class MenuModalScene extends Phaser.Scene {
       this.tabButtons.set(tab.key, { bg: tabBg, text: tabText });
     });
 
-    // Content container
-    this.contentContainer = this.add.container(0, 15);
+    // Content container (centered with ample margin to header tabs and bottom action buttons)
+    this.contentContainer = this.add.container(0, 8);
 
     // Bottom Action Bar: [⮌ VOLVER AL MENÚ INICIAL] and [▶ VOLVER A LA PARTIDA]
     const btnMenuBg = this.add.rectangle(-115, 134, 210, 24, 0x2e111d)
@@ -237,31 +237,31 @@ export class MenuModalScene extends Phaser.Scene {
   private renderStatusTab(): void {
     const isThomas = this.player.id === 'thomas';
 
-    // Left Column: Character Card
-    const cardBg = this.add.rectangle(-160, 10, 180, 200, 0x1d142e).setStrokeStyle(1, 0x6e4b8a);
+    // Left Column: Character Card (188px height to maintain 14px breathing room above bottom buttons)
+    const cardBg = this.add.rectangle(-160, 6, 180, 188, 0x1d142e).setStrokeStyle(1, 0x6e4b8a);
     const portraitKey = isThomas ? 'portrait_thomas' : 'portrait_khaterine';
     let portrait: Phaser.GameObjects.GameObject;
     if (this.textures.exists(portraitKey)) {
-      portrait = this.add.image(-160, -40, portraitKey).setDisplaySize(72, 72);
+      portrait = this.add.image(-160, -42, portraitKey).setDisplaySize(70, 70);
     } else {
-      portrait = this.add.rectangle(-160, -40, 72, 72, 0x271a3d).setStrokeStyle(1, 0x6e4b8a);
+      portrait = this.add.rectangle(-160, -42, 70, 70, 0x271a3d).setStrokeStyle(1, 0x6e4b8a);
     }
 
-    const nameText = this.add.text(-160, 5, isThomas ? 'THOMAS' : 'KHATERINE', {
+    const nameText = this.add.text(-160, 3, isThomas ? 'THOMAS' : 'KHATERINE', {
       fontFamily: 'Cinzel, Georgia, serif',
       fontSize: '15px',
       color: '#ffd700',
       fontStyle: 'bold'
     }).setOrigin(0.5);
 
-    const roleText = this.add.text(-160, 22, isThomas ? 'Híbrido del Abismo / Monaguillo' : 'Desterrada del Abismo / Falsa Monja', {
+    const roleText = this.add.text(-160, 20, isThomas ? 'Híbrido del Abismo / Monaguillo' : 'Desterrada del Abismo / Falsa Monja', {
       fontFamily: 'sans-serif',
       fontSize: '8px',
       color: '#cbb8e0'
     }).setOrigin(0.5);
 
-    const traitBox = this.add.rectangle(-160, 68, 160, 50, 0x271a3d).setStrokeStyle(1, 0x51386b);
-    const traitText = this.add.text(-160, 68, isThomas
+    const traitBox = this.add.rectangle(-160, 62, 160, 46, 0x271a3d).setStrokeStyle(1, 0x51386b);
+    const traitText = this.add.text(-160, 62, isThomas
       ? 'Rasgo: Superágil y daño destructivo. Se debilita rápidamente ante golpes pesados directos.'
       : 'Rasgo: Hechicera a distancia con arco abismal. Movimiento más lento pero gran resistencia.', {
       fontFamily: 'sans-serif',
@@ -272,9 +272,9 @@ export class MenuModalScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     // Right Column: Detailed Stats & Shalem Level Up
-    const statsBg = this.add.rectangle(100, 10, 310, 200, 0x1a1229).setStrokeStyle(1, 0x503766);
+    const statsBg = this.add.rectangle(100, 6, 310, 188, 0x1a1229).setStrokeStyle(1, 0x503766);
 
-    const statsHeader = this.add.text(100, -75, '— ATRIBUTOS DEL ALMA & ESTADO —', {
+    const statsHeader = this.add.text(100, -73, '— ATRIBUTOS DEL ALMA & ESTADO —', {
       fontFamily: 'Cinzel, serif',
       fontSize: '11px',
       color: '#ffd700',
@@ -293,7 +293,7 @@ export class MenuModalScene extends Phaser.Scene {
 
     const barW = 280;
     stats.forEach((s, i) => {
-      const sy = -52 + i * 32;
+      const sy = -52 + i * 29;
       const labelText = this.add.text(-40, sy, s.label, {
         fontFamily: 'Cinzel, monospace',
         fontSize: '8.5px',
@@ -307,10 +307,10 @@ export class MenuModalScene extends Phaser.Scene {
       }).setOrigin(1, 0);
 
       // Bar container & fill
-      const barBg = this.add.rectangle(100, sy + 14, barW, 6, 0x0c0714).setStrokeStyle(1, 0x3d274f);
+      const barBg = this.add.rectangle(100, sy + 13, barW, 6, 0x0c0714).setStrokeStyle(1, 0x3d274f);
       const safePct = isNaN(s.pct) ? 0 : Math.max(0, Math.min(1, s.pct));
       const fillW = Math.max(0, Math.min(barW, barW * safePct));
-      const barFill = this.add.rectangle(-40 + fillW / 2, sy + 14, fillW, 6, Phaser.Display.Color.HexStringToColor(s.col).color);
+      const barFill = this.add.rectangle(-40 + fillW / 2, sy + 13, fillW, 6, Phaser.Display.Color.HexStringToColor(s.col).color);
 
       this.contentContainer.add([labelText, valText, barBg, barFill]);
     });
@@ -384,9 +384,9 @@ export class MenuModalScene extends Phaser.Scene {
   // TAB 3: PROFECÍA ORIGINAL & LORE
   // ==========================================
   private renderProphecyTab(): void {
-    // Left Box: Profecía Oficial
-    const leftBg = this.add.rectangle(-135, 10, 255, 195, 0x181024).setStrokeStyle(1, 0x803333);
-    const leftHeader = this.add.text(-135, -75, 'LA PROFECÍA OFICIAL (ALTA PRELATURA)', {
+    // Left Box: Profecía Oficial (188px height for clean bottom margin)
+    const leftBg = this.add.rectangle(-135, 6, 255, 188, 0x181024).setStrokeStyle(1, 0x803333);
+    const leftHeader = this.add.text(-135, -73, 'LA PROFECÍA OFICIAL (ALTA PRELATURA)', {
       fontFamily: 'Cinzel, serif',
       fontSize: '8.5px',
       color: '#ff8888',
@@ -404,7 +404,7 @@ export class MenuModalScene extends Phaser.Scene {
       'y el mundo entero será devorado.»'
     ].join('\n');
 
-    const leftBody = this.add.text(-135, 15, officialText, {
+    const leftBody = this.add.text(-135, 12, officialText, {
       fontFamily: 'serif',
       fontSize: '8px',
       color: '#e6c8c8',
@@ -413,9 +413,9 @@ export class MenuModalScene extends Phaser.Scene {
       lineSpacing: 3
     }).setOrigin(0.5);
 
-    // Right Box: Profecía Original Reconstruida
-    const rightBg = this.add.rectangle(135, 10, 255, 195, 0x181024).setStrokeStyle(2, 0xd4af37);
-    const rightHeader = this.add.text(135, -75, 'LA PROFECÍA ORIGINAL (3/3 FRAGMENTOS)', {
+    // Right Box: Profecía Original Reconstruida (188px height)
+    const rightBg = this.add.rectangle(135, 6, 255, 188, 0x181024).setStrokeStyle(2, 0xd4af37);
+    const rightHeader = this.add.text(135, -73, 'LA PROFECÍA ORIGINAL (3/3 FRAGMENTOS)', {
       fontFamily: 'Cinzel, serif',
       fontSize: '8.5px',
       color: '#ffd700',
@@ -436,7 +436,7 @@ export class MenuModalScene extends Phaser.Scene {
       'será la única Luz en las Tinieblas.»'
     ].join('\n');
 
-    const rightBody = this.add.text(135, 15, originalText, {
+    const rightBody = this.add.text(135, 12, originalText, {
       fontFamily: 'serif',
       fontSize: '8px',
       color: '#fff3cc',
@@ -534,15 +534,15 @@ export class MenuModalScene extends Phaser.Scene {
       this.contentContainer.add([btnBg, titleTxt, subTxt]);
     });
 
-    // Right Detail View
+    // Right Detail View (188px height for clean bottom margin)
     const cur = chronicles[this.selectedChronicleIndex] || chronicles[0];
     const rightX = 105;
     const rightW = 310;
-    const rightH = 195;
+    const rightH = 188;
 
-    const detailBg = this.add.rectangle(rightX, 10, rightW, rightH, 0x140c21)
+    const detailBg = this.add.rectangle(rightX, 6, rightW, rightH, 0x140c21)
       .setStrokeStyle(1.5, 0xd4af37);
-    const detailInner = this.add.rectangle(rightX, 10, rightW - 6, rightH - 6, 0x000000, 0)
+    const detailInner = this.add.rectangle(rightX, 6, rightW - 6, rightH - 6, 0x000000, 0)
       .setStrokeStyle(1, 0x5a3b75);
 
     // Mini Portrait / Artwork Badge
@@ -632,16 +632,16 @@ export class MenuModalScene extends Phaser.Scene {
       this.contentContainer.add([keyPill, keyLabel, descLabel]);
     });
 
-    // Audio Mute Quick Toggle Button inside Controls Tab
+    // Audio Mute Quick Toggle & 3D Prototype buttons side by side at y = 92 (aligned under left and right columns)
     const audioAdapter = WebAudioSoundAdapter.getInstance();
     const isMuted = audioAdapter.getIsMuted();
-    const muteTogglePill = this.add.rectangle(0, 95, 260, 22, isMuted ? 0x551a1a : 0x1f3d24)
+    const muteTogglePill = this.add.rectangle(-135, 92, 255, 20, isMuted ? 0x551a1a : 0x1f3d24)
       .setStrokeStyle(1, isMuted ? 0xff7777 : 0x77ff77)
       .setInteractive({ useHandCursor: true });
 
-    const muteToggleText = this.add.text(0, 95, isMuted ? '🔇 AUDIO: SILENCIADO (Clic para activar)' : '🔊 AUDIO: ACTIVADO (Clic para silenciar)', {
+    const muteToggleText = this.add.text(-135, 92, isMuted ? '🔇 AUDIO: SILENCIADO (Clic para activar)' : '🔊 AUDIO: ACTIVADO (Clic para silenciar)', {
       fontFamily: 'monospace',
-      fontSize: '8.5px',
+      fontSize: '8px',
       color: '#ffffff',
       fontStyle: 'bold'
     }).setOrigin(0.5);
@@ -653,11 +653,11 @@ export class MenuModalScene extends Phaser.Scene {
       muteToggleText.setText(mutedNow ? '🔇 AUDIO: SILENCIADO (Clic para activar)' : '🔊 AUDIO: ACTIVADO (Clic para silenciar)');
     });
 
-    const proto3dBtn = this.add.rectangle(0, 120, 260, 20, 0x1a243d)
+    const proto3dBtn = this.add.rectangle(135, 92, 255, 20, 0x1a243d)
       .setStrokeStyle(1, 0x5599ff)
       .setInteractive({ useHandCursor: true });
 
-    const proto3dText = this.add.text(0, 120, '🏛️ PROBAR PROTOTIPO 3D (OAKHAVEN)', {
+    const proto3dText = this.add.text(135, 92, '🏛️ PROBAR PROTOTIPO 3D (OAKHAVEN)', {
       fontFamily: 'Cinzel, monospace',
       fontSize: '8px',
       color: '#99ddff',
