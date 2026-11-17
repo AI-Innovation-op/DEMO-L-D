@@ -11,6 +11,33 @@ export interface CombatStats3D {
   isArmed: boolean;
 }
 
+export interface Projectile3D {
+  mesh: THREE.Group;
+  light: THREE.PointLight;
+  velocity: THREE.Vector3;
+  life: number;
+  maxLife: number;
+  damage: number;
+  isHeavy: boolean;
+}
+
+export interface DestructibleProp3D {
+  id: string;
+  mesh: THREE.Mesh;
+  position: THREE.Vector3;
+  radius: number;
+  isDestroyed: boolean;
+  name: string;
+}
+
+export interface DebrisParticle3D {
+  mesh: THREE.Mesh;
+  velocity: THREE.Vector3;
+  rotSpeed: THREE.Vector3;
+  life: number;
+  maxLife: number;
+}
+
 export class Oakhaven3DExperience {
   private container: HTMLElement;
   private scene!: THREE.Scene;
@@ -24,9 +51,15 @@ export class Oakhaven3DExperience {
   private targetCameraPos = new THREE.Vector3();
   private targetCameraLook = new THREE.Vector3();
 
-  // Player 3D
+  // Dual Hero System (Thomas & Khaterine)
+  private activeHero: 'thomas' | 'khaterine' = 'thomas';
   private playerGroup!: THREE.Group;
   private playerBody!: THREE.Mesh;
+  private thomasModelGroup!: THREE.Group;
+  private khaterineModelGroup!: THREE.Group;
+  private khaterineBowMesh!: THREE.Group;
+  private wardBarrierMesh!: THREE.Mesh;
+  private thomasNpcGroup!: THREE.Group;
   private playerSwordMesh!: THREE.Group;
   private playerFistsGroup!: THREE.Group;
   private playerLight!: THREE.PointLight;
@@ -49,6 +82,11 @@ export class Oakhaven3DExperience {
   private droppedSwordGroup?: THREE.Group;
   private droppedSwordLight?: THREE.PointLight;
 
+  // Abyssal Ranged Projectiles & Destructible Environment
+  private projectiles: Projectile3D[] = [];
+  private destructibles: DestructibleProp3D[] = [];
+  private debrisParticles: DebrisParticle3D[] = [];
+
   // Enemy 3D (Sabueso de Ceniza / Cultista)
   private enemyGroup!: THREE.Group;
   private enemyHealth: number = 120;
@@ -64,7 +102,7 @@ export class Oakhaven3DExperience {
   private shalemTail!: THREE.Mesh;
   private shalemSpoke: boolean = false;
 
-  // Interactive Characters 3D (Elowen, Cedric, Khaterine)
+  // Interactive Characters 3D (Elowen, Cedric, Khaterine, Thomas NPC)
   private elowenGroup!: THREE.Group;
   private elowenLight!: THREE.PointLight;
   private hasTalkedToElowen3D: boolean = false;
@@ -75,6 +113,7 @@ export class Oakhaven3DExperience {
 
   private khaterineGroup!: THREE.Group;
   private hasTalkedToKhaterine3D: boolean = false;
+  private hasTalkedToThomas3D: boolean = false;
 
   // Boss 3D (Madre Morwenna en la Gran Pira)
   private morwennaGroup!: THREE.Group;
@@ -88,7 +127,7 @@ export class Oakhaven3DExperience {
   private morwennaHpBarFill?: HTMLDivElement;
 
   // 3D Proximity Interactions & Dialogue Modal
-  private activeInteractTarget?: 'elowen' | 'cedric' | 'shalem' | 'khaterine' | 'sword' | 'finisher';
+  private activeInteractTarget?: 'elowen' | 'cedric' | 'shalem' | 'khaterine' | 'thomas' | 'sword' | 'finisher';
   private proximityBadgeEl?: HTMLDivElement;
   private dialogueModalEl?: HTMLDivElement;
   private isDialogueOpen: boolean = false;
@@ -151,6 +190,7 @@ export class Oakhaven3DExperience {
     this.createElowen();
     this.createCedric();
     this.createKhaterine();
+    this.createThomasNPC();
     this.createBossMorwenna();
 
     // 6. Build 3D UI Overlay
@@ -158,6 +198,9 @@ export class Oakhaven3DExperience {
 
     // 7. Bind Inputs
     this.bindInputs();
+
+    // 8. Start Atmospheric BGM
+    this.audio.playBgm('bgm_oakhaven_night');
 
     this.isRunning = true;
     this.animate();
@@ -377,30 +420,110 @@ export class Oakhaven3DExperience {
 
     this.scene.add(shrineGroup);
 
-    // 2. Village Barrels & Crates beside cottages
+    // 2. Village Barrels & Crates beside cottages (Interactive Destructible Props)
     const barrelGeo = new THREE.CylinderGeometry(0.32, 0.38, 0.9, 8);
     const crateGeo = new THREE.BoxGeometry(0.75, 0.75, 0.75);
+
+    this.destructibles = [];
 
     // Left cluster (by Elowen's side)
     const b1 = new THREE.Mesh(barrelGeo, woodMat);
     b1.position.set(-4.8, 0.45, 1.8);
     b1.castShadow = true;
+    b1.receiveShadow = true;
+    this.scene.add(b1);
+    this.destructibles.push({
+      id: 'barrel-1',
+      mesh: b1,
+      position: b1.position,
+      radius: 0.75,
+      isDestroyed: false,
+      name: 'Barril de Especias'
+    });
+
     const c1 = new THREE.Mesh(crateGeo, woodMat);
     c1.position.set(-4.8, 0.38, 2.6);
     c1.castShadow = true;
-    this.scene.add(b1, c1);
+    c1.receiveShadow = true;
+    this.scene.add(c1);
+    this.destructibles.push({
+      id: 'crate-1',
+      mesh: c1,
+      position: c1.position,
+      radius: 0.8,
+      isDestroyed: false,
+      name: 'Caja de Suministros'
+    });
 
     // Right cluster (by well)
     const b2 = new THREE.Mesh(barrelGeo, woodMat);
     b2.position.set(4.8, 0.45, -0.5);
     b2.castShadow = true;
+    b2.receiveShadow = true;
+    this.scene.add(b2);
+    this.destructibles.push({
+      id: 'barrel-2',
+      mesh: b2,
+      position: b2.position,
+      radius: 0.75,
+      isDestroyed: false,
+      name: 'Barril de Agua Bendita'
+    });
+
     const b3 = new THREE.Mesh(barrelGeo, woodMat);
     b3.position.set(4.8, 0.45, 0.3);
     b3.castShadow = true;
+    b3.receiveShadow = true;
+    this.scene.add(b3);
+    this.destructibles.push({
+      id: 'barrel-3',
+      mesh: b3,
+      position: b3.position,
+      radius: 0.75,
+      isDestroyed: false,
+      name: 'Barril de Papiro Antiguo'
+    });
+
     const c2 = new THREE.Mesh(crateGeo, woodMat);
     c2.position.set(4.7, 0.38, -1.3);
     c2.castShadow = true;
-    this.scene.add(b2, b3, c2);
+    c2.receiveShadow = true;
+    this.scene.add(c2);
+    this.destructibles.push({
+      id: 'crate-2',
+      mesh: c2,
+      position: c2.position,
+      radius: 0.8,
+      isDestroyed: false,
+      name: 'Caja Parroquial'
+    });
+
+    // Mid-street clusters near Pyre plaza
+    const b4 = new THREE.Mesh(barrelGeo, woodMat);
+    b4.position.set(-4.2, 0.45, -11.5);
+    b4.castShadow = true;
+    this.scene.add(b4);
+    this.destructibles.push({
+      id: 'barrel-4',
+      mesh: b4,
+      position: b4.position,
+      radius: 0.75,
+      isDestroyed: false,
+      name: 'Barril de Aceite de Lámpara'
+    });
+
+    const c3 = new THREE.Mesh(crateGeo, woodMat);
+    c3.position.set(4.2, 0.38, -9.5);
+    c3.castShadow = true;
+    this.scene.add(c3);
+    this.destructibles.push({
+      id: 'crate-3',
+      mesh: c3,
+      position: c3.position,
+      radius: 0.8,
+      isDestroyed: false,
+      name: 'Cofre de la Vigilia'
+    });
 
     // 3. Shelter Roof over the Stone Well (where Shalem rests)
     const wellRoofGroup = new THREE.Group();
@@ -445,13 +568,17 @@ export class Oakhaven3DExperience {
   }
 
   // =========================================================================
-  // PLAYER 3D (THOMAS THE ACOLYTE)
+  // PLAYER 3D (DUAL HERO SYSTEM: THOMAS & KHATERINE)
   // =========================================================================
   private createPlayer(): void {
     this.playerGroup = new THREE.Group();
     this.playerGroup.position.set(0, 0, 4);
 
-    // Thomas Body (Stylized dark tunic)
+    // -----------------------------------------------------------------------
+    // A. THOMAS THE ACOLYTE MODEL GROUP
+    // -----------------------------------------------------------------------
+    this.thomasModelGroup = new THREE.Group();
+
     const tunicMat = new THREE.MeshStandardMaterial({ color: 0x221a29, roughness: 0.8 });
     const skinMat = new THREE.MeshStandardMaterial({ color: 0xd9b38c, roughness: 0.6 });
     const hairMat = new THREE.MeshStandardMaterial({ color: 0x3d2719, roughness: 0.9 });
@@ -461,31 +588,31 @@ export class Oakhaven3DExperience {
     const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, 1.1, 8), tunicMat);
     torso.position.y = 1.05;
     torso.castShadow = true;
-    this.playerGroup.add(torso);
+    this.thomasModelGroup.add(torso);
     this.playerBody = torso;
 
     // Ash Seal on Chest (Glowing purple/black rune)
     const ashSeal = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.25), ashMarkMat);
     ashSeal.position.set(0, 1.15, 0.36);
-    this.playerGroup.add(ashSeal);
+    this.thomasModelGroup.add(ashSeal);
 
     // Head
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.26, 8, 8), skinMat);
     head.position.y = 1.8;
     head.castShadow = true;
-    this.playerGroup.add(head);
+    this.thomasModelGroup.add(head);
 
     // Hair
     const hair = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 8), hairMat);
     hair.position.set(0, 1.88, -0.04);
-    this.playerGroup.add(hair);
+    this.thomasModelGroup.add(hair);
 
     // Scarf / Capelet
     const scarfMat = new THREE.MeshStandardMaterial({ color: 0x3f1f47, roughness: 0.7 });
     const scarf = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.09, 6, 8), scarfMat);
     scarf.rotation.x = Math.PI / 2;
     scarf.position.y = 1.6;
-    this.playerGroup.add(scarf);
+    this.thomasModelGroup.add(scarf);
 
     // Equipped Weapon: Short Sword with Dark Fire Runes
     this.playerSwordMesh = new THREE.Group();
@@ -512,7 +639,7 @@ export class Oakhaven3DExperience {
 
     this.playerSwordMesh.position.set(0.45, 0.9, 0.1);
     this.playerSwordMesh.rotation.set(0.3, 0, -0.2);
-    this.playerGroup.add(this.playerSwordMesh);
+    this.thomasModelGroup.add(this.playerSwordMesh);
 
     // Unarmed Fists Group (Visible when disarmed)
     this.playerFistsGroup = new THREE.Group();
@@ -524,14 +651,126 @@ export class Oakhaven3DExperience {
     rightFist.position.set(0.35, 1.0, 0.3);
     this.playerFistsGroup.add(leftFist, rightFist);
     this.playerFistsGroup.visible = false;
-    this.playerGroup.add(this.playerFistsGroup);
+    this.thomasModelGroup.add(this.playerFistsGroup);
 
-    // Subtle soul aura around Thomas
+    this.playerGroup.add(this.thomasModelGroup);
+
+    // -----------------------------------------------------------------------
+    // B. KHATERINE THE OUTCAST MODEL GROUP (PLAYABLE HERO)
+    // -----------------------------------------------------------------------
+    this.khaterineModelGroup = new THREE.Group();
+
+    const kRobeMat = new THREE.MeshStandardMaterial({ color: 0x1a0f26, roughness: 0.8 });
+    const kVeilMat = new THREE.MeshStandardMaterial({ color: 0x11071c, roughness: 0.5 });
+    const kSkinMat = new THREE.MeshStandardMaterial({ color: 0xe5ccbe, roughness: 0.5 });
+    const kHairMat = new THREE.MeshStandardMaterial({ color: 0x14101a, roughness: 0.9 });
+    const kBowWoodMat = new THREE.MeshStandardMaterial({ color: 0x2b1338, roughness: 0.4, metalness: 0.3 });
+    const kGlowMat = new THREE.MeshBasicMaterial({ color: 0xcc66ff });
+
+    // Khaterine Robe
+    const kRobe = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.48, 1.3, 8), kRobeMat);
+    kRobe.position.y = 0.65;
+    kRobe.castShadow = true;
+    this.khaterineModelGroup.add(kRobe);
+
+    // Head & Dark Hair
+    const kHead = new THREE.Mesh(new THREE.SphereGeometry(0.23, 8, 8), kSkinMat);
+    kHead.position.y = 1.5;
+    kHead.castShadow = true;
+    this.khaterineModelGroup.add(kHead);
+
+    const kHair = new THREE.Mesh(new THREE.SphereGeometry(0.26, 8, 8), kHairMat);
+    kHair.position.set(0, 1.54, -0.04);
+    this.khaterineModelGroup.add(kHair);
+
+    // Flowing Veil
+    const kVeil = new THREE.Mesh(new THREE.ConeGeometry(0.38, 0.75, 8), kVeilMat);
+    kVeil.position.set(0, 1.35, -0.05);
+    this.khaterineModelGroup.add(kVeil);
+
+    // Abyssal Bow held in hands
+    this.khaterineBowMesh = new THREE.Group();
+    const bowCurve = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.03, 6, 16, Math.PI * 0.9), kBowWoodMat);
+    bowCurve.rotation.z = Math.PI * 0.55;
+    this.khaterineBowMesh.add(bowCurve);
+
+    // Glowing Bow String
+    const bowString = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.82, 4), kGlowMat);
+    bowString.position.x = 0.04;
+    this.khaterineBowMesh.add(bowString);
+
+    this.khaterineBowMesh.position.set(0.35, 1.05, 0.25);
+    this.khaterineBowMesh.rotation.set(0.2, -0.3, 0.2);
+    this.khaterineModelGroup.add(this.khaterineBowMesh);
+
+    this.khaterineModelGroup.visible = false;
+    this.playerGroup.add(this.khaterineModelGroup);
+
+    // -----------------------------------------------------------------------
+    // C. ABYSSAL WARD BARRIER (VISIBLE DURING [L] GUARD WITH KHATERINE)
+    // -----------------------------------------------------------------------
+    const wardGeo = new THREE.SphereGeometry(1.25, 16, 16);
+    const wardMat = new THREE.MeshStandardMaterial({
+      color: 0xaa33ff,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.45,
+      emissive: 0x6611aa
+    });
+    this.wardBarrierMesh = new THREE.Mesh(wardGeo, wardMat);
+    this.wardBarrierMesh.position.y = 1.1;
+    this.wardBarrierMesh.visible = false;
+    this.playerGroup.add(this.wardBarrierMesh);
+
+    // Soul Aura around active hero
     this.playerLight = new THREE.PointLight(0xaa44ff, 1.4, 4);
     this.playerLight.position.set(0, 1.4, 0);
     this.playerGroup.add(this.playerLight);
 
     this.scene.add(this.playerGroup);
+  }
+
+  // =========================================================================
+  // THOMAS 3D NPC (VISIBLE WHEN PLAYING AS KHATERINE)
+  // =========================================================================
+  private createThomasNPC(): void {
+    this.thomasNpcGroup = new THREE.Group();
+    this.thomasNpcGroup.position.set(1.8, 0, 5.5);
+
+    const tunicMat = new THREE.MeshStandardMaterial({ color: 0x221a29, roughness: 0.8 });
+    const skinMat = new THREE.MeshStandardMaterial({ color: 0xd9b38c, roughness: 0.6 });
+    const hairMat = new THREE.MeshStandardMaterial({ color: 0x3d2719, roughness: 0.9 });
+    const woodMat = new THREE.MeshStandardMaterial({ color: 0x4a3219, roughness: 0.6 });
+
+    // Torso & Tunic
+    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, 1.1, 8), tunicMat);
+    torso.position.y = 1.05;
+    torso.castShadow = true;
+    this.thomasNpcGroup.add(torso);
+
+    // Head & Hair
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.26, 8, 8), skinMat);
+    head.position.y = 1.8;
+    this.thomasNpcGroup.add(head);
+
+    const hair = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 8), hairMat);
+    hair.position.set(0, 1.88, -0.04);
+    this.thomasNpcGroup.add(hair);
+
+    // Prayer scroll in hands
+    const scroll = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.35, 6), woodMat);
+    scroll.position.set(0, 1.1, 0.3);
+    scroll.rotation.z = Math.PI / 2;
+    this.thomasNpcGroup.add(scroll);
+
+    const tLight = new THREE.PointLight(0xffd700, 1.0, 3);
+    tLight.position.set(0, 1.4, 0.2);
+    this.thomasNpcGroup.add(tLight);
+
+    // Turn toward road
+    this.thomasNpcGroup.rotation.y = -Math.PI / 2;
+    this.thomasNpcGroup.visible = false;
+    this.scene.add(this.thomasNpcGroup);
   }
 
   // =========================================================================
@@ -885,9 +1124,9 @@ export class Oakhaven3DExperience {
 
     this.uiOverlay.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-        <!-- Left: Thomas 3D Combat HUD -->
-        <div style="background: rgba(14, 9, 23, 0.94); border: 1.2px solid #d4af37; border-radius: 4px; padding: 5px 9px; width: 172px; box-shadow: 0 4px 15px rgba(0,0,0,0.85);">
-          <div style="font-size: 8px; font-weight: bold; letter-spacing: 0.6px; margin-bottom: 4px; color: #ffd700;">
+        <!-- Left: Active Hero 3D Combat HUD -->
+        <div style="background: rgba(14, 9, 23, 0.94); border: 1.2px solid #d4af37; border-radius: 4px; padding: 5px 9px; width: 176px; box-shadow: 0 4px 15px rgba(0,0,0,0.85);">
+          <div id="p3d-hero-title" style="font-size: 8px; font-weight: bold; letter-spacing: 0.6px; margin-bottom: 4px; color: #ffd700;">
             ✦ THOMAS — OAKHAVEN 3D ✦
           </div>
           <!-- Health Bar -->
@@ -912,10 +1151,18 @@ export class Oakhaven3DExperience {
         </div>
 
         <!-- Right: Actions & Return Button -->
-        <div style="pointer-events: auto; display: flex; flex-direction: column; gap: 5px; align-items: flex-end;">
-          <button id="btn-return-2d" style="background: #2a1440; color: #ffd700; border: 1.2px solid #d4af37; padding: 5px 10px; border-radius: 4px; font-family: 'Cinzel', serif; font-size: 8px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.6); transition: all 0.2s;">
+        <div style="pointer-events: auto; display: flex; flex-direction: column; gap: 4px; align-items: flex-end;">
+          <button id="btn-return-2d" style="background: #2a1440; color: #ffd700; border: 1.2px solid #d4af37; padding: 4px 9px; border-radius: 4px; font-family: 'Cinzel', serif; font-size: 8px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.6); transition: all 0.2s;">
             ⮌ VOLVER AL MODO 2D
           </button>
+          <div style="display: flex; gap: 4px;">
+            <button id="btn-toggle-hero" style="background: #2b143d; color: #e6b8ff; border: 1px solid #8e44ad; padding: 3px 7px; border-radius: 4px; font-family: monospace; font-size: 7.5px; cursor: pointer;">
+              🔄 [TAB] HÉROE: THOMAS
+            </button>
+            <button id="btn-toggle-audio" style="background: #142a1f; color: #a3ffc7; border: 1px solid #27ae60; padding: 3px 7px; border-radius: 4px; font-family: monospace; font-size: 7.5px; cursor: pointer;">
+              🎵 [M] AUDIO: ACTIVO
+            </button>
+          </div>
           <button id="btn-toggle-cam" style="background: #141f2a; color: #99ddff; border: 1px solid #336699; padding: 3px 8px; border-radius: 4px; font-family: monospace; font-size: 7.5px; cursor: pointer;">
             🎥 [C] CÁMARA: OBLICUA 3/4
           </button>
@@ -957,12 +1204,12 @@ export class Oakhaven3DExperience {
 
       <!-- Dialogue Toast (Bottom Center) -->
       <div id="p3d-dialogue-toast" style="position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); background: rgba(14, 9, 23, 0.96); border: 1.2px solid #d4af37; border-radius: 4px; padding: 4px 12px; max-width: 520px; width: 82%; text-align: center; box-shadow: 0 6px 25px rgba(0,0,0,0.9); font-size: 8px; color: #e6dcfa; line-height: 1.35;">
-        <span style="color: #ffd700; font-weight: bold;">Shalem:</span> «¡Bienvenido al prototipo 3D, Thomas! Acércate a <span style="color:#ffd700;">Elowen</span>, al <span style="color:#ffd700;">Padre Cedric</span> o a <span style="color:#ffd700;">Khaterine</span> y pulsa <span style="color:#ffd700;">[E]</span> para hablar con ellos.»
+        <span style="color: #ffd700; font-weight: bold;">Shalem:</span> «¡Bienvenido a Oakhaven 3D! Pulsa <span style="color:#d999ff;">[TAB]</span> para alternar entre Thomas y Khaterine, o dispara a los barriles con <span style="color:#ffd700;">[J]</span> para conseguir EXP.»
       </div>
 
       <!-- Bottom Controls Bar -->
       <div style="position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); background: rgba(8, 4, 14, 0.95); border: 1px solid #3d2852; border-radius: 3px; padding: 2px 10px; font-family: monospace; font-size: 7px; color: #c5b4db; white-space: nowrap;">
-        WASD: Moverse 3D | J: Tajo Ligero | K: Fuerte | L: Guardia/Parry | Espacio: Esquivar | T: Lanzar | E: Hablar/Recoger | C: Cámara
+        WASD: Moverse 3D | TAB: Cambiar Héroe | J: Ligero/Flecha | K: Fuerte | L: Guardia/Escudo | Espacio: Esquivar | T: Lanzar | E: Hablar/Recoger | M: Audio | C: Cámara
       </div>
     `;
 
@@ -971,6 +1218,16 @@ export class Oakhaven3DExperience {
     // Button interactions
     const btnReturn = this.uiOverlay.querySelector('#btn-return-2d') as HTMLButtonElement;
     btnReturn.addEventListener('click', () => this.exit());
+
+    const btnHero = this.uiOverlay.querySelector('#btn-toggle-hero') as HTMLButtonElement;
+    if (btnHero) {
+      btnHero.addEventListener('click', () => this.toggleHero());
+    }
+
+    const btnAudio = this.uiOverlay.querySelector('#btn-toggle-audio') as HTMLButtonElement;
+    if (btnAudio) {
+      btnAudio.addEventListener('click', () => this.toggleAudio());
+    }
 
     const btnCam = this.uiOverlay.querySelector('#btn-toggle-cam') as HTMLButtonElement;
     btnCam.addEventListener('click', () => {
@@ -1008,6 +1265,19 @@ export class Oakhaven3DExperience {
   private handleKeyDown = (e: KeyboardEvent): void => {
     this.keys[e.key.toLowerCase()] = true;
 
+    // Toggle Hero with [TAB]
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      this.toggleHero();
+      return;
+    }
+
+    // Toggle Audio Mute with [M]
+    if (e.key.toLowerCase() === 'm') {
+      this.toggleAudio();
+      return;
+    }
+
     // Toggle Camera with [C]
     if (e.key.toLowerCase() === 'c') {
       this.toggleCameraMode();
@@ -1033,12 +1303,12 @@ export class Oakhaven3DExperience {
       return;
     }
 
-    // Light Attack with [J]
+    // Light Attack / Shoot Arrow with [J]
     if (e.key.toLowerCase() === 'j') {
       this.executeAttack(false);
     }
 
-    // Heavy Attack with [K]
+    // Heavy Attack / Charged Arrow with [K]
     if (e.key.toLowerCase() === 'k') {
       this.executeAttack(true);
     }
@@ -1048,16 +1318,23 @@ export class Oakhaven3DExperience {
       this.executeDodge();
     }
 
-    // Guard with [L]
+    // Guard / Abyssal Ward with [L]
     if (e.key.toLowerCase() === 'l') {
       this.playerStats.isGuarding = true;
       this.lastGuardTime = performance.now();
+      if (this.activeHero === 'khaterine' && this.wardBarrierMesh) {
+        this.wardBarrierMesh.visible = true;
+      }
       this.audio.playSfx('dodge');
     }
 
-    // Throw Weapon with [T]
+    // Throw Weapon with [T] (Thomas only)
     if (e.key.toLowerCase() === 't') {
-      this.executeThrowWeapon();
+      if (this.activeHero === 'thomas') {
+        this.executeThrowWeapon();
+      } else {
+        this.spawnFloatingText(this.playerGroup.position, '¡El arco abisal está imbuido a tu alma!', '#d999ff');
+      }
     }
   };
 
@@ -1066,6 +1343,9 @@ export class Oakhaven3DExperience {
 
     if (e.key.toLowerCase() === 'l') {
       this.playerStats.isGuarding = false;
+      if (this.wardBarrierMesh) {
+        this.wardBarrierMesh.visible = false;
+      }
     }
   };
 
@@ -1079,11 +1359,86 @@ export class Oakhaven3DExperience {
   };
 
   // =========================================================================
+  // DUAL HERO SWITCHING (THOMAS <-> KHATERINE)
+  // =========================================================================
+  public toggleHero(): void {
+    if (this.activeHero === 'thomas') {
+      this.activeHero = 'khaterine';
+      this.thomasModelGroup.visible = false;
+      this.khaterineModelGroup.visible = true;
+      this.khaterineGroup.visible = false;
+      this.thomasNpcGroup.visible = true;
+
+      // Adjust combat parameters for Khaterine (High Agility / Mystic Ranged)
+      this.playerStats.maxHealth = 90;
+      this.playerStats.health = Math.min(this.playerStats.health, 90);
+      this.playerStats.maxPosture = 70;
+      this.playerStats.posture = 70;
+      this.playerStats.isArmed = true;
+
+      if (this.droppedSwordGroup) {
+        this.droppedSwordGroup.visible = false;
+      }
+
+      this.spawnFloatingText(this.playerGroup.position, '🏹 KHATERINE ACTIVADA (ARCO ABISAL)', '#d999ff');
+      this.audio.playSfx('menu_select');
+    } else {
+      this.activeHero = 'thomas';
+      this.thomasModelGroup.visible = true;
+      this.khaterineModelGroup.visible = false;
+      this.khaterineGroup.visible = true;
+      this.thomasNpcGroup.visible = false;
+
+      // Adjust combat parameters for Thomas (Melee Defender / Ash Seal)
+      this.playerStats.maxHealth = 100;
+      this.playerStats.maxPosture = 50;
+
+      if (this.droppedSwordGroup) {
+        this.droppedSwordGroup.visible = true;
+      }
+
+      this.spawnFloatingText(this.playerGroup.position, '⚔ THOMAS ACTIVADO (ESPADA CORTA)', '#ffd700');
+      this.audio.playSfx('menu_select');
+    }
+
+    const btnHero = this.uiOverlay.querySelector('#btn-toggle-hero') as HTMLButtonElement;
+    if (btnHero) {
+      btnHero.innerText = `🔄 [TAB] HÉROE: ${this.activeHero === 'thomas' ? 'THOMAS' : 'KHATERINE'}`;
+      btnHero.style.color = this.activeHero === 'thomas' ? '#ffd700' : '#e6b8ff';
+    }
+
+    this.updateHUD();
+  }
+
+  public toggleAudio(): void {
+    const isMuted = this.audio.toggleMute();
+    const btnAudio = this.uiOverlay.querySelector('#btn-toggle-audio') as HTMLButtonElement;
+    if (btnAudio) {
+      btnAudio.innerText = isMuted ? '🔇 [M] AUDIO: MUDO' : '🎵 [M] AUDIO: ACTIVO';
+      btnAudio.style.background = isMuted ? '#2b1010' : '#142a1f';
+      btnAudio.style.color = isMuted ? '#ff9999' : '#a3ffc7';
+      btnAudio.style.borderColor = isMuted ? '#c0392b' : '#27ae60';
+    }
+    this.spawnFloatingText(
+      this.playerGroup.position,
+      isMuted ? '🔇 AUDIO SILENCIADO' : '🎵 BGM CATEDRAL ACTIVA',
+      isMuted ? '#ff8888' : '#88ffaa'
+    );
+  }
+
+  // =========================================================================
   // COMBAT ACTIONS (ATTACK, DODGE, THROW, PARRY)
   // =========================================================================
   private executeAttack(isHeavy: boolean): void {
     if (this.isPlayerAttacking || this.playerStats.isDodging) return;
 
+    // If Khaterine is active, fire Abyssal Arrow projectiles!
+    if (this.activeHero === 'khaterine') {
+      this.shootAbyssalArrow(isHeavy);
+      return;
+    }
+
+    // Thomas Melee Attack
     this.isPlayerAttacking = true;
     this.attackCooldown = isHeavy ? 0.45 : 0.28;
     this.audio.playCombatHit(isHeavy);
@@ -1104,9 +1459,20 @@ export class Oakhaven3DExperience {
       }, 160);
     }
 
+    const reach = this.playerStats.isArmed ? 2.4 : 1.6;
+
+    // Destructible Props Hit Check with Sword Slash
+    this.destructibles.forEach(prop => {
+      if (!prop.isDestroyed) {
+        const d = this.playerGroup.position.distanceTo(prop.position);
+        if (d <= reach + prop.radius) {
+          this.destroyProp(prop);
+        }
+      }
+    });
+
     // Hit Detection against Enemy
     const distToEnemy = this.playerGroup.position.distanceTo(this.enemyGroup.position);
-    const reach = this.playerStats.isArmed ? 2.4 : 1.6;
 
     if (distToEnemy <= reach && this.enemyState !== 'DEAD') {
       const dmg = this.playerStats.isArmed ? (isHeavy ? 42 : 26) : (isHeavy ? 22 : 14);
@@ -1153,6 +1519,198 @@ export class Oakhaven3DExperience {
           const title = this.morwennaHpBarContainer.querySelector('div') as HTMLDivElement;
           if (title) title.innerText = '👑 MADRE MORWENNA — ¡PURIFICADA! 👑';
         }
+      }
+    }
+  }
+
+  // =========================================================================
+  // ABYSSAL RANGED PROJECTILES & PROPS
+  // =========================================================================
+  private shootAbyssalArrow(isHeavy: boolean): void {
+    this.isPlayerAttacking = true;
+    this.attackCooldown = isHeavy ? 0.48 : 0.26;
+    this.audio.playBowShot();
+
+    // Bow recoil animation
+    if (this.khaterineBowMesh) {
+      this.khaterineBowMesh.position.z -= 0.15;
+      setTimeout(() => {
+        if (this.khaterineBowMesh) this.khaterineBowMesh.position.z += 0.15;
+        this.isPlayerAttacking = false;
+      }, isHeavy ? 260 : 160);
+    }
+
+    const forward = new THREE.Vector3(0, 0, -1).applyEuler(this.playerGroup.rotation).normalize();
+    const spawnPos = this.playerGroup.position.clone().add(new THREE.Vector3(0, 1.25, 0)).add(forward.clone().multiplyScalar(0.7));
+
+    // Arrow Group Mesh
+    const arrowGroup = new THREE.Group();
+    arrowGroup.position.copy(spawnPos);
+
+    const arrowShaftMat = new THREE.MeshBasicMaterial({ color: isHeavy ? 0xff44ee : 0xaa44ff });
+    const arrowHeadMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, isHeavy ? 0.95 : 0.7, 6), arrowShaftMat);
+    shaft.rotation.x = Math.PI / 2;
+    arrowGroup.add(shaft);
+
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.22, 6), arrowHeadMat);
+    tip.position.z = -0.4;
+    tip.rotation.x = -Math.PI / 2;
+    arrowGroup.add(tip);
+
+    const light = new THREE.PointLight(isHeavy ? 0xff33ee : 0xaa44ff, isHeavy ? 3.5 : 2.0, 5);
+    arrowGroup.add(light);
+
+    // Look in flying direction
+    arrowGroup.lookAt(spawnPos.clone().add(forward));
+    this.scene.add(arrowGroup);
+
+    const speed = isHeavy ? 22 : 18;
+    this.projectiles.push({
+      mesh: arrowGroup,
+      light,
+      velocity: forward.multiplyScalar(speed),
+      life: 1.8,
+      maxLife: 1.8,
+      damage: isHeavy ? 48 : 28,
+      isHeavy
+    });
+  }
+
+  private updateProjectiles(delta: number): void {
+    for (let i = this.projectiles.length - 1; i >= 0; i--) {
+      const p = this.projectiles[i];
+      p.life -= delta;
+      p.mesh.position.addScaledVector(p.velocity, delta);
+
+      let collided = false;
+
+      // 1. Check enemy collision
+      if (this.enemyState !== 'DEAD') {
+        const dEnemy = p.mesh.position.distanceTo(this.enemyGroup.position.clone().add(new THREE.Vector3(0, 0.6, 0)));
+        if (dEnemy <= 1.4) {
+          collided = true;
+          this.enemyHealth = Math.max(0, this.enemyHealth - p.damage);
+          this.spawnFloatingText(this.enemyGroup.position, `-${p.damage} (FLECHA ABISAL)`, p.isHeavy ? '#ffd700' : '#d999ff');
+          this.audio.playCombatHit(p.isHeavy);
+
+          if (p.isHeavy) {
+            this.enemyState = 'STUNNED';
+            this.enemyTimer = 1.0;
+          }
+
+          if (this.enemyHealth <= 0) {
+            this.enemyState = 'DEAD';
+            this.spawnFloatingText(this.enemyGroup.position, '¡PURIFICADO!', '#ffd700');
+            this.audio.playFinisherSound(true);
+            this.enemyGroup.position.y = -0.3;
+          }
+          this.updateHUD();
+        }
+      }
+
+      // 2. Check Morwenna collision
+      if (!collided && this.morwennaState !== 'DORMANT' && this.morwennaState !== 'DEAD') {
+        const dMorw = p.mesh.position.distanceTo(this.morwennaGroup.position.clone().add(new THREE.Vector3(0, 1.2, 0)));
+        if (dMorw <= 1.8) {
+          collided = true;
+          this.morwennaHealth = Math.max(0, this.morwennaHealth - p.damage);
+          this.spawnFloatingText(this.morwennaGroup.position, `-${p.damage} (DISPARO ABISAL)`, p.isHeavy ? '#ffd700' : '#ff88ee');
+          this.audio.playCombatHit(p.isHeavy);
+
+          if (p.isHeavy) {
+            this.morwennaState = 'STUNNED';
+            this.morwennaTimer = 1.4;
+            this.spawnFloatingText(this.morwennaGroup.position, '¡ATURDIDA! [E] ¡REMATAR!', '#ffaa44');
+          }
+
+          if (this.morwennaHealth <= 0) {
+            this.morwennaState = 'DEAD';
+            this.spawnFloatingText(this.morwennaGroup.position, '👑 ¡MADRE MORWENNA PURIFICADA! 👑', '#ffd700');
+            this.audio.playFinisherSound(true);
+            if (this.morwennaHpBarContainer) {
+              this.morwennaHpBarContainer.style.borderColor = '#ffd700';
+              const title = this.morwennaHpBarContainer.querySelector('div') as HTMLDivElement;
+              if (title) title.innerText = '👑 MADRE MORWENNA — ¡PURIFICADA! 👑';
+            }
+          }
+          this.updateHUD();
+        }
+      }
+
+      // 3. Check Destructibles collision
+      if (!collided) {
+        for (const prop of this.destructibles) {
+          if (!prop.isDestroyed) {
+            const dProp = p.mesh.position.distanceTo(prop.position);
+            if (dProp <= prop.radius + 0.3) {
+              collided = true;
+              this.destroyProp(prop);
+              break;
+            }
+          }
+        }
+      }
+
+      // Cleanup
+      if (collided || p.life <= 0) {
+        this.scene.remove(p.mesh);
+        this.projectiles.splice(i, 1);
+      }
+    }
+  }
+
+  private destroyProp(prop: DestructibleProp3D): void {
+    prop.isDestroyed = true;
+    this.scene.remove(prop.mesh);
+    this.audio.playWoodBreak();
+    this.createDebrisExplosion(prop.position);
+    this.spawnFloatingText(prop.position, `+15 EXP (${prop.name})`, '#ffd700');
+  }
+
+  private createDebrisExplosion(pos: THREE.Vector3): void {
+    const woodMat = new THREE.MeshStandardMaterial({ color: 0x4a3219, roughness: 0.9 });
+    const count = 7;
+
+    for (let i = 0; i < count; i++) {
+      const geo = new THREE.BoxGeometry(0.12 + Math.random() * 0.08, 0.12 + Math.random() * 0.08, 0.12 + Math.random() * 0.08);
+      const mesh = new THREE.Mesh(geo, woodMat);
+      mesh.position.copy(pos).add(new THREE.Vector3((Math.random() - 0.5) * 0.4, 0.3 + Math.random() * 0.3, (Math.random() - 0.5) * 0.4));
+      mesh.castShadow = true;
+      this.scene.add(mesh);
+
+      this.debrisParticles.push({
+        mesh,
+        velocity: new THREE.Vector3((Math.random() - 0.5) * 3.5, 3.2 + Math.random() * 2.5, (Math.random() - 0.5) * 3.5),
+        rotSpeed: new THREE.Vector3(Math.random() * 10, Math.random() * 10, Math.random() * 10),
+        life: 1.2,
+        maxLife: 1.2
+      });
+    }
+  }
+
+  private updateDebris(delta: number): void {
+    for (let i = this.debrisParticles.length - 1; i >= 0; i--) {
+      const d = this.debrisParticles[i];
+      d.life -= delta;
+      d.velocity.y -= 13.0 * delta; // Gravity
+      d.mesh.position.addScaledVector(d.velocity, delta);
+
+      d.mesh.rotation.x += d.rotSpeed.x * delta;
+      d.mesh.rotation.y += d.rotSpeed.y * delta;
+
+      // Floor bounce
+      if (d.mesh.position.y < 0.08) {
+        d.mesh.position.y = 0.08;
+        d.velocity.y *= -0.4;
+        d.velocity.x *= 0.7;
+        d.velocity.z *= 0.7;
+      }
+
+      if (d.life <= 0) {
+        this.scene.remove(d.mesh);
+        this.debrisParticles.splice(i, 1);
       }
     }
   }
@@ -1266,7 +1824,24 @@ export class Oakhaven3DExperience {
       case 'khaterine':
         this.interactWithKhaterine();
         break;
+      case 'thomas':
+        this.interactWithThomas();
+        break;
     }
+  }
+
+  public interactWithThomas(): void {
+    this.hasTalkedToThomas3D = true;
+    this.audio.playSfx('menu_select');
+    this.playerStats.posture = this.playerStats.maxPosture;
+    this.spawnFloatingText(this.playerGroup.position, '+25 POSTURA • BENDICIÓN FRATERNAL', '#ffd700');
+    this.updateHUD();
+
+    this.showDialogueModal(
+      '✦ HERMANO THOMAS — ACÓLITO DE LA ORDEN DE SAN JUDE ✦',
+      '«Khaterine... Tu arco abisal y tus flechas nos cubren desde la penumbra. Con cada disparo de [J] y [K], la niebla retrocede ante la voluntad del Sauce Negro. No permitas que el fuego del Crisol te alcance: recuerda que tu barrera [L] puede dispersar las llamas de Morwenna si la despliegas a tiempo. Caminamos juntos en esta noche.»',
+      '✦ VÍNCULO DE COMPAÑEROS: POSTURA AL MÁXIMO & BENDICIÓN CONTRA EL FUEGO ✦'
+    );
   }
 
   public interactWithElowen(): void {
@@ -1401,7 +1976,7 @@ export class Oakhaven3DExperience {
     if (this.isDialogueOpen) return;
 
     const pPos = this.playerGroup.position;
-    let targetFound: 'elowen' | 'cedric' | 'shalem' | 'khaterine' | 'sword' | 'finisher' | undefined;
+    let targetFound: 'elowen' | 'cedric' | 'shalem' | 'khaterine' | 'thomas' | 'sword' | 'finisher' | undefined;
     let badgeText = '';
     let badgeColor = '#ffd700';
 
@@ -1460,13 +2035,23 @@ export class Oakhaven3DExperience {
       }
     }
 
-    // 6. Khaterine
-    if (!targetFound) {
+    // 6. Khaterine (NPC when Thomas is active)
+    if (!targetFound && this.activeHero === 'thomas') {
       const dist = pPos.distanceTo(this.khaterineGroup.position);
       if (dist <= 3.8) {
         targetFound = 'khaterine';
         badgeText = this.hasTalkedToKhaterine3D ? '🏹 [E] CONVERSAR CON KHATERINE' : '🏹 [E] HABLAR CON KHATERINE (CAZADORA)';
         badgeColor = '#d999ff';
+      }
+    }
+
+    // 7. Thomas (NPC when Khaterine is active)
+    if (!targetFound && this.activeHero === 'khaterine') {
+      const dist = pPos.distanceTo(this.thomasNpcGroup.position);
+      if (dist <= 3.8) {
+        targetFound = 'thomas';
+        badgeText = this.hasTalkedToThomas3D ? '✦ [E] CONSULTAR A THOMAS' : '✦ [E] HABLAR CON THOMAS (ACÓLITO)';
+        badgeColor = '#ffd700';
       }
     }
 
@@ -1618,12 +2203,19 @@ export class Oakhaven3DExperience {
     this.updatePlayer(delta);
     this.updateEnemy(delta);
     this.updateBossMorwenna(delta);
+    this.updateProjectiles(delta);
+    this.updateDebris(delta);
     this.updateProximityInteractions();
     this.updateCamera(delta);
     this.updateFlickeringLights(delta);
     this.updateEmbers(delta);
     this.updateFloatingTexts(delta);
     this.checkShalemProximity();
+
+    if (this.wardBarrierMesh && this.wardBarrierMesh.visible) {
+      this.wardBarrierMesh.rotation.y += delta * 2.5;
+      this.wardBarrierMesh.rotation.x += delta * 1.5;
+    }
 
     this.renderer.render(this.scene, this.camera);
     this.animationFrameId = requestAnimationFrame(this.animate);
@@ -1894,10 +2486,21 @@ export class Oakhaven3DExperience {
   }
 
   private updateHUD(): void {
+    const heroTitle = this.uiOverlay.querySelector('#p3d-hero-title') as HTMLDivElement;
     const hpBar = this.uiOverlay.querySelector('#p3d-hp') as HTMLDivElement;
     const hpText = this.uiOverlay.querySelector('#p3d-hp-text') as HTMLSpanElement;
     const postureBar = this.uiOverlay.querySelector('#p3d-posture') as HTMLDivElement;
     const weaponBadge = this.uiOverlay.querySelector('#p3d-weapon-badge') as HTMLDivElement;
+
+    if (heroTitle) {
+      if (this.activeHero === 'thomas') {
+        heroTitle.innerText = '✦ THOMAS — OAKHAVEN 3D ✦';
+        heroTitle.style.color = '#ffd700';
+      } else {
+        heroTitle.innerText = '🏹 KHATERINE — CAZADORA DEL SAUCE 3D 🏹';
+        heroTitle.style.color = '#e6b8ff';
+      }
+    }
 
     if (hpBar) {
       const pct = Math.max(0, (this.playerStats.health / this.playerStats.maxHealth) * 100);
@@ -1911,10 +2514,15 @@ export class Oakhaven3DExperience {
       postureBar.style.width = `${pPct}%`;
     }
     if (weaponBadge) {
-      weaponBadge.innerText = this.playerStats.isArmed
-        ? '⚔ ARMA: Espada Corta del Monaguillo'
-        : '👊 DESARMADO: Pelea a puños [Pulsa E cerca de la espada]';
-      weaponBadge.style.color = this.playerStats.isArmed ? '#e2d4f0' : '#ffaa55';
+      if (this.activeHero === 'khaterine') {
+        weaponBadge.innerText = '🏹 ARMA: Arco Abisal del Sauce Negro [J: Rápida | K: Pesada]';
+        weaponBadge.style.color = '#e6b8ff';
+      } else {
+        weaponBadge.innerText = this.playerStats.isArmed
+          ? '⚔ ARMA: Espada Corta del Monaguillo'
+          : '👊 DESARMADO: Pelea a puños [Pulsa E cerca de la espada]';
+        weaponBadge.style.color = this.playerStats.isArmed ? '#e2d4f0' : '#ffaa55';
+      }
     }
 
     if (this.enemyHpBarFill) {

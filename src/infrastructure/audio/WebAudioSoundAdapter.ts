@@ -9,6 +9,8 @@ export class WebAudioSoundAdapter implements IAudioPort {
   private ctx: AudioContext | null = null;
   private currentBgmOsc: OscillatorNode | null = null;
   private bgmInterval: number | null = null;
+  private bellInterval: number | null = null;
+  private droneOscs: OscillatorNode[] = [];
   private isMuted: boolean = false;
   private lastTrackKey: string = 'bgm_oakhaven_night';
 
@@ -68,31 +70,85 @@ export class WebAudioSoundAdapter implements IAudioPort {
       const ctx = this.initContext();
       if (!ctx) return;
 
-      let noteSeq = [220, 247, 261, 293, 329, 293, 261, 196]; // A minor medieval mode
-      if (trackKey.includes('boss')) {
-        noteSeq = [164, 174, 164, 155, 146, 155, 164, 220]; // Dissonant boss motif
-      }
+      const isBoss = trackKey.includes('boss');
+
+      // 1. Polyphonic Cathedral Organ Drone (lowpass filtered open fifths)
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(isBoss ? 260 : 380, ctx.currentTime);
+      filter.connect(ctx.destination);
+
+      const droneGain = ctx.createGain();
+      droneGain.gain.setValueAtTime(0.04, ctx.currentTime);
+      droneGain.connect(filter);
+
+      const droneFreqs = isBoss ? [73.4, 110.0, 146.8] : [110.0, 164.8, 220.0];
+      droneFreqs.forEach(freq => {
+        const osc = ctx.createOscillator();
+        osc.type = isBoss ? 'sawtooth' : 'triangle';
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        osc.connect(droneGain);
+        osc.start();
+        this.droneOscs.push(osc);
+      });
+
+      // 2. Arpeggiated melody line (medieval fantasy mode)
+      const noteSeq = isBoss
+        ? [146.8, 155.6, 146.8, 174.6, 130.8, 146.8, 174.6, 220.0]
+        : [220.0, 246.9, 261.6, 293.7, 329.6, 293.7, 261.6, 196.0];
 
       let step = 0;
       this.bgmInterval = window.setInterval(() => {
         if (!this.ctx || this.isMuted) return;
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
 
-        osc.type = trackKey.includes('boss') ? 'sawtooth' : 'triangle';
-        osc.frequency.setValueAtTime(noteSeq[step % noteSeq.length], ctx.currentTime);
+        osc.type = isBoss ? 'sawtooth' : 'triangle';
+        osc.frequency.setValueAtTime(noteSeq[step % noteSeq.length], now);
 
-        gain.gain.setValueAtTime(0.06, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+        const vol = isBoss ? 0.05 : 0.045;
+        gain.gain.setValueAtTime(vol, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + (isBoss ? 0.28 : 0.38));
 
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.ctx.destination);
 
-        osc.start();
-        osc.stop(ctx.currentTime + 0.36);
+        osc.start(now);
+        osc.stop(now + (isBoss ? 0.29 : 0.39));
         step++;
-      }, 350);
+      }, isBoss ? 280 : 380);
+
+      // 3. Cathedral Bell Chime (every 12 seconds in normal mode)
+      if (!isBoss) {
+        this.bellInterval = window.setInterval(() => {
+          if (!this.ctx || this.isMuted) return;
+          this.triggerCathedralBell();
+        }, 12000);
+      }
     } catch {}
+  }
+
+  private triggerCathedralBell(): void {
+    if (!this.ctx || this.isMuted) return;
+    const now = this.ctx.currentTime;
+    const bellPartials = [440, 880, 1320];
+    bellPartials.forEach((freq, idx) => {
+      const osc = this.ctx!.createOscillator();
+      const gain = this.ctx!.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now);
+
+      const amp = 0.035 / (idx + 1);
+      gain.gain.setValueAtTime(amp, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 3.8);
+
+      osc.connect(gain);
+      gain.connect(this.ctx!.destination);
+
+      osc.start(now);
+      osc.stop(now + 3.9);
+    });
   }
 
   public stopBgm(): void {
@@ -100,9 +156,22 @@ export class WebAudioSoundAdapter implements IAudioPort {
       clearInterval(this.bgmInterval);
       this.bgmInterval = null;
     }
+    if (this.bellInterval) {
+      clearInterval(this.bellInterval);
+      this.bellInterval = null;
+    }
+    this.droneOscs.forEach(osc => {
+      try {
+        osc.stop();
+        osc.disconnect();
+      } catch {}
+    });
+    this.droneOscs = [];
     if (this.currentBgmOsc) {
-      this.currentBgmOsc.stop();
-      this.currentBgmOsc.disconnect();
+      try {
+        this.currentBgmOsc.stop();
+        this.currentBgmOsc.disconnect();
+      } catch {}
       this.currentBgmOsc = null;
     }
   }
@@ -370,6 +439,57 @@ export class WebAudioSoundAdapter implements IAudioPort {
       osc.frequency.exponentialRampToValueAtTime(320, now + 0.15);
 
       gain.gain.setValueAtTime(0.18, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.23);
+    } catch {}
+  }
+
+  public playWoodBreak(): void {
+    if (this.isMuted) return;
+    try {
+      const ctx = this.initContext();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+
+      // Deep wood splinter crunch (two detuned square/triangle pulses)
+      [160, 240].forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = idx === 0 ? 'triangle' : 'sawtooth';
+        osc.frequency.setValueAtTime(freq, now + idx * 0.02);
+        osc.frequency.exponentialRampToValueAtTime(45, now + 0.22 + idx * 0.02);
+
+        gain.gain.setValueAtTime(0.25, now + idx * 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22 + idx * 0.02);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + idx * 0.02);
+        osc.stop(now + 0.23 + idx * 0.02);
+      });
+    } catch {}
+  }
+
+  public playBowShot(): void {
+    if (this.isMuted) return;
+    try {
+      const ctx = this.initContext();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+
+      // Whistling abyssal arrow release (fast sine sweep with resonant twang)
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(450, now);
+      osc.frequency.exponentialRampToValueAtTime(1400, now + 0.08);
+      osc.frequency.exponentialRampToValueAtTime(300, now + 0.22);
+
+      gain.gain.setValueAtTime(0.2, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
 
       osc.connect(gain);
