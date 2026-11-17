@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { WebAudioSoundAdapter } from '../../infrastructure/audio/WebAudioSoundAdapter';
+import { Inventory } from '../../domain/inventory/Inventory';
 
 export interface CombatStats3D {
   health: number;
@@ -46,6 +47,12 @@ export class Oakhaven3DExperience {
   private clock!: THREE.Clock;
   private audio: WebAudioSoundAdapter;
 
+  // Inventory & Relics System
+  private inventory: Inventory = Inventory.createDefault();
+  private isInventoryOpen: boolean = false;
+  private attackBuffMultiplier: number = 1.0;
+  private attackBuffTimer: number = 0;
+
   // Camera settings
   private cameraMode: 'isometric' | 'third_person' = 'isometric';
   private targetCameraPos = new THREE.Vector3();
@@ -87,15 +94,31 @@ export class Oakhaven3DExperience {
   private destructibles: DestructibleProp3D[] = [];
   private debrisParticles: DebrisParticle3D[] = [];
 
-  // Enemy 3D (Sabueso de Ceniza / Cultista)
+  // Enemy 1: Ash Prowler (Sabueso de Ceniza con Patrulla)
   private enemyGroup!: THREE.Group;
   private enemyHealth: number = 120;
   private enemyMaxHealth: number = 120;
-  private enemyState: 'IDLE' | 'CHASE' | 'WINDUP' | 'ATTACK' | 'RECOVERY' | 'STUNNED' | 'DEAD' = 'CHASE';
+  private enemyState: 'PATROL' | 'ALERT' | 'CHASE' | 'WINDUP' | 'ATTACK' | 'RECOVERY' | 'STUNNED' | 'DEAD' | 'RETURNING' = 'PATROL';
   private enemyTimer: number = 0;
   private enemyWarningMesh!: THREE.Mesh;
   private enemyHpBarContainer!: HTMLDivElement;
   private enemyHpBarFill!: HTMLDivElement;
+  private enemyWaypoints: THREE.Vector3[] = [new THREE.Vector3(-1.2, 0, -2.5), new THREE.Vector3(1.2, 0, -8.0)];
+  private enemyCurrentWaypointIndex: number = 0;
+
+  // Enemy 2: Censer Bearer Cultist (Cultista del Incensario con Patrulla)
+  private cultistGroup!: THREE.Group;
+  private cultistHealth: number = 90;
+  private cultistMaxHealth: number = 90;
+  private cultistState: 'PATROL' | 'ALERT' | 'CHASE' | 'WINDUP' | 'ATTACK' | 'RECOVERY' | 'STUNNED' | 'DEAD' | 'RETURNING' = 'PATROL';
+  private cultistTimer: number = 0;
+  private cultistWarningMesh!: THREE.Mesh;
+  private cultistCenserMesh!: THREE.Group;
+  private cultistCenserLight!: THREE.PointLight;
+  private cultistWaypoints: THREE.Vector3[] = [new THREE.Vector3(-2.4, 0, -11.0), new THREE.Vector3(2.4, 0, -15.0)];
+  private cultistCurrentWaypointIndex: number = 0;
+  private cultistHpBarContainer?: HTMLDivElement;
+  private cultistHpBarFill?: HTMLDivElement;
 
   // Shalem 3D (Gato Guía)
   private shalemGroup!: THREE.Group;
@@ -126,10 +149,11 @@ export class Oakhaven3DExperience {
   private morwennaHpBarContainer?: HTMLDivElement;
   private morwennaHpBarFill?: HTMLDivElement;
 
-  // 3D Proximity Interactions & Dialogue Modal
+  // 3D Proximity Interactions & Modals
   private activeInteractTarget?: 'elowen' | 'cedric' | 'shalem' | 'khaterine' | 'thomas' | 'sword' | 'finisher';
   private proximityBadgeEl?: HTMLDivElement;
   private dialogueModalEl?: HTMLDivElement;
+  private inventoryModalEl?: HTMLDivElement;
   private isDialogueOpen: boolean = false;
 
   // Environment & Lights
@@ -186,6 +210,7 @@ export class Oakhaven3DExperience {
     // 5. Build Characters & Allies
     this.createPlayer();
     this.createEnemy();
+    this.createCultistEnemy();
     this.createShalem();
     this.createElowen();
     this.createCedric();
@@ -774,11 +799,11 @@ export class Oakhaven3DExperience {
   }
 
   // =========================================================================
-  // ENEMY 3D (ASH PROWLER / SABUESO DE CENIZA)
+  // ENEMY 1: ASH PROWLER 3D (SABUESO DE CENIZA CON PATRULLA)
   // =========================================================================
   private createEnemy(): void {
     this.enemyGroup = new THREE.Group();
-    this.enemyGroup.position.set(0, 0, -6);
+    this.enemyGroup.position.copy(this.enemyWaypoints[0]);
 
     const houndMat = new THREE.MeshStandardMaterial({ color: 0x140d0d, roughness: 0.9 });
     const emberMat = new THREE.MeshBasicMaterial({ color: 0xff3300 });
@@ -820,6 +845,74 @@ export class Oakhaven3DExperience {
     this.enemyGroup.add(this.enemyWarningMesh);
 
     this.scene.add(this.enemyGroup);
+  }
+
+  // =========================================================================
+  // ENEMY 2: CENSER BEARER CULTIST 3D (CULTISTA DEL INCENSARIO CON PATRULLA)
+  // =========================================================================
+  private createCultistEnemy(): void {
+    this.cultistGroup = new THREE.Group();
+    this.cultistGroup.position.copy(this.cultistWaypoints[0]);
+
+    const robeMat = new THREE.MeshStandardMaterial({ color: 0x1f142b, roughness: 0.85 });
+    const cowlMat = new THREE.MeshStandardMaterial({ color: 0x160c22, roughness: 0.75 });
+    const maskMat = new THREE.MeshStandardMaterial({ color: 0xd6c7ba, roughness: 0.6 });
+    const bronzeMat = new THREE.MeshStandardMaterial({ color: 0x9c6536, metalness: 0.8, roughness: 0.3 });
+    const censerFlameMat = new THREE.MeshBasicMaterial({ color: 0xff6611 });
+
+    // Cultist Body / Robe
+    const robe = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.54, 1.45, 8), robeMat);
+    robe.position.y = 0.72;
+    robe.castShadow = true;
+    this.cultistGroup.add(robe);
+
+    // Pointed Hood Cowl
+    const cowl = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.65, 4), cowlMat);
+    cowl.position.set(0, 1.72, -0.05);
+    cowl.rotation.y = Math.PI / 4;
+    this.cultistGroup.add(cowl);
+
+    // Ash Mask
+    const mask = new THREE.Mesh(new THREE.SphereGeometry(0.18, 6, 6), maskMat);
+    mask.position.set(0, 1.48, 0.16);
+    this.cultistGroup.add(mask);
+
+    // Swinging Censer (Incensario con Cadena)
+    this.cultistCenserMesh = new THREE.Group();
+    this.cultistCenserMesh.position.set(0.48, 1.15, 0.25);
+
+    // Chain links
+    const chainMat = new THREE.MeshStandardMaterial({ color: 0x555566, metalness: 0.8, roughness: 0.3 });
+    const chain = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.55, 4), chainMat);
+    chain.position.y = -0.28;
+    this.cultistCenserMesh.add(chain);
+
+    // Bronze Censer Basin
+    const censerBody = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.18, 0.28, 6), bronzeMat);
+    censerBody.position.y = -0.58;
+    censerBody.castShadow = true;
+    this.cultistCenserMesh.add(censerBody);
+
+    // Glowing Inner Flame & Smoke Core
+    const flameCore = new THREE.Mesh(new THREE.DodecahedronGeometry(0.09), censerFlameMat);
+    flameCore.position.y = -0.56;
+    this.cultistCenserMesh.add(flameCore);
+
+    this.cultistCenserLight = new THREE.PointLight(0xff6622, 2.0, 5);
+    this.cultistCenserLight.position.y = -0.56;
+    this.cultistCenserMesh.add(this.cultistCenserLight);
+
+    this.cultistGroup.add(this.cultistCenserMesh);
+
+    // Telegraphed Warning Octahedron above Cultist
+    const warnGeo = new THREE.OctahedronGeometry(0.24);
+    const warnMat = new THREE.MeshBasicMaterial({ color: 0xff3300 });
+    this.cultistWarningMesh = new THREE.Mesh(warnGeo, warnMat);
+    this.cultistWarningMesh.position.set(0, 2.25, 0);
+    this.cultistWarningMesh.visible = false;
+    this.cultistGroup.add(this.cultistWarningMesh);
+
+    this.scene.add(this.cultistGroup);
   }
 
   // =========================================================================
@@ -1156,6 +1249,14 @@ export class Oakhaven3DExperience {
             ⮌ VOLVER AL MODO 2D
           </button>
           <div style="display: flex; gap: 4px;">
+            <button id="btn-toggle-inventory" style="background: #3b2812; color: #ffd7aa; border: 1px solid #d49a37; padding: 3px 7px; border-radius: 4px; font-family: monospace; font-size: 7.5px; cursor: pointer;">
+              🎒 [I] INVENTARIO
+            </button>
+            <button id="btn-quick-balm" style="background: #14331e; color: #a3ffc7; border: 1px solid #2ecc71; padding: 3px 7px; border-radius: 4px; font-family: monospace; font-size: 7.5px; cursor: pointer;">
+              🌿 [Q] BÁLSAMO
+            </button>
+          </div>
+          <div style="display: flex; gap: 4px;">
             <button id="btn-toggle-hero" style="background: #2b143d; color: #e6b8ff; border: 1px solid #8e44ad; padding: 3px 7px; border-radius: 4px; font-family: monospace; font-size: 7.5px; cursor: pointer;">
               🔄 [TAB] HÉROE: THOMAS
             </button>
@@ -1169,18 +1270,28 @@ export class Oakhaven3DExperience {
         </div>
       </div>
 
-      <!-- Center: Enemy Target HUD (Top Center) -->
+      <!-- Center: Enemy 1 Target HUD (Sabueso de Ceniza) -->
       <div id="p3d-enemy-hud" style="position: absolute; top: 8px; left: 50%; transform: translateX(-50%); background: rgba(20, 8, 8, 0.94); border: 1.2px solid #aa2222; border-radius: 4px; padding: 4px 10px; width: 170px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.85);">
         <div style="font-size: 7.5px; font-weight: bold; color: #ffaaaa; margin-bottom: 2px;">
-          ⚠ SABUESO DE CENIZA (OAKHAVEN) ⚠
+          ⚠ SABUESO DE CENIZA (PATRULLA) ⚠
         </div>
         <div style="width: 100%; height: 5px; background: #330b0b; border: 1px solid #881a1a; border-radius: 2px; overflow: hidden;">
           <div id="p3d-enemy-hp-fill" style="width: 100%; height: 100%; background: #dd2222; transition: width 0.1s ease;"></div>
         </div>
       </div>
 
+      <!-- Center: Enemy 2 Target HUD (Cultista del Incensario) -->
+      <div id="p3d-cultist-hud" style="position: absolute; top: 32px; left: 50%; transform: translateX(-50%); background: rgba(25, 12, 10, 0.94); border: 1.2px solid #e67e22; border-radius: 4px; padding: 4px 10px; width: 185px; text-align: center; box-shadow: 0 4px 15px rgba(230, 126, 34, 0.4); display: none;">
+        <div style="font-size: 7.5px; font-weight: bold; color: #ffd2aa; margin-bottom: 2px;">
+          ⚠ CULTISTA DEL INCENSARIO (PATRULLA) ⚠
+        </div>
+        <div style="width: 100%; height: 5px; background: #331508; border: 1px solid #a04000; border-radius: 2px; overflow: hidden;">
+          <div id="p3d-cultist-hp-fill" style="width: 100%; height: 100%; background: #e67e22; transition: width 0.1s ease;"></div>
+        </div>
+      </div>
+
       <!-- Boss Morwenna 3D Target HUD (Top Center) -->
-      <div id="p3d-boss-hud" style="position: absolute; top: 34px; left: 50%; transform: translateX(-50%); background: rgba(30, 8, 12, 0.95); border: 1.2px solid #ff3344; border-radius: 4px; padding: 4px 12px; width: 215px; text-align: center; box-shadow: 0 4px 20px rgba(255, 0, 0, 0.45); display: none;">
+      <div id="p3d-boss-hud" style="position: absolute; top: 56px; left: 50%; transform: translateX(-50%); background: rgba(30, 8, 12, 0.95); border: 1.2px solid #ff3344; border-radius: 4px; padding: 4px 12px; width: 215px; text-align: center; box-shadow: 0 4px 20px rgba(255, 0, 0, 0.45); display: none;">
         <div style="font-size: 7.5px; font-weight: bold; color: #ffbbbb; margin-bottom: 2px; letter-spacing: 0.5px;">
           👑 MADRE MORWENNA — VIGÍA DE LA PIRA 👑
         </div>
@@ -1202,14 +1313,30 @@ export class Oakhaven3DExperience {
         <button id="p3d-modal-close" style="background: #2a1440; color: #ffd700; border: 1px solid #d4af37; padding: 4px 14px; border-radius: 3px; font-family: monospace; font-size: 8px; cursor: pointer; font-weight: bold;">[E / ESPACIO / CLIC] CONTINUAR</button>
       </div>
 
+      <!-- Gothic 3D Inventory Modal -->
+      <div id="p3d-inventory-modal" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(16, 9, 26, 0.98); border: 2px solid #ffd700; border-radius: 6px; padding: 12px 16px; max-width: 520px; width: 90%; box-shadow: 0 12px 45px rgba(0,0,0,0.98); display: none; z-index: 120; pointer-events: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #482f5e; padding-bottom: 6px; margin-bottom: 8px;">
+          <div style="font-size: 9.5px; font-weight: bold; color: #ffd700; letter-spacing: 0.8px;">
+            🎒 BOLSA DEL ACÓLITO & RELIQUIAS 🎒
+          </div>
+          <button id="p3d-inv-close" style="background: #2a1440; color: #ffaaaa; border: 1px solid #7a2222; border-radius: 3px; padding: 2px 7px; font-size: 8px; cursor: pointer; font-weight: bold;">[X] CERRAR</button>
+        </div>
+        <div id="p3d-inv-status" style="font-family: monospace; font-size: 7.5px; color: #dcd0ea; margin-bottom: 8px; background: rgba(30, 16, 45, 0.6); padding: 4px 8px; border-radius: 3px; border: 1px solid #5a3d78;">
+          ✦ Ranuras de Reliquia: 1/2 Equipadas | Bono de Parry: +70ms | Reducción Fatiga: 0%
+        </div>
+        <div id="p3d-inv-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; max-height: 240px; overflow-y: auto;">
+          <!-- Dynamically filled by renderInventoryItems() -->
+        </div>
+      </div>
+
       <!-- Dialogue Toast (Bottom Center) -->
       <div id="p3d-dialogue-toast" style="position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); background: rgba(14, 9, 23, 0.96); border: 1.2px solid #d4af37; border-radius: 4px; padding: 4px 12px; max-width: 520px; width: 82%; text-align: center; box-shadow: 0 6px 25px rgba(0,0,0,0.9); font-size: 8px; color: #e6dcfa; line-height: 1.35;">
-        <span style="color: #ffd700; font-weight: bold;">Shalem:</span> «¡Bienvenido a Oakhaven 3D! Pulsa <span style="color:#d999ff;">[TAB]</span> para alternar entre Thomas y Khaterine, o dispara a los barriles con <span style="color:#ffd700;">[J]</span> para conseguir EXP.»
+        <span style="color: #ffd700; font-weight: bold;">Shalem:</span> «¡Bienvenido a Oakhaven! Pulsa <span style="color:#ffd7aa;">[I]</span> para abrir el inventario o <span style="color:#a3ffc7;">[Q]</span> para usar un bálsamo curativo rápido.»
       </div>
 
       <!-- Bottom Controls Bar -->
       <div style="position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); background: rgba(8, 4, 14, 0.95); border: 1px solid #3d2852; border-radius: 3px; padding: 2px 10px; font-family: monospace; font-size: 7px; color: #c5b4db; white-space: nowrap;">
-        WASD: Moverse 3D | TAB: Cambiar Héroe | J: Ligero/Flecha | K: Fuerte | L: Guardia/Escudo | Espacio: Esquivar | T: Lanzar | E: Hablar/Recoger | M: Audio | C: Cámara
+        WASD: Moverse 3D | TAB: Héroe | I: Inventario | Q: Curar | J: Ligero/Flecha | K: Fuerte | L: Guardia | Espacio: Esquivar | T: Lanzar | E: Hablar/Recoger | M: Audio | C: Cámara
       </div>
     `;
 
@@ -1229,6 +1356,16 @@ export class Oakhaven3DExperience {
       btnAudio.addEventListener('click', () => this.toggleAudio());
     }
 
+    const btnInv = this.uiOverlay.querySelector('#btn-toggle-inventory') as HTMLButtonElement;
+    if (btnInv) {
+      btnInv.addEventListener('click', () => this.toggleInventoryModal());
+    }
+
+    const btnQuickBalm = this.uiOverlay.querySelector('#btn-quick-balm') as HTMLButtonElement;
+    if (btnQuickBalm) {
+      btnQuickBalm.addEventListener('click', () => this.useQuickConsumable());
+    }
+
     const btnCam = this.uiOverlay.querySelector('#btn-toggle-cam') as HTMLButtonElement;
     btnCam.addEventListener('click', () => {
       this.toggleCameraMode();
@@ -1237,6 +1374,9 @@ export class Oakhaven3DExperience {
 
     this.enemyHpBarContainer = this.uiOverlay.querySelector('#p3d-enemy-hud') as HTMLDivElement;
     this.enemyHpBarFill = this.uiOverlay.querySelector('#p3d-enemy-hp-fill') as HTMLDivElement;
+
+    this.cultistHpBarContainer = this.uiOverlay.querySelector('#p3d-cultist-hud') as HTMLDivElement;
+    this.cultistHpBarFill = this.uiOverlay.querySelector('#p3d-cultist-hp-fill') as HTMLDivElement;
 
     this.proximityBadgeEl = this.uiOverlay.querySelector('#p3d-proximity-badge') as HTMLDivElement;
     if (this.proximityBadgeEl) {
@@ -1247,6 +1387,12 @@ export class Oakhaven3DExperience {
     const btnModalClose = this.uiOverlay.querySelector('#p3d-modal-close') as HTMLButtonElement;
     if (btnModalClose) {
       btnModalClose.addEventListener('click', () => this.closeDialogueModal());
+    }
+
+    this.inventoryModalEl = this.uiOverlay.querySelector('#p3d-inventory-modal') as HTMLDivElement;
+    const btnInvClose = this.uiOverlay.querySelector('#p3d-inv-close') as HTMLButtonElement;
+    if (btnInvClose) {
+      btnInvClose.addEventListener('click', () => this.toggleInventoryModal());
     }
 
     this.morwennaHpBarContainer = this.uiOverlay.querySelector('#p3d-boss-hud') as HTMLDivElement;
@@ -1294,6 +1440,27 @@ export class Oakhaven3DExperience {
     }
 
     if (this.isDialogueOpen) {
+      return;
+    }
+
+    // Toggle Inventory Modal with [I] or dismiss with [ESC]
+    if (this.isInventoryOpen && (e.key === 'Escape' || e.key.toLowerCase() === 'i')) {
+      this.toggleInventoryModal();
+      return;
+    }
+
+    if (e.key.toLowerCase() === 'i') {
+      this.toggleInventoryModal();
+      return;
+    }
+
+    if (this.isInventoryOpen) {
+      return;
+    }
+
+    // Quick Balm / Consumable with [Q]
+    if (e.key.toLowerCase() === 'q') {
+      this.useQuickConsumable();
       return;
     }
 
@@ -1471,11 +1638,12 @@ export class Oakhaven3DExperience {
       }
     });
 
-    // Hit Detection against Enemy
+    // Hit Detection against Hound Enemy
     const distToEnemy = this.playerGroup.position.distanceTo(this.enemyGroup.position);
 
     if (distToEnemy <= reach && this.enemyState !== 'DEAD') {
-      const dmg = this.playerStats.isArmed ? (isHeavy ? 42 : 26) : (isHeavy ? 22 : 14);
+      const baseDmg = this.playerStats.isArmed ? (isHeavy ? 42 : 26) : (isHeavy ? 22 : 14);
+      const dmg = Math.round(baseDmg * this.attackBuffMultiplier);
       this.enemyHealth = Math.max(0, this.enemyHealth - dmg);
       this.spawnFloatingText(this.enemyGroup.position, `-${dmg}`, isHeavy ? '#ffd700' : '#e699ff');
 
@@ -1495,10 +1663,50 @@ export class Oakhaven3DExperience {
       }
     }
 
+    // Hit Detection against Cultist Enemy
+    const distToCultist = this.playerGroup.position.distanceTo(this.cultistGroup.position);
+
+    if (distToCultist <= reach && this.cultistState !== 'DEAD') {
+      const baseDmg = this.playerStats.isArmed ? (isHeavy ? 36 : 24) : (isHeavy ? 18 : 12);
+      const dmg = Math.round(baseDmg * this.attackBuffMultiplier);
+      this.cultistHealth = Math.max(0, this.cultistHealth - dmg);
+      this.spawnFloatingText(this.cultistGroup.position, `-${dmg}`, isHeavy ? '#ffd700' : '#a3ffc7');
+
+      if (isHeavy) {
+        this.cultistState = 'STUNNED';
+        this.cultistTimer = 0.9;
+        this.spawnFloatingText(this.cultistGroup.position, '¡ATURDIDO! [E] ¡REMATAR!', '#ffaa44');
+      }
+
+      this.updateHUD();
+
+      if (this.cultistHealth <= 0) {
+        this.cultistState = 'DEAD';
+        this.spawnFloatingText(this.cultistGroup.position, '¡PORTADOR DE CENIZA PURIFICADO!', '#ffd700');
+        this.audio.playFinisherSound(true);
+        this.cultistGroup.position.y = -0.3;
+        this.cultistCenserLight.intensity = 0;
+        this.inventory.addItem({
+          id: 'balm_health',
+          name: 'Bálsamo del Ocaso',
+          description: 'Extracto aromático destilado por las Hermanas de Oakhaven.',
+          category: 'consumable',
+          quantity: 1,
+          maxQuantity: 5,
+          effectType: 'heal_health',
+          effectValue: 40,
+          icon: '🌿'
+        });
+        this.spawnFloatingText(this.playerGroup.position, '🎒 ¡Bálsamo del Ocaso obtenido!', '#a3ffc7');
+        this.updateHUD();
+      }
+    }
+
     // Hit Detection against Boss Morwenna
     const distToMorwenna = this.playerGroup.position.distanceTo(this.morwennaGroup.position);
     if (distToMorwenna <= reach && this.morwennaState !== 'DORMANT' && this.morwennaState !== 'DEAD') {
-      const dmg = this.playerStats.isArmed ? (isHeavy ? 38 : 22) : (isHeavy ? 18 : 12);
+      const baseDmg = this.playerStats.isArmed ? (isHeavy ? 38 : 22) : (isHeavy ? 18 : 12);
+      const dmg = Math.round(baseDmg * this.attackBuffMultiplier);
       this.morwennaHealth = Math.max(0, this.morwennaHealth - dmg);
       this.spawnFloatingText(this.morwennaGroup.position, `-${dmg}`, isHeavy ? '#ffd700' : '#ff88aa');
 
@@ -1573,7 +1781,7 @@ export class Oakhaven3DExperience {
       velocity: forward.multiplyScalar(speed),
       life: 1.8,
       maxLife: 1.8,
-      damage: isHeavy ? 48 : 28,
+      damage: Math.round((isHeavy ? 48 : 28) * this.attackBuffMultiplier),
       isHeavy
     });
   }
@@ -1586,7 +1794,7 @@ export class Oakhaven3DExperience {
 
       let collided = false;
 
-      // 1. Check enemy collision
+      // 1. Check hound enemy collision
       if (this.enemyState !== 'DEAD') {
         const dEnemy = p.mesh.position.distanceTo(this.enemyGroup.position.clone().add(new THREE.Vector3(0, 0.6, 0)));
         if (dEnemy <= 1.4) {
@@ -1605,6 +1813,44 @@ export class Oakhaven3DExperience {
             this.spawnFloatingText(this.enemyGroup.position, '¡PURIFICADO!', '#ffd700');
             this.audio.playFinisherSound(true);
             this.enemyGroup.position.y = -0.3;
+          }
+          this.updateHUD();
+        }
+      }
+
+      // 2. Check cultist enemy collision
+      if (!collided && this.cultistState !== 'DEAD') {
+        const dCultist = p.mesh.position.distanceTo(this.cultistGroup.position.clone().add(new THREE.Vector3(0, 0.8, 0)));
+        if (dCultist <= 1.5) {
+          collided = true;
+          this.cultistHealth = Math.max(0, this.cultistHealth - p.damage);
+          this.spawnFloatingText(this.cultistGroup.position, `-${p.damage} (FLECHA ABISAL)`, p.isHeavy ? '#ffd700' : '#a3ffc7');
+          this.audio.playCombatHit(p.isHeavy);
+
+          if (p.isHeavy) {
+            this.cultistState = 'STUNNED';
+            this.cultistTimer = 1.0;
+            this.spawnFloatingText(this.cultistGroup.position, '¡ATURDIDO! [E] ¡REMATAR!', '#ffaa44');
+          }
+
+          if (this.cultistHealth <= 0) {
+            this.cultistState = 'DEAD';
+            this.spawnFloatingText(this.cultistGroup.position, '¡PORTADOR DE CENIZA PURIFICADO!', '#ffd700');
+            this.audio.playFinisherSound(true);
+            this.cultistGroup.position.y = -0.3;
+            this.cultistCenserLight.intensity = 0;
+            this.inventory.addItem({
+              id: 'balm_health',
+              name: 'Bálsamo del Ocaso',
+              description: 'Extracto aromático destilado por las Hermanas de Oakhaven.',
+              category: 'consumable',
+              quantity: 1,
+              maxQuantity: 5,
+              effectType: 'heal_health',
+              effectValue: 40,
+              icon: '🌿'
+            });
+            this.spawnFloatingText(this.playerGroup.position, '🎒 ¡Bálsamo del Ocaso obtenido!', '#a3ffc7');
           }
           this.updateHUD();
         }
@@ -1913,6 +2159,33 @@ export class Oakhaven3DExperience {
       return;
     }
 
+    // Check if Cultist is stunned
+    const distToCultist = this.playerGroup.position.distanceTo(this.cultistGroup.position);
+    if (this.cultistState === 'STUNNED' && distToCultist <= 3.2) {
+      this.cultistHealth = 0;
+      this.cultistState = 'DEAD';
+      this.cultistCenserLight.intensity = 0;
+      this.cultistGroup.position.y = -0.3;
+      this.audio.playFinisherSound(true);
+      this.spawnFloatingText(this.cultistGroup.position, '⚡ ¡CULTISTA REMATADO! (+110 DAÑO CRÍTICO)', '#ffd700');
+      this.inventory.addItem({
+        id: 'holy_water_posture',
+        name: 'Agua Bendita de Jude',
+        description: 'Vial consagrado en el santuario de San Jude.',
+        category: 'consumable',
+        quantity: 1,
+        maxQuantity: 5,
+        effectType: 'restore_posture',
+        effectValue: 50,
+        icon: '💧'
+      });
+      this.spawnFloatingText(this.playerGroup.position, '🎒 ¡Agua Bendita de Jude obtenida!', '#66ccff');
+      this.playerLight.intensity = 4.0;
+      setTimeout(() => { if (this.playerLight) this.playerLight.intensity = 1.4; }, 300);
+      this.updateHUD();
+      return;
+    }
+
     // Check if Morwenna is stunned
     const distToMorwenna = this.playerGroup.position.distanceTo(this.morwennaGroup.position);
     if (this.morwennaState === 'STUNNED' && distToMorwenna <= 3.6) {
@@ -1982,9 +2255,14 @@ export class Oakhaven3DExperience {
 
     // 1. Finisher priority
     const distToEnemy = pPos.distanceTo(this.enemyGroup.position);
+    const distToCultist = pPos.distanceTo(this.cultistGroup.position);
     if (this.enemyState === 'STUNNED' && distToEnemy <= 3.0) {
       targetFound = 'finisher';
       badgeText = '⚡ [E] ¡REMATAR SABUESO ATURDIDO!';
+      badgeColor = '#ffd700';
+    } else if (this.cultistState === 'STUNNED' && distToCultist <= 3.0) {
+      targetFound = 'finisher';
+      badgeText = '⚡ [E] ¡REMATAR CULTISTA ATURDIDO!';
       badgeColor = '#ffd700';
     } else {
       const distToMorwenna = pPos.distanceTo(this.morwennaGroup.position);
@@ -2158,12 +2436,14 @@ export class Oakhaven3DExperience {
     const dist = this.playerGroup.position.distanceTo(this.morwennaGroup.position);
     if (dist <= 3.8) {
       // Check for Parry
-      const isParry = this.playerStats.isGuarding && (performance.now() - this.lastGuardTime) <= 280;
+      const parryWindow = 280 + this.inventory.getParryBonusMs();
+      const isParry = this.playerStats.isGuarding && (performance.now() - this.lastGuardTime) <= parryWindow;
       if (isParry) {
         this.audio.playSfx('parry');
         this.morwennaState = 'STUNNED';
         this.morwennaTimer = 2.4; // 2.4s Stunned window for Finisher
-        this.spawnFloatingText(this.playerGroup.position, '¡PARRY DE CRISOL!', '#66ccff');
+        const msg = this.inventory.getParryBonusMs() > 0 ? '¡PARRY DE CRISOL SAGRADO (+70ms)!' : '¡PARRY DE CRISOL!';
+        this.spawnFloatingText(this.playerGroup.position, msg, '#66ccff');
         this.spawnFloatingText(this.morwennaGroup.position, '⚡ ¡ATURDIDA! [E] ¡REMATAR!', '#ffd700');
         return;
       }
@@ -2202,6 +2482,7 @@ export class Oakhaven3DExperience {
 
     this.updatePlayer(delta);
     this.updateEnemy(delta);
+    this.updateCultist(delta);
     this.updateBossMorwenna(delta);
     this.updateProjectiles(delta);
     this.updateDebris(delta);
@@ -2265,35 +2546,87 @@ export class Oakhaven3DExperience {
     // Timers
     if (this.dodgeTimer > 0) this.dodgeTimer -= delta;
     if (this.attackCooldown > 0) this.attackCooldown -= delta;
+    if (this.attackBuffTimer > 0) {
+      this.attackBuffTimer -= delta;
+      if (this.attackBuffTimer <= 0) {
+        this.attackBuffMultiplier = 1.0;
+        this.spawnFloatingText(this.playerGroup.position, '⚔ Óleo Consagrado disipado', '#c5b4db');
+      }
+    }
   }
 
+  // =========================================================================
+  // ENEMY 1: ASH PROWLER AI (PATROL, ALERT, CHASE, COMBAT)
+  // =========================================================================
   private updateEnemy(delta: number): void {
     if (this.enemyState === 'DEAD') return;
     if (this.isDialogueOpen) return;
 
     const toPlayer = this.playerGroup.position.clone().sub(this.enemyGroup.position);
     toPlayer.y = 0;
-    const dist = toPlayer.length();
+    const distToPlayer = toPlayer.length();
 
-    // Guard zone: Only aggro when player approaches z <= 1.5 or dist <= 6.5
-    const isPlayerInAggroRange = this.playerGroup.position.z <= 1.5 || dist <= 6.5;
-
-    // Rotate toward player
-    if (dist > 0.1 && isPlayerInAggroRange) {
-      const targetAngle = Math.atan2(toPlayer.x, toPlayer.z);
-      this.enemyGroup.rotation.y = THREE.MathUtils.lerp(this.enemyGroup.rotation.y, targetAngle, 0.1);
-    }
-
-    // State Machine
-    if (this.enemyState === 'CHASE') {
+    // 1. PATROL STATE
+    if (this.enemyState === 'PATROL') {
       this.enemyWarningMesh.visible = false;
-      if (!isPlayerInAggroRange) {
+      const targetWaypoint = this.enemyWaypoints[this.enemyCurrentWaypointIndex];
+      const toWaypoint = targetWaypoint.clone().sub(this.enemyGroup.position);
+      toWaypoint.y = 0;
+      const distToWaypoint = toWaypoint.length();
+
+      // Check player detection (Sight cone & proximity)
+      if (distToPlayer <= 5.8) {
+        this.enemyState = 'ALERT';
+        this.enemyTimer = 0.55;
+        this.enemyWarningMesh.visible = true;
+        this.audio.playSfx('warning');
+        this.spawnFloatingText(this.enemyGroup.position, '⚠️ ¡SABUESO EN ALERTA!', '#ff9933');
         return;
       }
 
-      if (dist > 2.0) {
+      if (distToWaypoint <= 0.4) {
+        this.enemyCurrentWaypointIndex = (this.enemyCurrentWaypointIndex + 1) % this.enemyWaypoints.length;
+      } else {
+        toWaypoint.normalize();
+        this.enemyGroup.position.add(toWaypoint.multiplyScalar(1.5 * delta));
+        const targetAngle = Math.atan2(toWaypoint.x, toWaypoint.z);
+        this.enemyGroup.rotation.y = THREE.MathUtils.lerp(this.enemyGroup.rotation.y, targetAngle, 0.1);
+      }
+    } else if (this.enemyState === 'ALERT') {
+      this.enemyTimer -= delta;
+      this.enemyWarningMesh.rotation.y += delta * 6;
+      if (distToPlayer > 0.1) {
+        const targetAngle = Math.atan2(toPlayer.x, toPlayer.z);
+        this.enemyGroup.rotation.y = THREE.MathUtils.lerp(this.enemyGroup.rotation.y, targetAngle, 0.15);
+      }
+
+      if (distToPlayer > 9.0) {
+        this.enemyState = 'RETURNING';
+        this.enemyWarningMesh.visible = false;
+        return;
+      }
+
+      if (this.enemyTimer <= 0) {
+        this.enemyState = 'CHASE';
+        this.enemyWarningMesh.visible = false;
+      }
+    } else if (this.enemyState === 'CHASE') {
+      this.enemyWarningMesh.visible = false;
+
+      // Orient toward player
+      if (distToPlayer > 0.1) {
+        const targetAngle = Math.atan2(toPlayer.x, toPlayer.z);
+        this.enemyGroup.rotation.y = THREE.MathUtils.lerp(this.enemyGroup.rotation.y, targetAngle, 0.12);
+      }
+
+      if (distToPlayer > 10.5) {
+        this.enemyState = 'RETURNING';
+        return;
+      }
+
+      if (distToPlayer > 2.0) {
         toPlayer.normalize();
-        this.enemyGroup.position.add(toPlayer.multiplyScalar(2.6 * delta));
+        this.enemyGroup.position.add(toPlayer.multiplyScalar(2.7 * delta));
         this.enemyGroup.position.z = THREE.MathUtils.clamp(this.enemyGroup.position.z, -12, 1.2);
       } else {
         // Start telegraphed wind-up before attacking!
@@ -2301,6 +2634,28 @@ export class Oakhaven3DExperience {
         this.enemyTimer = 0.48; // 480ms wind-up window
         this.enemyWarningMesh.visible = true;
         this.audio.playSfx('warning');
+      }
+    } else if (this.enemyState === 'RETURNING') {
+      this.enemyWarningMesh.visible = false;
+      const targetWaypoint = this.enemyWaypoints[this.enemyCurrentWaypointIndex];
+      const toWaypoint = targetWaypoint.clone().sub(this.enemyGroup.position);
+      toWaypoint.y = 0;
+      const distToWaypoint = toWaypoint.length();
+
+      if (distToPlayer <= 5.0) {
+        this.enemyState = 'ALERT';
+        this.enemyTimer = 0.4;
+        this.enemyWarningMesh.visible = true;
+        return;
+      }
+
+      if (distToWaypoint <= 0.6) {
+        this.enemyState = 'PATROL';
+      } else {
+        toWaypoint.normalize();
+        this.enemyGroup.position.add(toWaypoint.multiplyScalar(1.8 * delta));
+        const targetAngle = Math.atan2(toWaypoint.x, toWaypoint.z);
+        this.enemyGroup.rotation.y = THREE.MathUtils.lerp(this.enemyGroup.rotation.y, targetAngle, 0.1);
       }
     } else if (this.enemyState === 'WINDUP') {
       this.enemyTimer -= delta;
@@ -2332,13 +2687,15 @@ export class Oakhaven3DExperience {
     const dist = this.playerGroup.position.distanceTo(this.enemyGroup.position);
 
     if (dist <= 2.6) {
-      // Check for Perfect Parry!
-      const isParry = this.playerStats.isGuarding && (performance.now() - this.lastGuardTime) <= 280;
+      // Check for Perfect Parry with relic window bonus!
+      const parryWindow = 280 + this.inventory.getParryBonusMs();
+      const isParry = this.playerStats.isGuarding && (performance.now() - this.lastGuardTime) <= parryWindow;
       if (isParry) {
         this.audio.playSfx('parry');
         this.enemyState = 'STUNNED';
         this.enemyTimer = 1.6;
-        this.spawnFloatingText(this.playerGroup.position, '¡PARRY PERFECTO!', '#77aaff');
+        const msg = this.inventory.getParryBonusMs() > 0 ? '¡PARRY SAGRADO (+70ms)!' : '¡PARRY PERFECTO!';
+        this.spawnFloatingText(this.playerGroup.position, msg, '#77aaff');
         return;
       }
 
@@ -2370,6 +2727,366 @@ export class Oakhaven3DExperience {
 
     this.enemyState = 'RECOVERY';
     this.enemyTimer = 0.45;
+  }
+
+  // =========================================================================
+  // ENEMY 2: CENSER BEARER CULTIST AI (PATROL, ALERT, CHASE, COMBAT)
+  // =========================================================================
+  private updateCultist(delta: number): void {
+    if (this.cultistState === 'DEAD') return;
+    if (this.isDialogueOpen) return;
+
+    // Swing censer animation and bobbing
+    if (this.cultistCenserMesh) {
+      this.cultistCenserMesh.rotation.z = Math.sin(this.clock.elapsedTime * 4.0) * 0.4;
+      this.cultistCenserMesh.rotation.x = Math.cos(this.clock.elapsedTime * 3.2) * 0.2;
+    }
+    if (this.cultistCenserLight) {
+      this.cultistCenserLight.intensity = 2.2 + Math.sin(this.clock.elapsedTime * 10) * 0.8;
+    }
+
+    const toPlayer = this.playerGroup.position.clone().sub(this.cultistGroup.position);
+    toPlayer.y = 0;
+    const distToPlayer = toPlayer.length();
+
+    if (this.cultistState === 'PATROL') {
+      this.cultistWarningMesh.visible = false;
+      const targetWaypoint = this.cultistWaypoints[this.cultistCurrentWaypointIndex];
+      const toWaypoint = targetWaypoint.clone().sub(this.cultistGroup.position);
+      toWaypoint.y = 0;
+      const distToWaypoint = toWaypoint.length();
+
+      // Check player detection
+      if (distToPlayer <= 6.2) {
+        this.cultistState = 'ALERT';
+        this.cultistTimer = 0.6;
+        this.cultistWarningMesh.visible = true;
+        this.audio.playSfx('warning');
+        this.spawnFloatingText(this.cultistGroup.position, '⚠️ ¡CULTISTA DEL INCENSARIO ALERTA!', '#ffd700');
+        return;
+      }
+
+      if (distToWaypoint <= 0.4) {
+        this.cultistCurrentWaypointIndex = (this.cultistCurrentWaypointIndex + 1) % this.cultistWaypoints.length;
+      } else {
+        toWaypoint.normalize();
+        this.cultistGroup.position.add(toWaypoint.multiplyScalar(1.2 * delta));
+        const targetAngle = Math.atan2(toWaypoint.x, toWaypoint.z);
+        this.cultistGroup.rotation.y = THREE.MathUtils.lerp(this.cultistGroup.rotation.y, targetAngle, 0.08);
+      }
+    } else if (this.cultistState === 'ALERT') {
+      this.cultistTimer -= delta;
+      this.cultistWarningMesh.rotation.y += delta * 7;
+      if (distToPlayer > 0.1) {
+        const targetAngle = Math.atan2(toPlayer.x, toPlayer.z);
+        this.cultistGroup.rotation.y = THREE.MathUtils.lerp(this.cultistGroup.rotation.y, targetAngle, 0.12);
+      }
+
+      if (distToPlayer > 10.0) {
+        this.cultistState = 'RETURNING';
+        this.cultistWarningMesh.visible = false;
+        return;
+      }
+
+      if (this.cultistTimer <= 0) {
+        this.cultistState = 'CHASE';
+        this.cultistWarningMesh.visible = false;
+      }
+    } else if (this.cultistState === 'CHASE') {
+      this.cultistWarningMesh.visible = false;
+
+      if (distToPlayer > 0.1) {
+        const targetAngle = Math.atan2(toPlayer.x, toPlayer.z);
+        this.cultistGroup.rotation.y = THREE.MathUtils.lerp(this.cultistGroup.rotation.y, targetAngle, 0.1);
+      }
+
+      if (distToPlayer > 11.5) {
+        this.cultistState = 'RETURNING';
+        return;
+      }
+
+      if (distToPlayer > 2.4) {
+        toPlayer.normalize();
+        this.cultistGroup.position.add(toPlayer.multiplyScalar(2.2 * delta));
+        this.cultistGroup.position.z = THREE.MathUtils.clamp(this.cultistGroup.position.z, -19, -4);
+      } else {
+        // Telegraph Censer swing strike!
+        this.cultistState = 'WINDUP';
+        this.cultistTimer = 0.52;
+        this.cultistWarningMesh.visible = true;
+        this.audio.playSfx('warning');
+      }
+    } else if (this.cultistState === 'RETURNING') {
+      this.cultistWarningMesh.visible = false;
+      const targetWaypoint = this.cultistWaypoints[this.cultistCurrentWaypointIndex];
+      const toWaypoint = targetWaypoint.clone().sub(this.cultistGroup.position);
+      toWaypoint.y = 0;
+      const distToWaypoint = toWaypoint.length();
+
+      if (distToPlayer <= 5.5) {
+        this.cultistState = 'ALERT';
+        this.cultistTimer = 0.45;
+        this.cultistWarningMesh.visible = true;
+        return;
+      }
+
+      if (distToWaypoint <= 0.6) {
+        this.cultistState = 'PATROL';
+      } else {
+        toWaypoint.normalize();
+        this.cultistGroup.position.add(toWaypoint.multiplyScalar(1.5 * delta));
+        const targetAngle = Math.atan2(toWaypoint.x, toWaypoint.z);
+        this.cultistGroup.rotation.y = THREE.MathUtils.lerp(this.cultistGroup.rotation.y, targetAngle, 0.08);
+      }
+    } else if (this.cultistState === 'WINDUP') {
+      this.cultistTimer -= delta;
+      this.cultistWarningMesh.rotation.y += delta * 8;
+      this.cultistWarningMesh.visible = Math.floor(this.clock.elapsedTime * 18) % 2 === 0;
+
+      if (this.cultistTimer <= 0) {
+        this.cultistState = 'ATTACK';
+        this.cultistWarningMesh.visible = false;
+        this.executeCultistAttack();
+      }
+    } else if (this.cultistState === 'RECOVERY') {
+      this.cultistTimer -= delta;
+      if (this.cultistTimer <= 0) {
+        this.cultistState = 'CHASE';
+      }
+    } else if (this.cultistState === 'STUNNED') {
+      this.cultistTimer -= delta;
+      this.cultistGroup.rotation.z = Math.sin(this.clock.elapsedTime * 22) * 0.12;
+      if (this.cultistTimer <= 0) {
+        this.cultistGroup.rotation.z = 0;
+        this.cultistState = 'RECOVERY';
+        this.cultistTimer = 0.4;
+      }
+    }
+  }
+
+  private executeCultistAttack(): void {
+    const dist = this.playerGroup.position.distanceTo(this.cultistGroup.position);
+
+    if (dist <= 2.8) {
+      // Check Parry with relic window bonus!
+      const parryWindow = 280 + this.inventory.getParryBonusMs();
+      const isParry = this.playerStats.isGuarding && (performance.now() - this.lastGuardTime) <= parryWindow;
+      if (isParry) {
+        this.audio.playSfx('parry');
+        this.cultistState = 'STUNNED';
+        this.cultistTimer = 1.8;
+        const msg = this.inventory.getParryBonusMs() > 0 ? '¡PARRY SAGRADO (+70ms)!' : '¡PARRY PERFECTO!';
+        this.spawnFloatingText(this.playerGroup.position, msg, '#77aaff');
+        this.spawnFloatingText(this.cultistGroup.position, '⚡ ¡ATURDIDO! [E] ¡REMATAR!', '#ffd700');
+        return;
+      }
+
+      // Check Dodge
+      if (this.playerStats.isDodging) {
+        this.spawnFloatingText(this.playerGroup.position, '¡ESQUIVADO!', '#88ffaa');
+        this.cultistState = 'RECOVERY';
+        this.cultistTimer = 0.5;
+        return;
+      }
+
+      // Impact damage (Censer blunt hit + smoke)
+      const dmg = this.playerStats.isGuarding ? 4 : 16;
+      this.playerStats.health = Math.max(0, this.playerStats.health - dmg);
+      this.audio.playCombatHit(false);
+      this.spawnFloatingText(this.playerGroup.position, `-${dmg} (GOLPE DE INCENSARIO)`, '#ff9944');
+      this.updateHUD();
+
+      // Revive if fallen
+      if (this.playerStats.health <= 0) {
+        this.playerStats.health = 100;
+        this.playerStats.posture = 50;
+        this.playerGroup.position.set(0, 0, 4);
+        this.spawnFloatingText(this.playerGroup.position, '✝ BENDICIÓN: RESUCITADO EN EL SANTUARIO ✝', '#ffd700');
+        this.audio.playSfx('menu_select');
+        this.updateHUD();
+      }
+    }
+
+    this.cultistState = 'RECOVERY';
+    this.cultistTimer = 0.55;
+  }
+
+  // =========================================================================
+  // INVENTORY & RELICS MANAGEMENT
+  // =========================================================================
+  public toggleInventoryModal(): void {
+    this.isInventoryOpen = !this.isInventoryOpen;
+    if (!this.inventoryModalEl) return;
+
+    if (this.isInventoryOpen) {
+      this.inventoryModalEl.style.display = 'block';
+      this.renderInventoryItems();
+      this.audio.playSfx('menu_select');
+    } else {
+      this.inventoryModalEl.style.display = 'none';
+      this.audio.playSfx('menu_select');
+    }
+  }
+
+  public useQuickConsumable(): void {
+    const balm = this.inventory.getItem('maiden_balm') || this.inventory.getItem('balm_health');
+    if (balm && balm.quantity > 0) {
+      this.useInventoryItem(balm.id);
+      return;
+    }
+
+    const rosary = this.inventory.getItem('saint_jude_rosary') || this.inventory.getItem('holy_water_posture');
+    if (rosary && rosary.quantity > 0) {
+      this.useInventoryItem(rosary.id);
+      return;
+    }
+
+    const ash = this.inventory.getItem('consecrated_ash') || this.inventory.getItem('consecrated_oil_damage');
+    if (ash && ash.quantity > 0) {
+      this.useInventoryItem(ash.id);
+      return;
+    }
+
+    this.spawnFloatingText(this.playerGroup.position, '¡No te quedan consumibles en la bolsa!', '#ff8888');
+    this.audio.playSfx('warning');
+  }
+
+  public useInventoryItem(itemId: string): void {
+    const item = this.inventory.getItem(itemId);
+    if (!item || item.quantity <= 0) return;
+
+    const result = this.inventory.useItem(itemId);
+    if (result.success) {
+      this.audio.playSfx('menu_select');
+      if (result.effectType === 'heal_health') {
+        const heal = result.effectValue || 35;
+        this.playerStats.health = Math.min(this.playerStats.maxHealth, this.playerStats.health + heal);
+        this.spawnFloatingText(this.playerGroup.position, `🌿 +${heal} SALUD RESTAURADA`, '#88ffaa');
+      } else if (result.effectType === 'restore_posture') {
+        this.playerStats.posture = this.playerStats.maxPosture;
+        this.spawnFloatingText(this.playerGroup.position, `💧 POSTURA RESTAURADA AL 100%`, '#66ccff');
+      } else if (result.effectType === 'buff_attack') {
+        this.attackBuffMultiplier = 1.35;
+        this.attackBuffTimer = result.durationSeconds || 15;
+        this.spawnFloatingText(this.playerGroup.position, `⚔ DAÑO +35% (${this.attackBuffTimer}s) ⚔`, '#ffd700');
+      }
+      this.updateHUD();
+      this.renderInventoryItems();
+    } else {
+      this.spawnFloatingText(this.playerGroup.position, result.message, '#ffaa66');
+    }
+  }
+
+  public toggleRelic(relicId: string): void {
+    const item = this.inventory.getItem(relicId);
+    const result = this.inventory.toggleEquipRelic(relicId);
+    this.audio.playSfx('menu_select');
+    const relicName = item?.name || 'Reliquia';
+    if (result.isEquipped) {
+      this.spawnFloatingText(this.playerGroup.position, `✦ RELIQUIA EQUIPADA: ${relicName} ✦`, '#ffd700');
+    } else {
+      this.spawnFloatingText(this.playerGroup.position, `✦ Reliquia desequipada: ${relicName} ✦`, '#c5b4db');
+    }
+    this.renderInventoryItems();
+  }
+
+  private renderInventoryItems(): void {
+    if (!this.inventoryModalEl) return;
+
+    const statusEl = this.inventoryModalEl.querySelector('#p3d-inv-status') as HTMLDivElement;
+    const gridEl = this.inventoryModalEl.querySelector('#p3d-inv-grid') as HTMLDivElement;
+
+    if (statusEl) {
+      const equippedCount = this.inventory.getEquippedRelicsCount();
+      const maxSlots = this.inventory.getMaxRelicSlots();
+      const parryMs = this.inventory.getParryBonusMs();
+      const dodgeRedPct = Math.round(this.inventory.getDodgeCostReduction() * 100);
+      statusEl.innerHTML = `✦ Ranuras de Reliquia: <span style="color:#ffd700; font-weight:bold;">${equippedCount}/${maxSlots}</span> | Bono de Parry: <span style="color:#66ccff; font-weight:bold;">+${parryMs}ms</span> | Reducción de Fatiga: <span style="color:#a3ffc7; font-weight:bold;">${dodgeRedPct}%</span>`;
+    }
+
+    if (gridEl) {
+      gridEl.innerHTML = '';
+      const items = this.inventory.getAllItems();
+
+      items.forEach(item => {
+        const card = document.createElement('div');
+        const isRelic = item.category === 'relic';
+        card.style.background = isRelic ? 'rgba(32, 22, 54, 0.85)' : 'rgba(20, 28, 24, 0.85)';
+        card.style.border = `1px solid ${isRelic ? (item.isEquipped ? '#ffd700' : '#6a4c8a') : '#3d785a'}`;
+        card.style.borderRadius = '4px';
+        card.style.padding = '6px';
+        card.style.display = 'flex';
+        card.style.flexDirection = 'column';
+        card.style.justifyContent = 'space-between';
+
+        const topRow = document.createElement('div');
+        topRow.style.display = 'flex';
+        topRow.style.alignItems = 'center';
+        topRow.style.gap = '6px';
+        topRow.style.marginBottom = '4px';
+
+        const iconEl = document.createElement('span');
+        iconEl.innerText = item.icon;
+        iconEl.style.fontSize = '14px';
+
+        const nameEl = document.createElement('div');
+        nameEl.style.fontSize = '8px';
+        nameEl.style.fontWeight = 'bold';
+        nameEl.style.color = isRelic ? '#ffd700' : '#a3ffc7';
+        nameEl.innerText = isRelic ? item.name : `${item.name} (x${item.quantity})`;
+
+        topRow.appendChild(iconEl);
+        topRow.appendChild(nameEl);
+
+        const descEl = document.createElement('div');
+        descEl.style.fontSize = '7px';
+        descEl.style.color = '#dcd0ea';
+        descEl.style.lineHeight = '1.25';
+        descEl.style.marginBottom = '6px';
+        descEl.innerText = item.description;
+
+        const actionBtn = document.createElement('button');
+        actionBtn.style.width = '100%';
+        actionBtn.style.padding = '3px 0';
+        actionBtn.style.borderRadius = '3px';
+        actionBtn.style.fontSize = '7.5px';
+        actionBtn.style.fontWeight = 'bold';
+        actionBtn.style.cursor = 'pointer';
+
+        if (isRelic) {
+          if (item.isEquipped) {
+            actionBtn.innerText = '✦ EQUIPADA [DESEQUIPAR]';
+            actionBtn.style.background = '#3d2e0a';
+            actionBtn.style.color = '#ffd700';
+            actionBtn.style.border = '1px solid #ffd700';
+          } else {
+            actionBtn.innerText = 'EQUIPAR RELIQUIA';
+            actionBtn.style.background = '#281a38';
+            actionBtn.style.color = '#d8c4eb';
+            actionBtn.style.border = '1px solid #5a3d78';
+          }
+          actionBtn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            this.toggleRelic(item.id);
+          });
+        } else {
+          actionBtn.innerText = item.quantity > 0 ? 'USAR CONSUMIBLE' : 'AGOTADO';
+          actionBtn.style.background = item.quantity > 0 ? '#1b3b28' : '#2b1a1a';
+          actionBtn.style.color = item.quantity > 0 ? '#a3ffc7' : '#888';
+          actionBtn.style.border = `1px solid ${item.quantity > 0 ? '#27ae60' : '#444'}`;
+          actionBtn.disabled = item.quantity <= 0;
+          actionBtn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            this.useInventoryItem(item.id);
+          });
+        }
+
+        card.appendChild(topRow);
+        card.appendChild(descEl);
+        card.appendChild(actionBtn);
+        gridEl.appendChild(card);
+      });
+    }
   }
 
   private updateCamera(_delta: number): void {
@@ -2533,12 +3250,31 @@ export class Oakhaven3DExperience {
       }
     }
 
+    if (this.cultistHpBarFill) {
+      const cPct = Math.max(0, (this.cultistHealth / this.cultistMaxHealth) * 100);
+      this.cultistHpBarFill.style.width = `${cPct}%`;
+      if (this.cultistHealth <= 0 && this.cultistHpBarContainer) {
+        this.cultistHpBarContainer.style.display = 'none';
+      }
+    }
+
     if (this.morwennaHpBarFill) {
       const mPct = Math.max(0, (this.morwennaHealth / this.morwennaMaxHealth) * 100);
       this.morwennaHpBarFill.style.width = `${mPct}%`;
       if (this.morwennaHealth <= 0) {
         this.morwennaHpBarFill.style.background = '#ffd700';
       }
+    }
+
+    const btnQuickBalm = this.uiOverlay.querySelector('#btn-quick-balm') as HTMLButtonElement;
+    if (btnQuickBalm) {
+      const balm = this.inventory.getItem('maiden_balm') || this.inventory.getItem('balm_health');
+      const count = balm ? balm.quantity : 0;
+      btnQuickBalm.innerText = `🌿 [Q] BÁLSAMO (${count})`;
+    }
+
+    if (this.attackBuffTimer > 0 && weaponBadge) {
+      weaponBadge.innerText += ` | ⚔ ÓLEO (+35%): ${Math.ceil(this.attackBuffTimer)}s`;
     }
   }
 
