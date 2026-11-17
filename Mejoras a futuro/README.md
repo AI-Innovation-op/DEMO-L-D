@@ -10,6 +10,7 @@ Bienvenido a la carpeta central de **Mejoras a Futuro** para el desarrollo de *T
 Mejoras a futuro/
 ├── README.md                                   # Índice general del directorio
 ├── Seguimiento/
+│   ├── DOCUMENTACION_COMPLETA.md               # Auditoría técnica exhaustiva, hallazgos H01-H16 y arquitectura DDD
 │   ├── REPORTE_HISTORICO_ENTREGAS.md           # Crónica de entregas 1 a 8 completadas (38 tests)
 │   ├── REPORTE_OAKHAVEN_3D_COMPLETO.md          # Entrega 5: Sistema 3D, héroes duales y jefa Morwenna
 │   ├── REPORTE_ENTREGA_INVENTARIO_Y_PATRULLAS.md # Entrega 6: Inventario, reliquias y patrullas FSM
@@ -22,6 +23,11 @@ Mejoras a futuro/
     ├── ESPECIFICACION_MODELOS_Y_TEXTURAS_3D.md # Guía técnica de modelos GLTF/GLB, polígonos y rigs 3D
     └── GUIA_ESTILO_Y_PALETAS.md                # Paletas cromáticas HEX, siluetas e iluminación gótica
 ```
+
+> [!NOTE]
+> El paquete de entrega de recursos visuales generados y el catálogo interactivo se encuentran en el directorio raíz del proyecto:
+> - Catálogo interactivo con reproductor de animaciones: [Visuales-The-Light-in-the-Darkness-v1/catalogo.html](file:///d:/Edged/Visuales-The-Light-in-the-Darkness-v1/catalogo.html)
+> - Paquete de arte con los 123 recursos 2D/3D: [Visuales-The-Light-in-the-Darkness-v1/](file:///d:/Edged/Visuales-The-Light-in-the-Darkness-v1/)
 
 ---
 
