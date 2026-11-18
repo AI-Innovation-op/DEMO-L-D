@@ -2,6 +2,13 @@
 
 Esta guía detalla con precisión técnica cada hoja de sprites (*spritesheet*) necesaria para la versión **2D** de *The Light in the Darkness*. Está pensada para facilitar el flujo de trabajo de ilustración y pixel art de Kevin.
 
+> [!TIP] Visor Web Interactivo de Animaciones
+> Abre [catalogo.html](catalogo.html) directamente en tu navegador para ver la galería completa interactiva con reproductor de animaciones, visualización de frames y tiras horizontales para el motor Phaser.
+
+<p align="center">
+  <img src="previews/contact-concepts.png" alt="Hoja de Contacto de Conceptos y Personajes" width="100%" />
+</p>
+
 ---
 
 ## 📐 Estándares Generales de Entrega
@@ -20,6 +27,13 @@ Esta guía detalla con precisión técnica cada hoja de sprites (*spritesheet*) 
 ---
 
 ## 🗡️ 1. Héroe 1: Thomas el Acólito (Con Espada & Desarmado)
+
+<p align="center">
+  <img src="personajes/thomas/originales/thomas_idle.png" alt="Thomas Idle" width="140" />
+  <img src="personajes/thomas/originales/thomas_slash_light.png" alt="Thomas Tajo Ligero" width="140" />
+  <img src="personajes/thomas/originales/thomas_slash_heavy.png" alt="Thomas Tajo Pesado" width="140" />
+  <img src="personajes/thomas/originales/thomas_unarmed_idle.png" alt="Thomas Desarmado" width="140" />
+</p>
 
 Thomas tiene dos variantes principales: **Armado con Espada Corta** y **Desarmado a Puños**.
 
@@ -50,6 +64,12 @@ Thomas tiene dos variantes principales: **Armado con Espada Corta** y **Desarmad
 
 ## 🏹 2. Heroína 2: Khaterine la Cazadora del Sauce Negro
 
+<p align="center">
+  <img src="personajes/khaterine/originales/khaterine_idle.png" alt="Khaterine Idle" width="140" />
+  <img src="personajes/khaterine/originales/khaterine_shoot_light.png" alt="Khaterine Disparo" width="140" />
+  <img src="personajes/khaterine/originales/khaterine_ward.png" alt="Khaterine Barrera Abisal" width="140" />
+</p>
+
 Estilo grácil, túnica oscura, velo ceremonial de gasa que flota en el viento y arco abisal.
 
 | Animación | Frames | FPS Sugerido | Descripción de la Acción |
@@ -68,6 +88,12 @@ Estilo grácil, túnica oscura, velo ceremonial de gasa que flota en el viento y
 ---
 
 ## 🐾 3. Aliados de la Aldea (NPCs)
+
+<p align="center">
+  <img src="personajes/shalem/originales/shalem_sit_idle.png" alt="Shalem Sentado" width="100" />
+  <img src="personajes/elowen/originales/elowen_idle.png" alt="Elowen Doncella" width="120" />
+  <img src="personajes/cedric/originales/cedric_idle.png" alt="Padre Cedric Párroco" width="120" />
+</p>
 
 ### A. Shalem (Gato Negro Sabio) — Celda: 32 × 32 px
 - `shalem_sit_idle`: Sentado, cola moviéndose lentamente, pestañeo de ojos dorados (4 frames).
@@ -88,6 +114,13 @@ Estilo grácil, túnica oscura, velo ceremonial de gasa que flota en el viento y
 
 ## 👹 4. Enemigos & Jefes
 
+<p align="center">
+  <img src="enemigos/hound/originales/hound_patrol.png" alt="Sabueso Patrulla" width="160" />
+  <img src="enemigos/cultist/originales/cultist_patrol.png" alt="Cultista Patrulla" width="130" />
+  <img src="enemigos/zealot/originales/zealot_patrol.png" alt="Flagelante Patrulla" width="150" />
+  <img src="enemigos/skeleton/originales/skeleton_patrol.png" alt="Penitente Cripta" width="150" />
+</p>
+
 ### A. Sabueso de Ceniza (Ash Prowler) — Celda: 64 × 48 px
 - `hound_patrol`: Trote cuadrúpedo olfateando el camino (6 frames).
 - `hound_alert`: Se detiene, eriza el lomo y sus ojos rojos se encienden (3 frames).
@@ -97,6 +130,12 @@ Estilo grácil, túnica oscura, velo ceremonial de gasa que flota en el viento y
 - `hound_death`: Colapsa de costado y su cuerpo se desintegra en brasas rojas (6 frames).
 
 ### B. Madre Morwenna (Vigía de la Gran Pira) — Celda: 96 × 96 px (Fase 1) / 128 × 128 px (Fase 2)
+
+<p align="center">
+  <img src="enemigos/morwenna/originales/morwenna_levitate_idle.png" alt="Madre Morwenna Fase 1" width="180" />
+  <img src="enemigos/morwenna_phase2/originales/morwenna_phase2_idle.png" alt="Madre Morwenna Fase 2 (Pira Desatada)" width="220" />
+  <img src="enemigos/morwenna_phase2/originales/morwenna_phase2_lunge.png" alt="Madre Morwenna Embestida Ígnea" width="220" />
+</p>
 
 #### Fase 1: La Inquisidora del Crisol (96 × 96 px)
 - `morwenna_levitate_idle`: Flota en el aire, túnica inquisitorial carmesí meciéndose, crisol en mano (6 frames).
@@ -137,6 +176,14 @@ Estilo grácil, túnica oscura, velo ceremonial de gasa que flota en el viento y
 
 ## 📦 5. Props Destructibles, Entorno & Cementerio
 
+<p align="center">
+  <img src="props/originales/prop_sanctuary_cross.png" alt="Cruz Santuario" width="100" />
+  <img src="props/originales/prop_sanctuary_altar.png" alt="Altar San Jude" width="120" />
+  <img src="props/originales/prop_cemetery_gate.png" alt="Verja Cementerio" width="130" />
+  <img src="props/originales/prop_soul_brazier.png" alt="Pebetero Almas" width="90" />
+  <img src="props/originales/prop_barrel.png" alt="Barril Destructible" width="80" />
+</p>
+
 | Elemento | Celda | Estados Requeridos |
 | :--- | :---: | :--- |
 | **Barriles de Madera** | 32 × 48 px | Intacto, Crujido/Agrietado (1 frame), Roto en 4 pedazos (duelas y aros de hierro). |
@@ -156,6 +203,23 @@ Estilo grácil, túnica oscura, velo ceremonial de gasa que flota en el viento y
 ## 💎 6. Iconografía de Inventario, Reliquias & Códice (32 × 32 px)
 
 Diseño de iconos pixel art con borde gótico estilizado en bronce o plata:
+
+<p align="center">
+  <img src="iconos/sprites/icon_maiden_balm.png" alt="Bálsamo Doncella" width="48" />
+  <img src="iconos/sprites/icon_dusk_balm.png" alt="Bálsamo Ocaso" width="48" />
+  <img src="iconos/sprites/icon_holy_water.png" alt="Agua Bendita" width="48" />
+  <img src="iconos/sprites/icon_consecrated_ash.png" alt="Ceniza Consagrada" width="48" />
+  <img src="iconos/sprites/icon_jude_rosary.png" alt="Rosario San Jude" width="48" />
+  <img src="iconos/sprites/icon_crypt_key.png" alt="Llave Criptas" width="48" />
+  <img src="iconos/sprites/icon_oakhaven_cross.png" alt="Cruz Oakhaven" width="48" />
+  <img src="iconos/sprites/icon_black_willow_feather.png" alt="Pluma Sauce" width="48" />
+  <img src="iconos/sprites/icon_skill_shield_slam.png" alt="Golpe Escudo" width="48" />
+  <img src="iconos/sprites/icon_skill_holy_edge.png" alt="Filo Consagrado" width="48" />
+  <img src="iconos/sprites/icon_skill_unyielding.png" alt="Tenacidad" width="48" />
+  <img src="iconos/sprites/icon_skill_piercing_arrow.png" alt="Disparo Perforante" width="48" />
+  <img src="iconos/sprites/icon_skill_spectral_step.png" alt="Paso Espectral" width="48" />
+  <img src="iconos/sprites/icon_skill_willow_sanctuary.png" alt="Sagrario Sauce" width="48" />
+</p>
 
 ### A. Consumibles & Objetos de Misión
 - `icon_maiden_balm`: Frasco de cristal verdoso con ungüento de flores y tapón de corcho (*Bálsamo de la Doncella* - Cura 35 HP).

@@ -1647,28 +1647,31 @@ export class Oakhaven3DExperience {
     this.uiOverlay.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: flex-start;">
         <!-- Left: Active Hero 3D Combat HUD -->
-        <div style="background: rgba(14, 9, 23, 0.94); border: 1.2px solid #d4af37; border-radius: 4px; padding: 5px 9px; width: 176px; box-shadow: 0 4px 15px rgba(0,0,0,0.85);">
-          <div id="p3d-hero-title" style="font-size: 8px; font-weight: bold; letter-spacing: 0.6px; margin-bottom: 4px; color: #ffd700;">
-            ✦ THOMAS — OAKHAVEN 3D ✦
-          </div>
-          <!-- Health Bar -->
-          <div style="display: flex; align-items: center; gap: 6px; font-size: 7.5px; font-family: monospace; color: #ffaaaa; margin-bottom: 3px;">
-            <span>SALUD</span>
-            <div style="flex: 1; height: 6px; background: #2b0c0c; border: 1px solid #7a2222; border-radius: 2px; overflow: hidden;">
-              <div id="p3d-hp" style="width: 100%; height: 100%; background: #22cc44; transition: width 0.15s ease;"></div>
+        <div style="display: flex; gap: 8px; background: rgba(14, 9, 23, 0.94); border: 1.2px solid #d4af37; border-radius: 4px; padding: 5px 8px; min-width: 215px; box-shadow: 0 4px 15px rgba(0,0,0,0.85); align-items: center;">
+          <img id="p3d-hero-portrait" src="/assets/concepts/concept_thomas.png" alt="Retrato Héroe" style="width: 36px; height: 36px; border: 1.2px solid #d4af37; border-radius: 4px; object-fit: cover; object-position: top center; background: #000; flex-shrink: 0;" />
+          <div style="flex: 1;">
+            <div id="p3d-hero-title" style="font-size: 8px; font-weight: bold; letter-spacing: 0.6px; margin-bottom: 3px; color: #ffd700;">
+              ✦ THOMAS — OAKHAVEN 3D ✦
             </div>
-            <span id="p3d-hp-text">100/100</span>
-          </div>
-          <!-- Posture / Guard Bar -->
-          <div style="display: flex; align-items: center; gap: 6px; font-size: 7.5px; font-family: monospace; color: #aaaaff; margin-bottom: 4px;">
-            <span>POSTURA</span>
-            <div style="flex: 1; height: 4px; background: #0c142b; border: 1px solid #22447a; border-radius: 2px; overflow: hidden;">
-              <div id="p3d-posture" style="width: 100%; height: 100%; background: #4488ff; transition: width 0.15s ease;"></div>
+            <!-- Health Bar -->
+            <div style="display: flex; align-items: center; gap: 5px; font-size: 7.5px; font-family: monospace; color: #ffaaaa; margin-bottom: 3px;">
+              <span>SALUD</span>
+              <div style="flex: 1; height: 6px; background: #2b0c0c; border: 1px solid #7a2222; border-radius: 2px; overflow: hidden;">
+                <div id="p3d-hp" style="width: 100%; height: 100%; background: #22cc44; transition: width 0.15s ease;"></div>
+              </div>
+              <span id="p3d-hp-text">100/100</span>
             </div>
-          </div>
-          <!-- Weapon Status Badge -->
-          <div id="p3d-weapon-badge" style="font-size: 7.2px; font-family: monospace; color: #e2d4f0; background: rgba(35, 20, 50, 0.7); padding: 2px 5px; border-radius: 3px; border: 1px solid #5a3d78;">
-            ⚔ ARMA: Espada Corta del Monaguillo
+            <!-- Posture / Guard Bar -->
+            <div style="display: flex; align-items: center; gap: 5px; font-size: 7.5px; font-family: monospace; color: #aaaaff; margin-bottom: 3px;">
+              <span>POSTURA</span>
+              <div style="flex: 1; height: 4px; background: #0c142b; border: 1px solid #22447a; border-radius: 2px; overflow: hidden;">
+                <div id="p3d-posture" style="width: 100%; height: 100%; background: #4488ff; transition: width 0.15s ease;"></div>
+              </div>
+            </div>
+            <!-- Weapon Status Badge -->
+            <div id="p3d-weapon-badge" style="font-size: 7px; font-family: monospace; color: #e2d4f0; background: rgba(35, 20, 50, 0.7); padding: 1px 4px; border-radius: 3px; border: 1px solid #5a3d78;">
+              ⚔ ARMA: Espada Corta del Monaguillo
+            </div>
           </div>
         </div>
 
@@ -1814,8 +1817,11 @@ export class Oakhaven3DExperience {
       </div>
 
       <!-- Dialogue Toast (Bottom Center) -->
-      <div id="p3d-dialogue-toast" style="position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); background: rgba(14, 9, 23, 0.96); border: 1.2px solid #d4af37; border-radius: 4px; padding: 4px 12px; max-width: 520px; width: 82%; text-align: center; box-shadow: 0 6px 25px rgba(0,0,0,0.9); font-size: 8px; color: #e6dcfa; line-height: 1.35;">
-        <span style="color: #ffd700; font-weight: bold;">Shalem:</span> «¡Bienvenido a Oakhaven! Pulsa <span style="color:#ffd7aa;">[I]</span> para abrir el inventario o <span style="color:#a3ffc7;">[Q]</span> para usar un bálsamo curativo rápido.»
+      <div id="p3d-dialogue-toast-container" style="position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 9px; background: rgba(14, 9, 23, 0.96); border: 1.2px solid #d4af37; border-radius: 4px; padding: 4px 12px; max-width: 560px; width: 85%; box-shadow: 0 6px 25px rgba(0,0,0,0.9);">
+        <img id="p3d-dialogue-portrait" src="/assets/concepts/concept_shalem.png" alt="Retrato Hablante" style="width: 32px; height: 32px; border: 1.2px solid #d4af37; border-radius: 4px; object-fit: cover; object-position: top center; flex-shrink: 0;" />
+        <div id="p3d-dialogue-toast" style="font-size: 8px; color: #e6dcfa; line-height: 1.35; flex: 1;">
+          <span style="color: #ffd700; font-weight: bold;">Shalem:</span> «¡Bienvenido a Oakhaven! Pulsa <span style="color:#ffd7aa;">[I]</span> para abrir el inventario o <span style="color:#a3ffc7;">[Q]</span> para usar un bálsamo curativo rápido.»
+        </div>
       </div>
 
       <!-- Bottom Controls Bar -->
@@ -2078,7 +2084,29 @@ export class Oakhaven3DExperience {
       btnHero.style.color = isKhaterine ? '#e6b8ff' : '#ffd700';
     }
 
+    const heroPortrait = this.uiOverlay?.querySelector('#p3d-hero-portrait') as HTMLImageElement | null;
+    if (heroPortrait) {
+      heroPortrait.src = isKhaterine ? '/assets/concepts/concept_khaterine.png' : '/assets/concepts/concept_thomas.png';
+      heroPortrait.style.borderColor = isKhaterine ? '#8e44ad' : '#d4af37';
+    }
+
     this.updateHUD();
+  }
+
+  public setDialogueToast(speaker: string, text: string, portrait: string, borderColor = '#d4af37'): void {
+    const toast = this.uiOverlay?.querySelector('#p3d-dialogue-toast') as HTMLDivElement | null;
+    const container = this.uiOverlay?.querySelector('#p3d-dialogue-toast-container') as HTMLDivElement | null;
+    const img = this.uiOverlay?.querySelector('#p3d-dialogue-portrait') as HTMLImageElement | null;
+    if (toast) {
+      toast.innerHTML = `<span style="color: ${borderColor}; font-weight: bold;">${speaker}:</span> ${text}`;
+    }
+    if (container) {
+      container.style.borderColor = borderColor;
+    }
+    if (img) {
+      img.src = portrait;
+      img.style.borderColor = borderColor;
+    }
   }
 
   public toggleHero(): void {
@@ -2794,11 +2822,12 @@ export class Oakhaven3DExperience {
     } else {
       this.audio.playSfx('warning');
       this.spawnFloatingText(this.playerGroup.position, '🔒 Requiere la Llave de las Criptas (Madre Morwenna)', '#ff6666');
-      const toast = this.uiOverlay.querySelector('#p3d-dialogue-toast') as HTMLDivElement;
-      if (toast) {
-        toast.innerHTML = `<span style="color: #ff6666; font-weight: bold;">Verja Sellada:</span> «El hierro negro está encadenado con los sellos del Crisol. Derrota a Madre Morwenna en la Gran Pira para obtener la Llave de las Criptas.»`;
-        toast.style.borderColor = '#ff6666';
-      }
+      this.setDialogueToast(
+        'Verja Sellada',
+        '«El hierro negro está encadenado con los sellos del Crisol. Derrota a Madre Morwenna en la Gran Pira para obtener la Llave de las Criptas.»',
+        '/assets/icons/icon_crypt_key.png',
+        '#ff6666'
+      );
     }
   }
 
@@ -3169,11 +3198,12 @@ export class Oakhaven3DExperience {
         if (this.morwennaHpBarContainer) {
           this.morwennaHpBarContainer.style.display = 'block';
         }
-        const toast = this.uiOverlay.querySelector('#p3d-dialogue-toast') as HTMLDivElement;
-        if (toast) {
-          toast.innerHTML = `<span style="color: #ff3344; font-weight: bold;">Madre Morwenna:</span> «¡Nadie desafiará el Crisol de la Sagrada Vigilia! ¡Arded en la llama de Oakhaven!»`;
-          toast.style.borderColor = '#ff3344';
-        }
+        this.setDialogueToast(
+          'Madre Morwenna',
+          '«¡Nadie desafiará el Crisol de la Sagrada Vigilia! ¡Arded en la llama de Oakhaven!»',
+          '/assets/concepts/concept_morwenna.png',
+          '#ff3344'
+        );
         this.audio.playSfx('warning');
         this.spawnFloatingText(this.morwennaGroup.position, '👑 ¡MADRE MORWENNA HA DESPERTADO!', '#ff3344');
       }
@@ -3330,11 +3360,12 @@ export class Oakhaven3DExperience {
     this.spawnFloatingText(this.morwennaGroup.position, '🔥 ¡FASE 2: PIRA DEL ABISMO DESATADA! 🔥', '#ff3300');
     this.spawnFloatingText(this.playerGroup.position, '⚠ ¡ONDA EXPANSIVA DE FUEGO!', '#ffaa44');
 
-    const toast = this.uiOverlay.querySelector('#p3d-dialogue-toast') as HTMLDivElement;
-    if (toast) {
-      toast.innerHTML = `<span style="color: #ff3300; font-weight: bold;">Madre Morwenna:</span> «¡Insolente! ¡El Crisol juzgará tu alma con el fuego sagrado de la Pira! ¡NO QUEDARÁ NI CENIZA DE TI!»`;
-      toast.style.borderColor = '#ff3300';
-    }
+    this.setDialogueToast(
+      'Madre Morwenna',
+      '«¡Insolente! ¡El Crisol juzgará tu alma con el fuego sagrado de la Pira! ¡NO QUEDARÁ NI CENIZA DE TI!»',
+      '/assets/concepts/concept_morwenna_phase2.png',
+      '#ff3300'
+    );
 
     if (this.morwennaHpBarContainer) {
       this.morwennaHpBarContainer.style.borderColor = '#ff3300';
@@ -3366,11 +3397,12 @@ export class Oakhaven3DExperience {
       if (title) title.innerText = '👑 MADRE MORWENNA — ¡PURIFICADA! 👑';
     }
 
-    const toast = this.uiOverlay.querySelector('#p3d-dialogue-toast') as HTMLDivElement;
-    if (toast) {
-      toast.innerHTML = `<span style="color: #ffd700; font-weight: bold;">Padre Cedric:</span> «¡La luz ha vencido sobre el fuego de la Pira! La verja de hierro del cementerio antiguo al norte se ha abierto. Ten cuidado con los penitentes de las criptas.»`;
-      toast.style.borderColor = '#ffd700';
-    }
+    this.setDialogueToast(
+      'Padre Cedric',
+      '«¡La luz ha vencido sobre el fuego de la Pira! La verja de hierro del cementerio antiguo al norte se ha abierto. Ten cuidado con los penitentes de las criptas.»',
+      '/assets/concepts/concept_cedric.png',
+      '#ffd700'
+    );
 
     this.updateHUD();
   }
@@ -4728,11 +4760,12 @@ export class Oakhaven3DExperience {
       this.audio.playSfx('parry');
       this.spawnFloatingText(this.playerGroup.position, '💾 ¡SANTUARIO CONSAGRADO! Partida Guardada & Salud Restaurada', '#ffd700');
 
-      const toast = this.uiOverlay.querySelector('#p3d-dialogue-toast') as HTMLDivElement;
-      if (toast) {
-        toast.innerHTML = `<span style="color: #ffd700; font-weight: bold;">Padre Cedric:</span> «Que la gracia de San Jude guarde tu alma, hijo mío. Tu devoción ha quedado consagrada en este altar sagrado.»`;
-        toast.style.borderColor = '#ffd700';
-      }
+      this.setDialogueToast(
+        'Padre Cedric',
+        '«Que la gracia de San Jude guarde tu alma, hijo mío. Tu devoción ha quedado consagrada en este altar sagrado.»',
+        '/assets/concepts/concept_cedric.png',
+        '#ffd700'
+      );
     } else {
       this.audio.playSfx('menu_select');
       this.spawnFloatingText(this.playerGroup.position, '💾 Partida Guardada en Punto de Control', '#a3ffc7');
@@ -4944,13 +4977,14 @@ export class Oakhaven3DExperience {
 
   private checkShalemProximity(): void {
     const dist = this.playerGroup.position.distanceTo(this.shalemGroup.position);
-    const toast = this.uiOverlay.querySelector('#p3d-dialogue-toast') as HTMLDivElement;
     if (dist < 3.2 && !this.shalemSpoke) {
       this.shalemSpoke = true;
-      if (toast) {
-        toast.innerHTML = `<span style="color: #ffd700; font-weight: bold;">Shalem:</span> «Aquí en 3D la espada se clava donde la arrojes y las sombras son reales. ¡Esquiva los colmillos del sabueso con <span style="color:#ffd700;">ESPACIO</span>!»`;
-        toast.style.borderColor = '#ffd700';
-      }
+      this.setDialogueToast(
+        'Shalem',
+        '«Aquí en 3D la espada se clava donde la arrojes y las sombras son reales. ¡Esquiva los colmillos del sabueso con <span style="color:#ffd700;">ESPACIO</span>!»',
+        '/assets/concepts/concept_shalem.png',
+        '#ffd700'
+      );
     }
   }
 

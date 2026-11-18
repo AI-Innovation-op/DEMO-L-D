@@ -37,6 +37,10 @@ Esta guía técnica define los requerimientos para la integración de modelos tr
 ## 🧍‍♂️ 1. Personajes Jugables Requeridos
 
 ### A. Thomas el Acólito (`thomas_hero.glb`)
+<p align="center">
+  <img src="3D/personajes/concept_thomas.png" alt="Concepto 3D Thomas el Acólito" width="320" />
+</p>
+
 - **Malla**:
   - Túnica clerical gris oscura/púrpura desgastada con pliegues en la parte baja.
   - Bufanda/capucha alrededor del cuello en tono ciruela oscuro.
@@ -54,6 +58,10 @@ Esta guía técnica define los requerimientos para la integración de modelos tr
   - `Dodge`: Voltereta frontal rápida en 280 ms.
 
 ### B. Khaterine la Cazadora (`khaterine_hero.glb`)
+<p align="center">
+  <img src="3D/personajes/concept_khaterine.png" alt="Concepto 3D Khaterine la Cazadora" width="320" />
+</p>
+
 - **Malla**:
   - Túnica estilizada ceñida con manto ceremonial en tono berenjena/negro abisal.
   - Velo translúcido que cae desde la cabeza sobre los hombros (material con `transparent: true`).
@@ -70,6 +78,12 @@ Esta guía técnica define los requerimientos para la integración de modelos tr
 
 ## 🐾 2. Aliados & NPCs 3D
 
+<p align="center">
+  <img src="3D/personajes/concept_shalem.png" alt="Concepto 3D Shalem" width="220" />
+  <img src="3D/personajes/concept_elowen.png" alt="Concepto 3D Elowen" width="220" />
+  <img src="3D/personajes/concept_cedric.png" alt="Concepto 3D Padre Cedric" width="220" />
+</p>
+
 | Modelo | Nombre Archivo | Triángulos | Detalles Clave |
 | :--- | :--- | :---: | :--- |
 | **Shalem el Gato** | `shalem_cat.glb` | 600 - 900 | Pelaje negro carbón, ojos amarillos/dorados emisivos, cola larga con rig de 4 huesos para movimiento sinuoso. |
@@ -79,6 +93,11 @@ Esta guía técnica define los requerimientos para la integración de modelos tr
 ---
 
 ## 👑 3. Jefa: Madre Morwenna (`morwenna_boss.glb`)
+
+<p align="center">
+  <img src="3D/enemigos/concept_morwenna.png" alt="Concepto 3D Madre Morwenna Fase 1" width="300" />
+  <img src="3D/enemigos/concept_morwenna_phase2.png" alt="Concepto 3D Madre Morwenna Fase 2 (Pira Desatada)" width="340" />
+</p>
 
 - **Malla Base**:
   - Túnica ceremonial inquisitorial de color vino tinto/carmesí con ribetes de oro envejecido.
@@ -104,6 +123,13 @@ Esta guía técnica define los requerimientos para la integración de modelos tr
 
 ## 👹 4. Enemigos Comunes & Patrullas
 
+<p align="center">
+  <img src="3D/enemigos/concept_hound.png" alt="Concepto 3D Sabueso de Ceniza" width="220" />
+  <img src="3D/enemigos/concept_cultist.png" alt="Concepto 3D Cultista del Incensario" width="220" />
+  <img src="3D/enemigos/concept_zealot.png" alt="Concepto 3D Flagelante con Cadena" width="220" />
+  <img src="3D/enemigos/concept_skeleton.png" alt="Concepto 3D Penitente de la Cripta" width="220" />
+</p>
+
 | Modelo | Archivo GLTF | Triángulos | Sockets / Huesos Especiales | Animaciones Requeridas |
 | :--- | :--- | :---: | :--- | :--- |
 | **Sabueso de Ceniza** | `hound_ash.glb` | 800 - 1,200 | Ojos emisivos rojos, fauces con dientes afilados. | `Patrol_Walk`, `Alert`, `Bite_Windup`, `Bite_Lunge`, `Stagger`, `Death_Ash`. |
@@ -114,6 +140,15 @@ Esta guía técnica define los requerimientos para la integración de modelos tr
 ---
 
 ## 🛢️ 5. Props Destructibles, Entorno & Cementerio
+
+<p align="center">
+  <img src="3D/props/concept_prop_cemetery_gate.png" alt="Verja del Cementerio" width="160" />
+  <img src="3D/props/concept_prop_sanctuary_cross.png" alt="Cruz del Santuario" width="130" />
+  <img src="3D/props/concept_prop_sanctuary_altar.png" alt="Altar de San Jude" width="150" />
+  <img src="3D/props/concept_prop_soul_brazier.png" alt="Pebetero de Almas" width="120" />
+  <img src="3D/props/concept_prop_celtic_gravestone.png" alt="Lápida Celta" width="120" />
+  <img src="3D/props/concept_prop_monumental_sarcophagus.png" alt="Sarcófago Monumental" width="150" />
+</p>
 
 ### A. Mallas Fragmentadas Pre-Rotas (*Fracture Meshes*)
 Para que la física de destrucción en Three.js sea inmediata y sin lag:
