@@ -1,0 +1,20 @@
+{
+  "id": "concept_skeleton",
+  "kind": "concept",
+  "group": "concepts",
+  "frames": 1,
+  "fps": 0,
+  "cellWidth": 0,
+  "cellHeight": 0,
+  "cols": 1,
+  "rows": 1,
+  "action": "Front, side, back and three-quarter views of the same design for a low-poly 3D artist; consistent proportions and attached weapon detail.",
+  "design": "Crypt Penitent: weathered ivory skeleton, tattered dark burial mantle, cyan spectral eyes, rusted two-handed claymore, visible ribs and articulated bones, solemn Gothic cemetery guardian.",
+  "reference": null,
+  "loop": false,
+  "sourcePath": "C:\\Users\\usuario\\.codex\\generated_images\\01a1ead6-1a34-7f80-808b-9fbe2f2f503c\\exec-7e48ad96-b8ce-4229-abee-2096acdf7755.png",
+  "prompt": "Use case: stylized-concept. Asset type: 3D MODEL DESIGN REFERENCE sheet concept_skeleton. Create a professional low-poly, hand-painted Gothic dark-fantasy model turnaround, neutral gray backdrop, soft neutral studio lighting, clean unambiguous shapes. Design: Crypt Penitent: weathered ivory skeleton, tattered dark burial mantle, cyan spectral eyes, rusted two-handed claymore, visible ribs and articulated bones, solemn Gothic cemetery guardian.. Front, side, back and three-quarter views of the same design for a low-poly 3D artist; consistent proportions and attached weapon detail. All views show the same proportions, costume, colors and accessories. One meter equals one world unit, Y up. Show complete silhouettes with adequate separation, detail of joints or weapon attachment and clean material differentiation. These are reference illustrations for a modeler, not screenshots and not actual GLB files. Palette: abyss #06040b, charcoal #141219, slate #272233, old wood #3d2716, bronze #d4af37, gold #ffd700, violet #aa44ff, moon silver #b5d4ff, inquisitorial crimson #ff2233 and #ff5511, spectral cyan #00e5ff, bone #d6cfc7. NO text, no labels, no logos, no watermarks.",
+  "generation": "built-in image_gen",
+  "status": "generated-source",
+  "elapsedSeconds": 262
+}

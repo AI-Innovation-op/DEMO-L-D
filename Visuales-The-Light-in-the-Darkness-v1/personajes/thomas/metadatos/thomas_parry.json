@@ -1,0 +1,20 @@
+{
+  "id": "thomas_parry",
+  "kind": "animation",
+  "group": "thomas",
+  "frames": 4,
+  "fps": 16,
+  "cellWidth": 64,
+  "cellHeight": 64,
+  "cols": 2,
+  "rows": 2,
+  "action": "Desvío rápido hacia arriba, chispa metálica dorada en el punto de impacto.",
+  "design": "Young pale man, tousled dark brown hair, worn charcoal clerical tunic, dark plum scarf and cowl, small violet ash seal on the chest, modest bronze details, short steel sword; armed and unarmed versions are the same person.",
+  "reference": "thomas_idle.png",
+  "loop": false,
+  "sourcePath": "C:\\Users\\usuario\\.codex\\generated_images\\01a1ead6-1a34-7f80-808b-9fbe2f2f503c\\exec-71d3d066-135f-4ade-9211-a17c0cc1d76a.png",
+  "prompt": "Use case: identity-preserve. Asset type: transparent pixel-art animation sheet thomas_parry.png. Input is an IDENTITY reference only; keep its subject design but draw the new action and crisp pixel art described here. Subject: Young pale man, tousled dark brown hair, worn charcoal clerical tunic, dark plum scarf and cowl, small violet ash seal on the chest, modest bronze details, short steel sword; armed and unarmed versions are the same person. Action: Desvío rápido hacia arriba, chispa metálica dorada en el punto de impacto. Create EXACTLY 4 distinct chronological frames in 2 equal SQUARE columns and 2 rows, read left to right then down. Any unused last cells completely EMPTY and transparent. Fixed right-facing SIDE VIEW, full body, same proportions and equipment in every frame. Feet pivot at 50% cell width and 90% height. First frame is a ready/start pose at normal standing height before the action. Complete a clear action arc or a seamless looping cycle as appropriate. Crisp detailed square pixel clusters, no smooth painting. Game cell 64x64 pixels; high-resolution original on a regular grid for nearest-neighbor reduction. Keep every figure/effect completely INSIDE its cell, empty gutters, no overlap, no clipped weapons. REAL alpha transparency, EMPTY background with zero opacity, no background glow clouds, no cast shadows, no ground, no painted checkerboard and no grid lines. Palette: abyss #06040b, charcoal #141219, slate #272233, old wood #3d2716, bronze #d4af37, gold #ffd700, violet #aa44ff, moon silver #b5d4ff, inquisitorial crimson #ff2233 and #ff5511, spectral cyan #00e5ff, bone #d6cfc7. NO text, no labels, no logos, no watermarks.",
+  "generation": "built-in image_gen",
+  "status": "generated-source",
+  "elapsedSeconds": 88
+}

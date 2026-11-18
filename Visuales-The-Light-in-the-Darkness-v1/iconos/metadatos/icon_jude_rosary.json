@@ -1,0 +1,29 @@
+{
+  "id": "icon_jude_rosary",
+  "kind": "icon",
+  "group": "icons",
+  "frames": 1,
+  "fps": 0,
+  "cellWidth": 32,
+  "cellHeight": 32,
+  "cols": 1,
+  "rows": 1,
+  "action": "Cuentas de madera bendecidas con cruz de plata y borla (*Rosario de San Jude* - Restaura postura al 100%).",
+  "design": "Cuentas de madera bendecidas con cruz de plata y borla (*Rosario de San Jude* - Restaura postura al 100%).",
+  "reference": null,
+  "loop": false,
+  "sourcePath": "C:\\Users\\usuario\\.codex\\generated_images\\01a1ead6-1a34-7f80-808b-9fbe2f2f503c\\exec-76e40638-2d71-41cb-bc55-7583a71761d8.png",
+  "prompt": "Use case: stylized-concept. Asset type: transparent pixel-art icon sheet icon_jude_rosary.png. Subject: Cuentas de madera bendecidas con cruz de plata y borla (*Rosario de San Jude* - Restaura postura al 100%). Action: Cuentas de madera bendecidas con cruz de plata y borla (*Rosario de San Jude* - Restaura postura al 100%). Create EXACTLY 1 distinct chronological frames in 1 equal SQUARE columns and 1 rows, read left to right then down. Any unused last cells completely EMPTY and transparent. One large centered readable inventory icon with a Gothic bronze/silver rim; no miniature scene. Complete a clear action arc or a seamless looping cycle as appropriate. Crisp detailed square pixel clusters, no smooth painting. Game cell 32x32 pixels; high-resolution original on a regular grid for nearest-neighbor reduction. Keep every figure/effect completely INSIDE its cell, empty gutters, no overlap, no clipped weapons. REAL alpha transparency, EMPTY background with zero opacity, no background glow clouds, no cast shadows, no ground, no painted checkerboard and no grid lines. Palette: abyss #06040b, charcoal #141219, slate #272233, old wood #3d2716, bronze #d4af37, gold #ffd700, violet #aa44ff, moon silver #b5d4ff, inquisitorial crimson #ff2233 and #ff5511, spectral cyan #00e5ff, bone #d6cfc7. NO text, no labels, no logos, no watermarks.",
+  "generation": "built-in image_gen",
+  "status": "generated-source",
+  "elapsedSeconds": 184,
+  "edits": [
+    {
+      "sourcePath": "C:\\Users\\usuario\\.codex\\generated_images\\01a1ead6-1a34-7f80-808b-9fbe2f2f503c\\exec-dd29f97b-a27e-49a3-96fd-347427eaa69c.png",
+      "prompt": "Use case: stylized-concept. Asset type: icon_jude_rosary, readable inventory icon for a Gothic pixel-art game at exactly 32x32 native pixels. One loop of medium brown wooden rosary beads, one large simple silver cross hanging in its center/lower left, and a short muted crimson tassel. A restrained thin square bronze border with minimal Gothic corners. Design for readability at 32x32: a few broad crisp square pixel clusters, strong silhouette, simple shadows, no tiny ornament clutter. High resolution source with nearest-neighbor enlarged pixel-art appearance. The space around and INSIDE the bead loop and between icon and border must be TRUE TRANSPARENT ALPHA ZERO. NO white or gray background, NO painted checkerboard, no background haze or cast shadow. No saint portrait, no medallion, no face or character, no extra jewelry, no gems, no text or watermark. Keep the entire border and icon inside the canvas with generous empty transparent margin.",
+      "generation": "built-in image_gen",
+      "reason": "Replace painted checkerboard and simplify the rosary for 32-pixel readability"
+    }
+  ],
+  "selectedSourcePath": "C:\\Users\\usuario\\.codex\\generated_images\\01a1ead6-1a34-7f80-808b-9fbe2f2f503c\\exec-dd29f97b-a27e-49a3-96fd-347427eaa69c.png"
+}

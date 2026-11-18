@@ -1,0 +1,20 @@
+{
+  "id": "morwenna_stunned",
+  "kind": "animation",
+  "group": "morwenna",
+  "frames": 4,
+  "fps": 10,
+  "cellWidth": 96,
+  "cellHeight": 96,
+  "cols": 2,
+  "rows": 2,
+  "action": "Desestabilizada en el suelo, crisol caído, rodeada de chispas de postura rota (4 frames).",
+  "design": "Mother Morwenna: tall stern inquisitor, high pointed ceremonial headdress, wine-red and crimson robe with aged gold trim, face mostly shadowed, glowing red eyes, heavy bronze fire crucible in her right hand.",
+  "reference": "boss_morwenna.png",
+  "loop": false,
+  "sourcePath": "C:\\Users\\usuario\\.codex\\generated_images\\01a1ead6-1a34-7f80-808b-9fbe2f2f503c\\exec-af46e0da-f12f-4b0a-8ccc-afe81b0ae7dc.png",
+  "prompt": "Use case: identity-preserve. Asset type: transparent pixel-art animation sheet morwenna_stunned.png. Input is an IDENTITY reference only; keep its subject design but draw the new action and crisp pixel art described here. Subject: Mother Morwenna: tall stern inquisitor, high pointed ceremonial headdress, wine-red and crimson robe with aged gold trim, face mostly shadowed, glowing red eyes, heavy bronze fire crucible in her right hand. Action: Desestabilizada en el suelo, crisol caído, rodeada de chispas de postura rota (4 frames). Create EXACTLY 4 distinct chronological frames in 2 equal SQUARE columns and 2 rows, read left to right then down. Any unused last cells completely EMPTY and transparent. Fixed right-facing SIDE VIEW, full body, same proportions and equipment in every frame. Feet pivot at 50% cell width and 90% height. First frame is a ready/start pose at normal standing height before the action. Complete a clear action arc or a seamless looping cycle as appropriate. Crisp detailed square pixel clusters, no smooth painting. Game cell 96x96 pixels; high-resolution original on a regular grid for nearest-neighbor reduction. Keep every figure/effect completely INSIDE its cell, empty gutters, no overlap, no clipped weapons. REAL alpha transparency, EMPTY background with zero opacity, no background glow clouds, no cast shadows, no ground, no painted checkerboard and no grid lines. Palette: abyss #06040b, charcoal #141219, slate #272233, old wood #3d2716, bronze #d4af37, gold #ffd700, violet #aa44ff, moon silver #b5d4ff, inquisitorial crimson #ff2233 and #ff5511, spectral cyan #00e5ff, bone #d6cfc7. NO text, no labels, no logos, no watermarks.",
+  "generation": "built-in image_gen",
+  "status": "generated-source",
+  "elapsedSeconds": 42
+}

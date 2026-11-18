@@ -1,0 +1,20 @@
+{
+  "id": "fx_flame_geyser_ground",
+  "kind": "vfx",
+  "group": "vfx",
+  "frames": 4,
+  "fps": 12,
+  "cellWidth": 96,
+  "cellHeight": 64,
+  "cols": 2,
+  "rows": 2,
+  "action": "Sello rúnico circular en el suelo que pulsa antes de la erupción (4 frames).",
+  "design": "Sello rúnico circular en el suelo que pulsa antes de la erupción (4 frames).",
+  "reference": null,
+  "loop": true,
+  "sourcePath": "C:\\Users\\usuario\\.codex\\generated_images\\01a1ead6-1a34-7f80-808b-9fbe2f2f503c\\exec-fedd86af-73aa-4f37-864c-8f8f0556e11f.png",
+  "prompt": "Use case: stylized-concept. Asset type: transparent pixel-art vfx sheet fx_flame_geyser_ground.png. Subject: Sello rúnico circular en el suelo que pulsa antes de la erupción (4 frames). Action: Sello rúnico circular en el suelo que pulsa antes de la erupción (4 frames). Create EXACTLY 4 distinct chronological frames in 2 equal SQUARE columns and 2 rows, read left to right then down. Any unused last cells completely EMPTY and transparent. Only the effect, absolutely no characters or scenery, pulse grows then decays; generous empty transparent padding. Complete a clear action arc or a seamless looping cycle as appropriate. Crisp detailed square pixel clusters, no smooth painting. Game cell 96x64 pixels; high-resolution original on a regular grid for nearest-neighbor reduction. Keep every figure/effect completely INSIDE its cell, empty gutters, no overlap, no clipped weapons. REAL alpha transparency, EMPTY background with zero opacity, no background glow clouds, no cast shadows, no ground, no painted checkerboard and no grid lines. Palette: abyss #06040b, charcoal #141219, slate #272233, old wood #3d2716, bronze #d4af37, gold #ffd700, violet #aa44ff, moon silver #b5d4ff, inquisitorial crimson #ff2233 and #ff5511, spectral cyan #00e5ff, bone #d6cfc7. NO text, no labels, no logos, no watermarks.",
+  "generation": "built-in image_gen",
+  "status": "generated-source",
+  "elapsedSeconds": 23
+}

@@ -1,0 +1,19 @@
+{
+  "id": "thomas_idle",
+  "kind": "animation",
+  "group": "thomas",
+  "frames": 6,
+  "fps": 8,
+  "cellWidth": 64,
+  "cellHeight": 64,
+  "cols": 3,
+  "rows": 2,
+  "action": "Respiración lenta en guardia, túnica meciéndose sutilmente, espada baja.",
+  "design": "Young pale man, tousled dark brown hair, worn charcoal clerical tunic, dark plum scarf and cowl, small violet ash seal on the chest, modest bronze details, short steel sword; armed and unarmed versions are the same person.",
+  "reference": "thomas_idle.png",
+  "loop": true,
+  "sourcePath": "C:\\Users\\usuario\\.codex\\generated_images\\01a1ead6-1a34-7f80-808b-9fbe2f2f503c\\exec-10d712a8-8cdf-431f-ad10-035042733b55.png",
+  "prompt": "Use case: identity-preserve. Asset type: game sprite sheet thomas_idle.png. The input sheet is the identity and pixel-art style reference for Thomas; create the NEW action described below, not another walk cycle. Character: Young pale man, tousled dark brown hair, worn charcoal clerical tunic, dark plum scarf and cowl, small violet ash seal on the chest, modest bronze details, short steel sword; armed and unarmed versions are the same person. Action specification: Respiración lenta en guardia, túnica meciéndose sutilmente, espada baja. Exactly 6 DIFFERENT consecutive animation frames in reading order, 3 equal SQUARE cells across and 2 rows. Any unused final cells are completely transparent and empty. Fixed right-facing SIDE VIEW, full body, consistent scale and boots baseline at 90% cell height; first frame shows the initial ready/anticipation pose, subsequent frames follow the action through impact and recovery. Pixel art with crisp square clusters, no smooth painting, same costume, face, sword and silhouette as reference. Native game cell 64x64, Thomas body about 48 native pixels tall; render source cells at high resolution with large pixel clusters suitable for nearest-neighbor reduction. Isolate every frame fully inside its cell with empty gutters, NO OVERLAP OR CROPPED WEAPONS. True alpha background, no ground, no cast shadows, no grid lines, no letters, no labels, no checkerboard, no extra characters. Keep motion legible and frames genuinely different. Palette charcoal, dark plum, aged bronze, pale skin and small violet ash seal.",
+  "generation": "built-in image_gen",
+  "status": "generated-source"
+}

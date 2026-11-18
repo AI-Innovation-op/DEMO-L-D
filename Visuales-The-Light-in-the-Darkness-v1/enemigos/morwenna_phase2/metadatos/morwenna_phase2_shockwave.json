@@ -1,0 +1,29 @@
+{
+  "id": "morwenna_phase2_shockwave",
+  "kind": "animation",
+  "group": "morwenna_phase2",
+  "frames": 8,
+  "fps": 10,
+  "cellWidth": 128,
+  "cellHeight": 128,
+  "cols": 4,
+  "rows": 2,
+  "action": "Explosión radial de fuego a 360°, desgarro de túnica y despliegue de alas (8 frames).",
+  "design": "The SAME Mother Morwenna transformed: crimson and wine robes, tall inquisitorial hood, white-hot eyes, twelve angular ash-and-fire wing feathers, burning thorn halo and large flaming greatsword; remain recognizably the same woman.",
+  "reference": "boss_morwenna.png",
+  "loop": false,
+  "sourcePath": "C:\\Users\\usuario\\.codex\\generated_images\\01a1ead6-1a34-7f80-808b-9fbe2f2f503c\\exec-90b9c50c-4424-4442-b22b-67f4eef0ed98.png",
+  "prompt": "Use case: identity-preserve. Asset type: transparent pixel-art animation sheet morwenna_phase2_shockwave.png. Input is an IDENTITY reference only; keep its subject design but draw the new action and crisp pixel art described here. Subject: The SAME Mother Morwenna transformed: crimson and wine robes, tall inquisitorial hood, white-hot eyes, twelve angular ash-and-fire wing feathers, burning thorn halo and large flaming greatsword; remain recognizably the same woman. Action: Explosión radial de fuego a 360°, desgarro de túnica y despliegue de alas (8 frames). Create EXACTLY 8 distinct chronological frames in 4 equal SQUARE columns and 2 rows, read left to right then down. Any unused last cells completely EMPTY and transparent. Fixed right-facing SIDE VIEW, full body, same proportions and equipment in every frame. Feet pivot at 50% cell width and 90% height. First frame is a ready/start pose at normal standing height before the action. Complete a clear action arc or a seamless looping cycle as appropriate. Crisp detailed square pixel clusters, no smooth painting. Game cell 128x128 pixels; high-resolution original on a regular grid for nearest-neighbor reduction. Keep every figure/effect completely INSIDE its cell, empty gutters, no overlap, no clipped weapons. REAL alpha transparency, EMPTY background with zero opacity, no background glow clouds, no cast shadows, no ground, no painted checkerboard and no grid lines. Palette: abyss #06040b, charcoal #141219, slate #272233, old wood #3d2716, bronze #d4af37, gold #ffd700, violet #aa44ff, moon silver #b5d4ff, inquisitorial crimson #ff2233 and #ff5511, spectral cyan #00e5ff, bone #d6cfc7. NO text, no labels, no logos, no watermarks.",
+  "generation": "built-in image_gen",
+  "status": "generated-source",
+  "elapsedSeconds": 101,
+  "edits": [
+    {
+      "sourcePath": "C:\\Users\\usuario\\.codex\\generated_images\\01a1ead6-1a34-7f80-808b-9fbe2f2f503c\\exec-61a9af77-b21d-413a-b54c-391954b5b1fe.png",
+      "prompt": "Use case: identity-preserve. Asset type: morwenna_phase2_shockwave pixel-art TRANSFORMATION sprite sheet. Reference 1 is Mother Morwenna BEFORE transformation: crimson inquisitor robe and tall headdress, bronze fire crucible, NO wings, NO halo and NO sword. Reference 2 is the SAME woman AFTER transformation: ash-and-fire wings, thorn halo, flaming greatsword. Draw exactly EIGHT chronological full-body frames in a fixed right-facing side/three-quarter camera, 4 equal square columns x 2 rows, reading left to right then down. Frame 0: phase 1 with crucible, no wings/halo/sword. Frame 1: she braces as the crucible overheats. Frame 2: fiery cracks and torn outer cloth, two small wing roots emerge. Frame 3: ash feathers visibly unfold halfway. Frame 4: maximum radial shockwave and wings fully spread, thorn halo ignites. Frame 5: crucible dissolves into ash and flaming greatsword forms in hand. Frame 6: she regains aggressive hovering posture. Frame 7: stable fully transformed phase 2 with full wings, halo, greatsword, no crucible. Recognizably the same face, headdress and crimson costume in every frame. Keep scale, camera, ground baseline and body root consistent. The untransformed first frame is essential; do not show full wings before frame 4. Crisp square pixel clusters, dark Gothic pixel art for 128x128 native cells, high resolution source. Complete bodies, wings and effects inside cells with generous transparent gutters. True transparent alpha-zero background, no matte or glow clouds, no floor, shadows, labels, text or grid lines.",
+      "generation": "built-in image_gen",
+      "reason": "Show the change from phase 1 to phase 2, including gradual wing deployment"
+    }
+  ],
+  "selectedSourcePath": "C:\\Users\\usuario\\.codex\\generated_images\\01a1ead6-1a34-7f80-808b-9fbe2f2f503c\\exec-61a9af77-b21d-413a-b54c-391954b5b1fe.png"
+}

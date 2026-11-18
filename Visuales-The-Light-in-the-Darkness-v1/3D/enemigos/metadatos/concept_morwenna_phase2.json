@@ -1,0 +1,20 @@
+{
+  "id": "concept_morwenna_phase2",
+  "kind": "concept",
+  "group": "concepts",
+  "frames": 1,
+  "fps": 0,
+  "cellWidth": 0,
+  "cellHeight": 0,
+  "cols": 1,
+  "rows": 1,
+  "action": "Front, side, back and three-quarter views of the same design for a low-poly 3D artist; consistent proportions and attached weapon detail.",
+  "design": "The SAME Mother Morwenna transformed: crimson and wine robes, tall inquisitorial hood, white-hot eyes, twelve angular ash-and-fire wing feathers, burning thorn halo and large flaming greatsword; remain recognizably the same woman.",
+  "reference": "boss_morwenna.png",
+  "loop": false,
+  "sourcePath": "C:\\Users\\usuario\\.codex\\generated_images\\01a1ead6-1a34-7f80-808b-9fbe2f2f503c\\exec-ca37d0b2-a6ba-46f5-88f6-5bce79d96de2.png",
+  "prompt": "Use case: stylized-concept. Asset type: 3D MODEL DESIGN REFERENCE sheet concept_morwenna_phase2. Create a professional low-poly, hand-painted Gothic dark-fantasy model turnaround, neutral gray backdrop, soft neutral studio lighting, clean unambiguous shapes. Design: The SAME Mother Morwenna transformed: crimson and wine robes, tall inquisitorial hood, white-hot eyes, twelve angular ash-and-fire wing feathers, burning thorn halo and large flaming greatsword; remain recognizably the same woman.. Front, side, back and three-quarter views of the same design for a low-poly 3D artist; consistent proportions and attached weapon detail. All views show the same proportions, costume, colors and accessories. One meter equals one world unit, Y up. Show complete silhouettes with adequate separation, detail of joints or weapon attachment and clean material differentiation. These are reference illustrations for a modeler, not screenshots and not actual GLB files. Palette: abyss #06040b, charcoal #141219, slate #272233, old wood #3d2716, bronze #d4af37, gold #ffd700, violet #aa44ff, moon silver #b5d4ff, inquisitorial crimson #ff2233 and #ff5511, spectral cyan #00e5ff, bone #d6cfc7. NO text, no labels, no logos, no watermarks.",
+  "generation": "built-in image_gen",
+  "status": "generated-source",
+  "elapsedSeconds": 340
+}

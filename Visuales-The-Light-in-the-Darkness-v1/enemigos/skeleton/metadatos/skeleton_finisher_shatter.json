@@ -1,0 +1,20 @@
+{
+  "id": "skeleton_finisher_shatter",
+  "kind": "animation",
+  "group": "skeleton",
+  "frames": 8,
+  "fps": 10,
+  "cellWidth": 64,
+  "cellHeight": 64,
+  "cols": 4,
+  "rows": 2,
+  "action": "Secuencia de remate donde Thomas o Khaterine quiebran su cráneo y sus huesos se desparraman en el suelo de piedra (8 frames).",
+  "design": "Crypt Penitent: weathered ivory skeleton, tattered dark burial mantle, cyan spectral eyes, rusted two-handed claymore, visible ribs and articulated bones, solemn Gothic cemetery guardian.",
+  "reference": null,
+  "loop": false,
+  "sourcePath": "C:\\Users\\usuario\\.codex\\generated_images\\01a1ead6-1a34-7f80-808b-9fbe2f2f503c\\exec-b82eba9d-f0a6-4f12-8297-c53c3a7b7b7b.png",
+  "prompt": "Use case: identity-preserve. Asset type: transparent pixel-art animation sheet skeleton_finisher_shatter.png. Input is an IDENTITY reference only; keep its subject design but draw the new action and crisp pixel art described here. Subject: Crypt Penitent: weathered ivory skeleton, tattered dark burial mantle, cyan spectral eyes, rusted two-handed claymore, visible ribs and articulated bones, solemn Gothic cemetery guardian. Action: Secuencia de remate donde Thomas o Khaterine quiebran su cráneo y sus huesos se desparraman en el suelo de piedra (8 frames). Create EXACTLY 8 distinct chronological frames in 4 equal SQUARE columns and 2 rows, read left to right then down. Any unused last cells completely EMPTY and transparent. Fixed right-facing SIDE VIEW, full body, same proportions and equipment in every frame. Feet pivot at 50% cell width and 90% height. First frame is a ready/start pose at normal standing height before the action. End with the specified fallen or dissolved final pose, never return to standing. Crisp detailed square pixel clusters, no smooth painting. Game cell 64x64 pixels; high-resolution original on a regular grid for nearest-neighbor reduction. Keep every figure/effect completely INSIDE its cell, empty gutters, no overlap, no clipped weapons. REAL alpha transparency, EMPTY background with zero opacity, no background glow clouds, no cast shadows, no ground, no painted checkerboard and no grid lines. Palette: abyss #06040b, charcoal #141219, slate #272233, old wood #3d2716, bronze #d4af37, gold #ffd700, violet #aa44ff, moon silver #b5d4ff, inquisitorial crimson #ff2233 and #ff5511, spectral cyan #00e5ff, bone #d6cfc7. NO text, no labels, no logos, no watermarks.",
+  "generation": "built-in image_gen",
+  "status": "generated-source",
+  "elapsedSeconds": 130
+}

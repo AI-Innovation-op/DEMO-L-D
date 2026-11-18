@@ -1,0 +1,20 @@
+{
+  "id": "thomas_punch_heavy",
+  "kind": "animation",
+  "group": "thomas",
+  "frames": 5,
+  "fps": 12,
+  "cellWidth": 64,
+  "cellHeight": 64,
+  "cols": 3,
+  "rows": 2,
+  "action": "Gancho demoledor con energía rúnica ascendente.",
+  "design": "Thomas is COMPLETELY UNARMED. Young pale man, dark brown tousled hair, charcoal clerical tunic, dark plum scarf and small violet ash seal, both hands empty and visible in a boxer stance. NO sword, NO weapon, NO scabbard, NO object hanging from belt, NO blade anywhere in ANY frame. Keep exactly this same unarmed costume in all frames.",
+  "reference": "thomas_disarmed.png",
+  "loop": false,
+  "sourcePath": "C:\\Users\\usuario\\.codex\\generated_images\\01a1ead6-1a34-7f80-808b-9fbe2f2f503c\\exec-25845d30-838d-40ea-a10e-b4a411c61b35.png",
+  "prompt": "Use case: identity-preserve. Asset type: transparent pixel-art animation sheet thomas_punch_heavy.png. Input is an IDENTITY reference only; keep its subject design but draw the new action and crisp pixel art described here. Subject: Thomas is COMPLETELY UNARMED. Young pale man, dark brown tousled hair, charcoal clerical tunic, dark plum scarf and small violet ash seal, both hands empty and visible in a boxer stance. NO sword, NO weapon, NO scabbard, NO object hanging from belt, NO blade anywhere in ANY frame. Keep exactly this same unarmed costume in all frames. Action: Gancho demoledor con energía rúnica ascendente. Create EXACTLY 5 distinct chronological frames in 3 equal SQUARE columns and 2 rows, read left to right then down. Any unused last cells completely EMPTY and transparent. Fixed right-facing SIDE VIEW, full body, same proportions and equipment in every frame. Feet pivot at 50% cell width and 90% height. First frame is a ready/start pose at normal standing height before the action. Complete a clear action arc or a seamless looping cycle as appropriate. Crisp detailed square pixel clusters, no smooth painting. Game cell 64x64 pixels; high-resolution original on a regular grid for nearest-neighbor reduction. Keep every figure/effect completely INSIDE its cell, empty gutters, no overlap, no clipped weapons. REAL alpha transparency, EMPTY background with zero opacity, no background glow clouds, no cast shadows, no ground, no painted checkerboard and no grid lines. Palette: abyss #06040b, charcoal #141219, slate #272233, old wood #3d2716, bronze #d4af37, gold #ffd700, violet #aa44ff, moon silver #b5d4ff, inquisitorial crimson #ff2233 and #ff5511, spectral cyan #00e5ff, bone #d6cfc7. NO text, no labels, no logos, no watermarks.",
+  "generation": "built-in image_gen",
+  "status": "generated-source",
+  "elapsedSeconds": 81
+}

@@ -1,0 +1,35 @@
+{
+  "id": "prop_street_lamp",
+  "kind": "prop",
+  "group": "props",
+  "frames": 5,
+  "fps": 8,
+  "cellWidth": 32,
+  "cellHeight": 96,
+  "cols": 3,
+  "rows": 2,
+  "action": "Slender Gothic iron oil street lamp: intact, three successive flickering flame states, then broken and unlit.",
+  "design": "Slender Gothic iron oil street lamp: intact, three successive flickering flame states, then broken and unlit.",
+  "reference": null,
+  "loop": true,
+  "sourcePath": "C:\\Users\\usuario\\.codex\\generated_images\\01a1ead6-1a34-7f80-808b-9fbe2f2f503c\\exec-e6b41526-7b61-49a8-a3b9-873dcf55d0e2.png",
+  "prompt": "Use case: stylized-concept. Asset type: transparent pixel-art prop sheet prop_street_lamp.png. Subject: Slender Gothic iron oil street lamp: intact, three successive flickering flame states, then broken and unlit. Action: Slender Gothic iron oil street lamp: intact, three successive flickering flame states, then broken and unlit. Create EXACTLY 5 distinct chronological frames in 3 equal SQUARE columns and 2 rows, read left to right then down. Any unused last cells completely EMPTY and transparent. Fixed side/three-quarter view, same object scale and origin in all states; keep fixed components aligned. Complete a clear action arc or a seamless looping cycle as appropriate. Crisp detailed square pixel clusters, no smooth painting. Game cell 32x96 pixels; high-resolution original on a regular grid for nearest-neighbor reduction. Keep every figure/effect completely INSIDE its cell, empty gutters, no overlap, no clipped weapons. REAL alpha transparency, EMPTY background with zero opacity, no background glow clouds, no cast shadows, no ground, no painted checkerboard and no grid lines. Palette: abyss #06040b, charcoal #141219, slate #272233, old wood #3d2716, bronze #d4af37, gold #ffd700, violet #aa44ff, moon silver #b5d4ff, inquisitorial crimson #ff2233 and #ff5511, spectral cyan #00e5ff, bone #d6cfc7. NO text, no labels, no logos, no watermarks.",
+  "generation": "built-in image_gen",
+  "status": "generated-source",
+  "elapsedSeconds": 33,
+  "edits": [
+    {
+      "sourcePath": "C:\\Users\\usuario\\.codex\\generated_images\\01a1ead6-1a34-7f80-808b-9fbe2f2f503c\\exec-72fa7145-eaa4-4764-bb20-d11bf4de8aeb.png",
+      "prompt": "Use case: background-extraction. Edit target: the attached street-lamp sprite sheet. Remove ONLY the pale gray studio backdrop and dark gradient in unused bottom-right cell, plus any background shadows or haze. All backdrop, gaps, and the unused sixth cell must have true zero-opacity alpha. Keep exactly FIVE Gothic oil-lamp sprites unchanged on their 3-column by 2-row grid: intact, three flame flickers, broken/unlit. Preserve exact poses, positions, scale, pixels, black iron, bronze details, warm flame, crimson banner and the transparent holes in broken glass. Preserve the whole post and all five lamp tops. Do not redraw, resize, crop or rearrange the lamps. No checkerboard, white matte, labels, borders or extra objects.",
+      "generation": "built-in image_gen",
+      "reason": "Extract the five lamps from studio background"
+    },
+    {
+      "sourcePath": "C:\\Users\\usuario\\.codex\\generated_images\\01a1ead6-1a34-7f80-808b-9fbe2f2f503c\\exec-a6a5b000-1be6-474d-b69c-7d47c647b653.png",
+      "prompt": "Use case: background-extraction. Remove ALL the brown/gray/black cloudy gradients and ALL exterior light halos around the five lamps. Those clouds are unwanted background and must become 100% transparent, alpha exactly ZERO. Return a clean hard-edged pixel-art cutout of ONLY the solid iron posts, lanterns, banners, glass and the tiny flames INSIDE the lantern cages. Keep light emission confined to the cage interior; NO visible glow, haze, fog, color wash or shadow may remain OUTSIDE the solid lamp silhouettes. Every pixel farther than 2 pixels from a lamp's actual outline must be alpha zero, including all black-looking areas and the entire unused lower-right cell. Preserve the FIVE figures, their 3x2 positions, design, colors and dimensions. Do not add background lighting. No checkerboard. This is a strict alpha-mask cleanup, not a relighting or new scene.",
+      "generation": "built-in image_gen",
+      "reason": "Strict alpha cleanup, verified at background sample points"
+    }
+  ],
+  "selectedSourcePath": "C:\\Users\\usuario\\.codex\\generated_images\\01a1ead6-1a34-7f80-808b-9fbe2f2f503c\\exec-a6a5b000-1be6-474d-b69c-7d47c647b653.png"
+}

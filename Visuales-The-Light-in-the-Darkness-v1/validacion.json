@@ -1,0 +1,15 @@
+{
+  "delivered": 123,
+  "planned": 123,
+  "pending": 0,
+  "byKind": {
+    "animation": 65,
+    "icon": 14,
+    "vfx": 11,
+    "prop": 11,
+    "concept": 22
+  },
+  "frames": 463,
+  "errors": [],
+  "flagged": []
+}

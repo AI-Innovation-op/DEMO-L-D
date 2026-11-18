@@ -1,0 +1,20 @@
+{
+  "id": "morwenna_phase2_whirlwind",
+  "kind": "animation",
+  "group": "morwenna_phase2",
+  "frames": 8,
+  "fps": 10,
+  "cellWidth": 128,
+  "cellHeight": 128,
+  "cols": 4,
+  "rows": 2,
+  "action": "Giro veloz de 360° con el mandoble despidiendo 4 proyectiles de fuego dispersos (8 frames).",
+  "design": "The SAME Mother Morwenna transformed: crimson and wine robes, tall inquisitorial hood, white-hot eyes, twelve angular ash-and-fire wing feathers, burning thorn halo and large flaming greatsword; remain recognizably the same woman.",
+  "reference": "boss_morwenna.png",
+  "loop": false,
+  "sourcePath": "C:\\Users\\usuario\\.codex\\generated_images\\01a1ead6-1a34-7f80-808b-9fbe2f2f503c\\exec-67f2f779-f065-4695-851a-090828bd6457.png",
+  "prompt": "Use case: identity-preserve. Asset type: transparent pixel-art animation sheet morwenna_phase2_whirlwind.png. Input is an IDENTITY reference only; keep its subject design but draw the new action and crisp pixel art described here. Subject: The SAME Mother Morwenna transformed: crimson and wine robes, tall inquisitorial hood, white-hot eyes, twelve angular ash-and-fire wing feathers, burning thorn halo and large flaming greatsword; remain recognizably the same woman. Action: Giro veloz de 360° con el mandoble despidiendo 4 proyectiles de fuego dispersos (8 frames). Create EXACTLY 8 distinct chronological frames in 4 equal SQUARE columns and 2 rows, read left to right then down. Any unused last cells completely EMPTY and transparent. Fixed right-facing SIDE VIEW, full body, same proportions and equipment in every frame. Feet pivot at 50% cell width and 90% height. First frame is a ready/start pose at normal standing height before the action. Complete a clear action arc or a seamless looping cycle as appropriate. Crisp detailed square pixel clusters, no smooth painting. Game cell 128x128 pixels; high-resolution original on a regular grid for nearest-neighbor reduction. Keep every figure/effect completely INSIDE its cell, empty gutters, no overlap, no clipped weapons. REAL alpha transparency, EMPTY background with zero opacity, no background glow clouds, no cast shadows, no ground, no painted checkerboard and no grid lines. Palette: abyss #06040b, charcoal #141219, slate #272233, old wood #3d2716, bronze #d4af37, gold #ffd700, violet #aa44ff, moon silver #b5d4ff, inquisitorial crimson #ff2233 and #ff5511, spectral cyan #00e5ff, bone #d6cfc7. NO text, no labels, no logos, no watermarks.",
+  "generation": "built-in image_gen",
+  "status": "generated-source",
+  "elapsedSeconds": 153
+}

@@ -1,0 +1,20 @@
+{
+  "id": "prop_mausoleum_facade",
+  "kind": "prop",
+  "group": "props",
+  "frames": 4,
+  "fps": 8,
+  "cellWidth": 96,
+  "cellHeight": 128,
+  "cols": 2,
+  "rows": 2,
+  "action": "Gothic stone mausoleum facade, pointed arch and carved crosses, four subtle cyan-gray abyssal mist vortex phases inside the portal, fixed stonework.",
+  "design": "Gothic stone mausoleum facade, pointed arch and carved crosses, four subtle cyan-gray abyssal mist vortex phases inside the portal, fixed stonework.",
+  "reference": null,
+  "loop": true,
+  "sourcePath": "C:\\Users\\usuario\\.codex\\generated_images\\01a1ead6-1a34-7f80-808b-9fbe2f2f503c\\exec-87a682f3-6eed-493f-802d-a97ccef68c86.png",
+  "prompt": "Use case: stylized-concept. Asset type: transparent pixel-art prop sheet prop_mausoleum_facade.png. Subject: Gothic stone mausoleum facade, pointed arch and carved crosses, four subtle cyan-gray abyssal mist vortex phases inside the portal, fixed stonework. Action: Gothic stone mausoleum facade, pointed arch and carved crosses, four subtle cyan-gray abyssal mist vortex phases inside the portal, fixed stonework. Create EXACTLY 4 distinct chronological frames in 2 equal SQUARE columns and 2 rows, read left to right then down. Any unused last cells completely EMPTY and transparent. Fixed side/three-quarter view, same object scale and origin in all states; keep fixed components aligned. Complete a clear action arc or a seamless looping cycle as appropriate. Crisp detailed square pixel clusters, no smooth painting. Game cell 96x128 pixels; high-resolution original on a regular grid for nearest-neighbor reduction. Keep every figure/effect completely INSIDE its cell, empty gutters, no overlap, no clipped weapons. REAL alpha transparency, EMPTY background with zero opacity, no background glow clouds, no cast shadows, no ground, no painted checkerboard and no grid lines. Palette: abyss #06040b, charcoal #141219, slate #272233, old wood #3d2716, bronze #d4af37, gold #ffd700, violet #aa44ff, moon silver #b5d4ff, inquisitorial crimson #ff2233 and #ff5511, spectral cyan #00e5ff, bone #d6cfc7. NO text, no labels, no logos, no watermarks.",
+  "generation": "built-in image_gen",
+  "status": "generated-source",
+  "elapsedSeconds": 79
+}

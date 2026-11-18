@@ -1,0 +1,19 @@
+{
+  "id": "thomas_walk",
+  "kind": "animation",
+  "group": "thomas",
+  "frames": 8,
+  "fps": 10,
+  "cellWidth": 64,
+  "cellHeight": 64,
+  "cols": 4,
+  "rows": 2,
+  "action": "Paso firme y cauteloso con la espada en mano.",
+  "design": "Young pale man, tousled dark brown hair, worn charcoal clerical tunic, dark plum scarf and cowl, small violet ash seal on the chest, modest bronze details, short steel sword; armed and unarmed versions are the same person.",
+  "reference": "thomas_idle.png",
+  "loop": true,
+  "sourcePath": "C:\\Users\\usuario\\.codex\\generated_images\\01a1ead6-1a34-7f80-808b-9fbe2f2f503c\\exec-76432882-6117-48ac-8865-00e24269bb50.png",
+  "prompt": "Use case: identity-preserve. Asset type: production game sprite sheet, thomas_walk.png. Use the attached local Thomas sprite as character identity reference, not as a pose to copy. Create exactly EIGHT different chronological frames of a seamless walking cycle, facing right in a fixed side view, full body with boots and short steel sword, same scale in every frame. Young pale adult man with tousled dark brown hair, worn charcoal clerical tunic, dark plum scarf/cowl, modest bronze accents, small violet ash seal on chest. Dark Gothic fantasy detailed pixel art, crisp hand-placed square pixel clusters; no smooth painting. Sheet composition: 4 equal square cells across and 2 rows, reading left to right top to bottom, on a 2048 by 1024 pixel transparent canvas. Each cell is 512 square and represents a 64x64 native sprite enlarged exactly 8x with nearest-neighbor appearance; character height about 48 native pixels, feet baseline at 90% of each cell. All eight poses must be distinct walk phases with alternating foot plant and natural sword arm movement; same character proportions, face, clothing, camera, weapon, palette, and stable feet pivot. Keep the entire figure inside each cell, generous empty transparent gutters, no overlap between cells. Real transparent background and no cast shadows, no ground, no frame borders, no checkerboard drawn into the image, no text, no labels, no extra characters or objects. Preserve the established design rather than reinventing it.",
+  "generation": "built-in image_gen",
+  "status": "generated-source"
+}
