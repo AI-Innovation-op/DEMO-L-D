@@ -1,53 +1,62 @@
-import { describe, it, expect } from 'vitest';
-import { Boss, BossPhaseType } from '../../src/domain/boss/Boss';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { MorwennaEncounter } from '../../src/domain/encounters/MorwennaEncounter';
 import { Inventory } from '../../src/domain/inventory/Inventory';
+import { Progression } from '../../src/domain/progression/Progression';
 
-describe('Domain: Boss Phase 2 & Key Progression', () => {
-  it('initializes Madre Morwenna in Phase 1 with full health', () => {
-    const morwenna = Boss.createMadreMorwenna();
-    expect(morwenna.phase).toBe(BossPhaseType.PHASE_1);
-    expect(morwenna.health).toBe(350);
-    expect(morwenna.maxHealth).toBe(350);
-    expect(morwenna.title).toBe('VIGÍA DE LA PIRA SAGRADA');
+describe('Mother Morwenna Encounter (H04 Solution)', () => {
+  let encounter: MorwennaEncounter;
+  let inventory: Inventory;
+  let progression: Progression;
+
+  beforeEach(() => {
+    encounter = new MorwennaEncounter(280);
+    inventory = new Inventory();
+    progression = Progression.createDefault();
   });
 
-  it('triggers Phase 2 transition when Morwenna reaches 50% health', () => {
-    const morwenna = Boss.createMadreMorwenna();
-
-    // Damage Morwenna to 60% -> still Phase 1
-    const res1 = morwenna.takeDamage(140);
-    expect(morwenna.health).toBe(210);
-    expect(res1.phaseChanged).toBe(false);
-    expect(morwenna.phase).toBe(BossPhaseType.PHASE_1);
-
-    // Damage Morwenna to 40% -> triggers Phase 2 (PIRA DEL ABISMO DESATADA)
-    const res2 = morwenna.takeDamage(70);
-    expect(morwenna.health).toBe(140);
-    expect(res2.phaseChanged).toBe(true);
-    expect(morwenna.phase).toBe(BossPhaseType.PHASE_2);
+  it('initializes in Phase 1 with 280 HP', () => {
+    expect(encounter.phase).toBe(1);
+    expect(encounter.health).toBe(280);
+    expect(encounter.maxHealth).toBe(280);
+    expect(encounter.isDefeated).toBe(false);
   });
 
-  it('stores Oakhaven Crypt Key as a key item in inventory upon boss defeat', () => {
-    const inventory = Inventory.createDefault();
-    const initialItems = inventory.getAllItems().length;
+  it('triggers Phase 2 transition when HP drops to or below 50% (<= 140 HP)', () => {
+    // Deal 140 damage: health reaches 140/280 (50%)
+    const res = encounter.takeDamage(140);
+    expect(res.transitionedToPhase2).toBe(true);
+    expect(encounter.phase).toBe(2);
+    expect(encounter.isTransitioning).toBe(true);
+    expect(encounter.health).toBe(140);
 
-    inventory.addItem({
-      id: 'oakhaven_crypt_key',
-      name: 'Llave de las Criptas de San Jude',
-      description: 'Llave de hierro negro oxidado recuperada de Madre Morwenna. Abre la verja del cementerio y las criptas subterráneas.',
-      category: 'key_item',
-      icon: '🗝️',
-      quantity: 1,
-      maxQuantity: 1,
-      effectType: 'unlock_gate',
-      effectValue: 1
-    });
+    // Further damage in phase 2 does not re-trigger transition
+    const res2 = encounter.takeDamage(20);
+    expect(res2.transitionedToPhase2).toBe(false);
+    expect(encounter.phase).toBe(2);
+    expect(encounter.health).toBe(120);
+  });
 
-    expect(inventory.getAllItems().length).toBe(initialItems + 1);
-    const key = inventory.getItem('oakhaven_crypt_key');
-    expect(key).toBeDefined();
-    expect(key?.category).toBe('key_item');
-    expect(key?.quantity).toBe(1);
-    expect(key?.effectType).toBe('unlock_gate');
+  it('handles lethal hit and claims rewards idempotently', () => {
+    // Drop directly to 0 HP
+    const res = encounter.takeDamage(280);
+    expect(res.defeated).toBe(true);
+    expect(encounter.isDefeated).toBe(true);
+    expect(encounter.health).toBe(0);
+
+    // Initial claim
+    const initialExp = progression.getExp();
+    const rewards = encounter.claimRewards(inventory, progression);
+    expect(rewards.keyGranted).toBe(true);
+    expect(rewards.expAwarded).toBe(350);
+    expect(rewards.gateOpened).toBe(true);
+
+    expect(inventory.getItem(MorwennaEncounter.REWARD_KEY_ID)?.quantity).toBe(1);
+    expect(progression.getExp()).toBe(initialExp + 350);
+
+    // Second claim attempt must be rejected (idempotent reward ledger)
+    const rewards2 = encounter.claimRewards(inventory, progression);
+    expect(rewards2.keyGranted).toBe(false);
+    expect(rewards2.expAwarded).toBe(0);
+    expect(inventory.getItem(MorwennaEncounter.REWARD_KEY_ID)?.quantity).toBe(1);
   });
 });

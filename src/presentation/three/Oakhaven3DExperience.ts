@@ -2,7 +2,11 @@ import * as THREE from 'three';
 import { WebAudioSoundAdapter } from '../../infrastructure/audio/WebAudioSoundAdapter';
 import { Inventory } from '../../domain/inventory/Inventory';
 import { Progression } from '../../domain/progression/Progression';
+import { HeroType } from '../../domain/progression/Skill';
 import { GameSaveManager } from '../../infrastructure/storage/GameSaveManager';
+import { Party } from '../../domain/party/Party';
+import { HeroId, HERO_DEFINITIONS } from '../../domain/party/HeroCombatState';
+import { MorwennaEncounter } from '../../domain/encounters/MorwennaEncounter';
 
 export interface CombatStats3D {
   health: number;
@@ -61,7 +65,9 @@ export class Oakhaven3DExperience {
   private targetCameraLook = new THREE.Vector3();
 
   // Dual Hero System (Thomas & Khaterine)
-  private activeHero: 'thomas' | 'khaterine' = 'thomas';
+  public get activeHero(): 'thomas' | 'khaterine' {
+    return (this.party.getActiveHeroId() === 'khaterine' ? 'khaterine' : 'thomas');
+  }
   private playerGroup!: THREE.Group;
   private playerBody!: THREE.Mesh;
   private thomasModelGroup!: THREE.Group;
@@ -72,15 +78,32 @@ export class Oakhaven3DExperience {
   private playerSwordMesh!: THREE.Group;
   private playerFistsGroup!: THREE.Group;
   private playerLight!: THREE.PointLight;
-  private playerStats: CombatStats3D = {
-    health: 100,
-    maxHealth: 100,
-    posture: 50,
-    maxPosture: 50,
-    isGuarding: false,
-    isDodging: false,
-    isArmed: true
-  };
+  public party: Party = new Party('thomas');
+  public morwennaEncounter: MorwennaEncounter = new MorwennaEncounter(280);
+
+  public get playerStats(): CombatStats3D {
+    const active = this.party.getActiveHero();
+    const id = this.party.getActiveHeroId();
+    const bonusHp = this.progression && (id === 'thomas' || id === 'khaterine')
+      ? this.progression.getMaxHealthBonus(id as HeroType)
+      : 0;
+    return {
+      get health() { return active.health; },
+      set health(v: number) { active.health = v; },
+      get maxHealth() { return HERO_DEFINITIONS[id].baseMaxHealth + bonusHp; },
+      set maxHealth(_v: number) {},
+      get posture() { return active.posture; },
+      set posture(v: number) { active.posture = v; },
+      get maxPosture() { return HERO_DEFINITIONS[id].baseMaxPosture; },
+      set maxPosture(_v: number) {},
+      get isGuarding() { return active.isGuarding; },
+      set isGuarding(v: boolean) { active.isGuarding = v; },
+      get isDodging() { return active.isDodging; },
+      set isDodging(v: boolean) { active.isDodging = v; },
+      get isArmed() { return active.isArmed; },
+      set isArmed(v: boolean) { active.isArmed = v; }
+    };
+  }
   private playerVelocity = new THREE.Vector3();
   private isPlayerAttacking: boolean = false;
   private attackCooldown: number = 0;
@@ -105,7 +128,7 @@ export class Oakhaven3DExperience {
   private enemyWarningMesh!: THREE.Mesh;
   private enemyHpBarContainer!: HTMLDivElement;
   private enemyHpBarFill!: HTMLDivElement;
-  private enemyWaypoints: THREE.Vector3[] = [new THREE.Vector3(-1.2, 0, -2.5), new THREE.Vector3(1.2, 0, -8.0)];
+  private enemyWaypoints: THREE.Vector3[] = [new THREE.Vector3(-1.2, 0, -4.5), new THREE.Vector3(1.2, 0, -9.5)];
   private enemyCurrentWaypointIndex: number = 0;
 
   // Enemy 2: Censer Bearer Cultist (Cultista del Incensario con Patrulla)
@@ -2030,57 +2053,49 @@ export class Oakhaven3DExperience {
   };
 
   // =========================================================================
-  // DUAL HERO SWITCHING (THOMAS <-> KHATERINE)
+  // DUAL HERO SWITCHING (THOMAS <-> KHATERINE) - H01 RESOLVED
   // =========================================================================
-  public toggleHero(): void {
-    if (this.activeHero === 'thomas') {
-      this.activeHero = 'khaterine';
-      this.thomasModelGroup.visible = false;
-      this.khaterineModelGroup.visible = true;
-      this.khaterineGroup.visible = false;
-      this.thomasNpcGroup.visible = true;
+  public updateHeroVisuals(): void {
+    const isKhaterine = this.activeHero === 'khaterine';
 
-      // Adjust combat parameters for Khaterine (High Agility / Mystic Ranged)
-      const kHealthBonus = this.progression.getMaxHealthBonus('khaterine');
-      this.playerStats.maxHealth = 90 + kHealthBonus;
-      this.playerStats.health = Math.min(this.playerStats.health, this.playerStats.maxHealth);
-      this.playerStats.maxPosture = 70;
-      this.playerStats.posture = 70;
-      this.playerStats.isArmed = true;
+    if (this.thomasModelGroup) this.thomasModelGroup.visible = !isKhaterine;
+    if (this.khaterineModelGroup) this.khaterineModelGroup.visible = isKhaterine;
+    if (this.khaterineGroup) this.khaterineGroup.visible = !isKhaterine;
+    if (this.thomasNpcGroup) this.thomasNpcGroup.visible = isKhaterine;
 
-      if (this.droppedSwordGroup) {
+    if (this.droppedSwordGroup) {
+      if (isKhaterine) {
         this.droppedSwordGroup.visible = false;
+      } else {
+        // H01: Retain Thomas's actual armed state
+        this.droppedSwordGroup.visible = !this.party.getHero('thomas').isArmed;
       }
-
-      this.spawnFloatingText(this.playerGroup.position, '🏹 KHATERINE ACTIVADA (ARCO ABISAL)', '#d999ff');
-      this.audio.playSfx('menu_select');
-    } else {
-      this.activeHero = 'thomas';
-      this.thomasModelGroup.visible = true;
-      this.khaterineModelGroup.visible = false;
-      this.khaterineGroup.visible = true;
-      this.thomasNpcGroup.visible = false;
-
-      // Adjust combat parameters for Thomas (Melee Defender / Ash Seal)
-      const tHealthBonus = this.progression.getMaxHealthBonus('thomas');
-      this.playerStats.maxHealth = 100 + tHealthBonus;
-      this.playerStats.maxPosture = 50;
-
-      if (this.droppedSwordGroup) {
-        this.droppedSwordGroup.visible = true;
-      }
-
-      this.spawnFloatingText(this.playerGroup.position, '⚔ THOMAS ACTIVADO (ESPADA CORTA)', '#ffd700');
-      this.audio.playSfx('menu_select');
     }
 
-    const btnHero = this.uiOverlay.querySelector('#btn-toggle-hero') as HTMLButtonElement;
+    const btnHero = this.uiOverlay?.querySelector('#btn-toggle-hero') as HTMLButtonElement | null;
     if (btnHero) {
-      btnHero.innerText = `🔄 [TAB] HÉROE: ${this.activeHero === 'thomas' ? 'THOMAS' : 'KHATERINE'}`;
-      btnHero.style.color = this.activeHero === 'thomas' ? '#ffd700' : '#e6b8ff';
+      btnHero.innerText = `🔄 [TAB] HÉROE: ${isKhaterine ? 'KHATERINE' : 'THOMAS'}`;
+      btnHero.style.color = isKhaterine ? '#e6b8ff' : '#ffd700';
     }
 
     this.updateHUD();
+  }
+
+  public toggleHero(): void {
+    const targetHero: HeroId = this.activeHero === 'thomas' ? 'khaterine' : 'thomas';
+    const switched = this.party.switchHero(targetHero);
+    if (!switched) {
+      return;
+    }
+
+    this.updateHeroVisuals();
+
+    if (this.activeHero === 'khaterine') {
+      this.spawnFloatingText(this.playerGroup.position, '🏹 KHATERINE ACTIVADA (ARCO ABISAL)', '#d999ff');
+    } else {
+      this.spawnFloatingText(this.playerGroup.position, '⚔ THOMAS ACTIVADO (ESPADA CORTA)', '#ffd700');
+    }
+    this.audio.playSfx('menu_select');
   }
 
   public toggleAudio(): void {
@@ -2097,6 +2112,28 @@ export class Oakhaven3DExperience {
       isMuted ? '🔇 AUDIO SILENCIADO' : '🎵 BGM CATEDRAL ACTIVA',
       isMuted ? '#ff8888' : '#88ffaa'
     );
+  }
+
+  // =========================================================================
+  // COMBAT CALCULATIONS & EFFECTIVE MODIFIERS (H15 RESOLVED)
+  // =========================================================================
+  private calculateIncomingDamage(baseDmg: number, baseGuardDmg: number): number {
+    if (!this.playerStats.isGuarding) {
+      return baseDmg;
+    }
+    let dmg = baseGuardDmg;
+    if (this.activeHero === 'khaterine') {
+      const wardMitigation = this.progression.getWardMitigationBonusPct();
+      if (wardMitigation > 0) {
+        dmg = Math.max(1, Math.round(dmg * (1 - wardMitigation / 100)));
+      }
+    }
+    return dmg;
+  }
+
+  private getStaggerMultiplier(): number {
+    const bonus = this.progression.getStaggerBonusPct('thomas');
+    return 1 + (bonus / 100);
   }
 
   // =========================================================================
@@ -2296,20 +2333,21 @@ export class Oakhaven3DExperience {
       const baseDmg = this.playerStats.isArmed ? (isHeavy ? 38 : 22) : (isHeavy ? 18 : 12);
       const skillBonus = 1.0 + (this.progression.getDamageBonusPct(this.activeHero) / 100);
       const dmg = Math.round(baseDmg * this.attackBuffMultiplier * skillBonus);
-      this.morwennaHealth = Math.max(0, this.morwennaHealth - dmg);
+      const mResult = this.morwennaEncounter.takeDamage(dmg);
+      this.morwennaHealth = mResult.currentHealth;
       this.spawnFloatingText(this.morwennaGroup.position, `-${dmg}`, isHeavy ? '#ffd700' : '#ff88aa');
 
       if (isHeavy && this.morwennaState !== 'STUNNED') {
         this.morwennaState = 'STUNNED';
-        this.morwennaTimer = 1.2;
+        this.morwennaTimer = 1.2 * this.getStaggerMultiplier();
         this.spawnFloatingText(this.morwennaGroup.position, '¡ATURDIDA! [E] ¡REMATAR!', '#ffaa44');
       }
 
       this.updateHUD();
 
-      if (this.morwennaHealth <= this.morwennaMaxHealth * 0.5 && this.morwennaPhase === 1 && this.morwennaHealth > 0) {
+      if (mResult.transitionedToPhase2) {
         this.triggerMorwennaPhase2();
-      } else if (this.morwennaHealth <= 0) {
+      } else if (mResult.defeated) {
         this.handleMorwennaDefeat();
       }
     }
@@ -2525,19 +2563,20 @@ export class Oakhaven3DExperience {
         const dMorw = p.mesh.position.distanceTo(this.morwennaGroup.position.clone().add(new THREE.Vector3(0, 1.2, 0)));
         if (dMorw <= 1.8) {
           collided = true;
-          this.morwennaHealth = Math.max(0, this.morwennaHealth - p.damage);
+          const mResult = this.morwennaEncounter.takeDamage(p.damage);
+          this.morwennaHealth = mResult.currentHealth;
           this.spawnFloatingText(this.morwennaGroup.position, `-${p.damage} (DISPARO ABISAL)`, p.isHeavy ? '#ffd700' : '#ff88ee');
           this.audio.playCombatHit(p.isHeavy);
 
           if (p.isHeavy && this.morwennaState !== 'STUNNED') {
             this.morwennaState = 'STUNNED';
-            this.morwennaTimer = 1.4;
+            this.morwennaTimer = 1.4 * this.getStaggerMultiplier();
             this.spawnFloatingText(this.morwennaGroup.position, '¡ATURDIDA! [E] ¡REMATAR!', '#ffaa44');
           }
 
-          if (this.morwennaHealth <= this.morwennaMaxHealth * 0.5 && this.morwennaPhase === 1 && this.morwennaHealth > 0) {
+          if (mResult.transitionedToPhase2) {
             this.triggerMorwennaPhase2();
-          } else if (this.morwennaHealth <= 0) {
+          } else if (mResult.defeated) {
             this.handleMorwennaDefeat();
           }
           this.updateHUD();
@@ -2938,16 +2977,17 @@ export class Oakhaven3DExperience {
     const distToMorwenna = this.playerGroup.position.distanceTo(this.morwennaGroup.position);
     if (this.morwennaState === 'STUNNED' && distToMorwenna <= 3.6) {
       const finisherDmg = 90;
-      this.morwennaHealth = Math.max(0, this.morwennaHealth - finisherDmg);
+      const mResult = this.morwennaEncounter.takeDamage(finisherDmg);
+      this.morwennaHealth = mResult.currentHealth;
       this.audio.playFinisherSound(true);
       this.spawnFloatingText(this.morwennaGroup.position, `⚡ ¡REMATADA! -${finisherDmg} DAÑO SAGRADO`, '#ffd700');
       this.progression.addExp(80);
       this.playerLight.intensity = 4.0;
       setTimeout(() => { if (this.playerLight) this.playerLight.intensity = 1.4; }, 300);
 
-      if (this.morwennaHealth <= this.morwennaMaxHealth * 0.5 && this.morwennaPhase === 1 && this.morwennaHealth > 0) {
+      if (mResult.transitionedToPhase2) {
         this.triggerMorwennaPhase2();
-      } else if (this.morwennaHealth <= 0) {
+      } else if (mResult.defeated) {
         this.handleMorwennaDefeat();
       } else {
         this.morwennaState = 'RECOVERY';
@@ -3312,20 +3352,10 @@ export class Oakhaven3DExperience {
     this.morwennaState = 'DEAD';
     this.spawnFloatingText(this.morwennaGroup.position, '👑 ¡MADRE MORWENNA PURIFICADA! (+350 EXP) 👑', '#ffd700');
     this.spawnFloatingText(this.playerGroup.position, '🗝️ ¡LLAVE DE LAS CRIPTAS OBTENIDA!', '#00e5ff');
-    this.progression.addExp(350);
     this.audio.playFinisherSound(true);
 
-    this.inventory.addItem({
-      id: 'oakhaven_crypt_key',
-      name: 'Llave de las Criptas de San Jude',
-      description: 'Llave forjada en hierro negro. Abre la verja del cementerio antiguo y el acceso a las criptas.',
-      category: 'key_item',
-      icon: '🗝️',
-      quantity: 1,
-      maxQuantity: 1,
-      effectType: 'unlock_gate',
-      effectValue: 1
-    });
+    // H04: Claim rewards through MorwennaEncounter idempotently
+    this.morwennaEncounter.claimRewards(this.inventory, this.progression);
 
     // Automatically open the cemetery gate
     this.openCemeteryGate();
@@ -3357,7 +3387,7 @@ export class Oakhaven3DExperience {
         if (this.playerStats.isDodging) {
           this.spawnFloatingText(this.playerGroup.position, '¡ESQUIVA DE TORBELLINO!', '#88ffaa');
         } else {
-          const dmg = this.playerStats.isGuarding ? 14 : 34;
+          const dmg = this.calculateIncomingDamage(34, 14);
           this.playerStats.health = Math.max(0, this.playerStats.health - dmg);
           this.audio.playCombatHit(true);
           this.spawnFloatingText(this.playerGroup.position, `-${dmg} (TORBELLINO ÍGNEO)`, '#ff3344');
@@ -3401,7 +3431,7 @@ export class Oakhaven3DExperience {
         if (isParry) {
           this.audio.playSfx('parry');
           this.morwennaState = 'STUNNED';
-          this.morwennaTimer = 2.6;
+          this.morwennaTimer = 2.6 * this.getStaggerMultiplier();
           this.spawnFloatingText(this.playerGroup.position, '¡PARRY DE EMBESTIDA!', '#66ccff');
           this.spawnFloatingText(this.morwennaGroup.position, '⚡ ¡ATURDIDA! [E] ¡REMATAR!', '#ffd700');
           return;
@@ -3410,7 +3440,7 @@ export class Oakhaven3DExperience {
         if (this.playerStats.isDodging) {
           this.spawnFloatingText(this.playerGroup.position, '¡ESQUIVA PERFECTA!', '#88ffaa');
         } else {
-          const dmg = this.playerStats.isGuarding ? 10 : 32;
+          const dmg = this.calculateIncomingDamage(32, 10);
           this.playerStats.health = Math.max(0, this.playerStats.health - dmg);
           this.audio.playCombatHit(true);
           this.spawnFloatingText(this.playerGroup.position, `-${dmg} (EMBESTIDA)`, '#ff3344');
@@ -3431,7 +3461,7 @@ export class Oakhaven3DExperience {
       if (isParry) {
         this.audio.playSfx('parry');
         this.morwennaState = 'STUNNED';
-        this.morwennaTimer = 2.4; // 2.4s Stunned window for Finisher
+        this.morwennaTimer = 2.4 * this.getStaggerMultiplier(); // Stunned window for Finisher
         const msg = this.inventory.getParryBonusMs() > 0 ? '¡PARRY DE CRISOL SAGRADO (+70ms)!' : '¡PARRY DE CRISOL!';
         this.spawnFloatingText(this.playerGroup.position, msg, '#66ccff');
         this.spawnFloatingText(this.morwennaGroup.position, '⚡ ¡ATURDIDA! [E] ¡REMATAR!', '#ffd700');
@@ -3447,7 +3477,7 @@ export class Oakhaven3DExperience {
       }
 
       // Impact damage
-      const dmg = this.playerStats.isGuarding ? 8 : 28;
+      const dmg = this.calculateIncomingDamage(28, 8);
       this.playerStats.health = Math.max(0, this.playerStats.health - dmg);
       this.audio.playCombatHit(true);
       this.spawnFloatingText(this.playerGroup.position, `-${dmg} (FUEGO SAGRADO)`, '#ff3344');
@@ -3479,8 +3509,7 @@ export class Oakhaven3DExperience {
           // Check player collision
           const dPlayer = this.playerGroup.position.distanceTo(g.pos);
           if (dPlayer <= 1.4) {
-            const isGuarding = this.playerStats.isGuarding;
-            const dmg = isGuarding ? 8 : 26;
+            const dmg = this.calculateIncomingDamage(26, 8);
             this.playerStats.health = Math.max(0, this.playerStats.health - dmg);
             this.audio.playCombatHit(true);
             this.spawnFloatingText(this.playerGroup.position, `-${dmg} (COLUMNA DE FUEGO)`, '#ff4400');
@@ -3642,7 +3671,7 @@ export class Oakhaven3DExperience {
       if (isParry) {
         this.audio.playSfx('parry');
         this.skeletonState = 'STUNNED';
-        this.skeletonTimer = 2.4;
+        this.skeletonTimer = 2.4 * this.getStaggerMultiplier();
         this.spawnFloatingText(this.playerGroup.position, '¡PARRY DE ESPADÓN (+70ms)!', '#66ccff');
         this.spawnFloatingText(this.skeletonGroup.position, '⚡ ¡ATURDIDO! [E] ¡REMATAR!', '#ffd700');
         return;
@@ -3655,11 +3684,16 @@ export class Oakhaven3DExperience {
         return;
       }
 
-      const dmg = this.playerStats.isGuarding ? 7 : 24;
+      const dmg = this.calculateIncomingDamage(24, 7);
       this.playerStats.health = Math.max(0, this.playerStats.health - dmg);
       this.audio.playCombatHit(true);
       this.spawnFloatingText(this.playerGroup.position, `-${dmg} (CORTE OXIDADO)`, '#ff6666');
       this.updateHUD();
+
+      // Revive if fallen (H16 central policy)
+      if (this.playerStats.health <= 0) {
+        this.handlePlayerDefeatAndRespawn();
+      }
     }
 
     this.skeletonState = 'RECOVERY';
@@ -3783,7 +3817,8 @@ export class Oakhaven3DExperience {
       const distToWaypoint = toWaypoint.length();
 
       // Check player detection (Sight cone & proximity)
-      if (distToPlayer <= 5.8) {
+      // Sanctuary safe zone: player position z >= 2.0 is the peaceful shrine area
+      if (distToPlayer <= 5.8 && this.playerGroup.position.z < 2.0) {
         this.enemyState = 'ALERT';
         this.enemyTimer = 0.55;
         this.enemyWarningMesh.visible = true;
@@ -3827,7 +3862,7 @@ export class Oakhaven3DExperience {
         this.enemyGroup.rotation.y = THREE.MathUtils.lerp(this.enemyGroup.rotation.y, targetAngle, 0.12);
       }
 
-      if (distToPlayer > 10.5) {
+      if (distToPlayer > 10.5 || this.playerGroup.position.z >= 2.0) {
         this.enemyState = 'RETURNING';
         return;
       }
@@ -3915,21 +3950,16 @@ export class Oakhaven3DExperience {
         return;
       }
 
-      // Damage Player
-      const dmg = this.playerStats.isGuarding ? 4 : 18;
+      // Damage Player with ward mitigation
+      const dmg = this.calculateIncomingDamage(18, 4);
       this.playerStats.health = Math.max(0, this.playerStats.health - dmg);
       this.audio.playCombatHit(false);
       this.spawnFloatingText(this.playerGroup.position, `-${dmg}`, '#ff4444');
       this.updateHUD();
 
-      // Revive if fallen
+      // Revive if fallen (H16 central policy)
       if (this.playerStats.health <= 0) {
-        this.playerStats.health = 100;
-        this.playerStats.posture = 50;
-        this.playerGroup.position.set(0, 0, 4);
-        this.spawnFloatingText(this.playerGroup.position, '✝ BENDICIÓN: RESUCITADO EN EL SANTUARIO ✝', '#ffd700');
-        this.audio.playSfx('menu_select');
-        this.updateHUD();
+        this.handlePlayerDefeatAndRespawn();
       }
     }
 
@@ -4082,7 +4112,7 @@ export class Oakhaven3DExperience {
       if (isParry) {
         this.audio.playSfx('parry');
         this.cultistState = 'STUNNED';
-        this.cultistTimer = 1.8;
+        this.cultistTimer = 1.8 * this.getStaggerMultiplier();
         const msg = this.inventory.getParryBonusMs() > 0 ? '¡PARRY SAGRADO (+70ms)!' : '¡PARRY PERFECTO!';
         this.spawnFloatingText(this.playerGroup.position, msg, '#77aaff');
         this.spawnFloatingText(this.cultistGroup.position, '⚡ ¡ATURDIDO! [E] ¡REMATAR!', '#ffd700');
@@ -4098,20 +4128,15 @@ export class Oakhaven3DExperience {
       }
 
       // Impact damage (Censer blunt hit + smoke)
-      const dmg = this.playerStats.isGuarding ? 4 : 16;
+      const dmg = this.calculateIncomingDamage(16, 4);
       this.playerStats.health = Math.max(0, this.playerStats.health - dmg);
       this.audio.playCombatHit(false);
       this.spawnFloatingText(this.playerGroup.position, `-${dmg} (GOLPE DE INCENSARIO)`, '#ff9944');
       this.updateHUD();
 
-      // Revive if fallen
+      // Revive if fallen (H16 central policy)
       if (this.playerStats.health <= 0) {
-        this.playerStats.health = 100;
-        this.playerStats.posture = 50;
-        this.playerGroup.position.set(0, 0, 4);
-        this.spawnFloatingText(this.playerGroup.position, '✝ BENDICIÓN: RESUCITADO EN EL SANTUARIO ✝', '#ffd700');
-        this.audio.playSfx('menu_select');
-        this.updateHUD();
+        this.handlePlayerDefeatAndRespawn();
       }
     }
 
@@ -4268,7 +4293,7 @@ export class Oakhaven3DExperience {
       if (isParry) {
         this.audio.playSfx('parry');
         this.zealotState = 'STUNNED';
-        this.zealotTimer = 2.0; // 2.0s Stunned window for Finisher
+        this.zealotTimer = 2.0 * this.getStaggerMultiplier(); // Stunned window for Finisher
         const msg = this.inventory.getParryBonusMs() > 0 ? '¡PARRY DE CADENA SAGRADO (+70ms)!' : '¡PARRY DE CADENA!';
         this.spawnFloatingText(this.playerGroup.position, msg, '#77aaff');
         this.spawnFloatingText(this.zealotGroup.position, '⚡ ¡ATURDIDO! [E] ¡REMATAR!', '#ffd700');
@@ -4284,20 +4309,15 @@ export class Oakhaven3DExperience {
       }
 
       // Impact damage (Heavy chain swipe)
-      const dmg = this.playerStats.isGuarding ? 6 : 20;
+      const dmg = this.calculateIncomingDamage(20, 6);
       this.playerStats.health = Math.max(0, this.playerStats.health - dmg);
       this.audio.playCombatHit(true);
       this.spawnFloatingText(this.playerGroup.position, `-${dmg} (BARRIDO DE CADENA)`, '#ff3344');
       this.updateHUD();
 
-      // Revive if fallen
+      // Revive if fallen (H16 central policy)
       if (this.playerStats.health <= 0) {
-        this.playerStats.health = 100;
-        this.playerStats.posture = 50;
-        this.playerGroup.position.set(0, 0, 4);
-        this.spawnFloatingText(this.playerGroup.position, '✝ BENDICIÓN: RESUCITADO EN EL SANTUARIO ✝', '#ffd700');
-        this.audio.playSfx('menu_select');
-        this.updateHUD();
+        this.handlePlayerDefeatAndRespawn();
       }
     }
 
@@ -4420,8 +4440,23 @@ export class Oakhaven3DExperience {
         topRow.style.marginBottom = '4px';
 
         const iconEl = document.createElement('span');
-        iconEl.innerText = item.icon;
-        iconEl.style.fontSize = '14px';
+        const iconMap: Record<string, string> = {
+          maiden_balm: '/assets/icons/icon_maiden_balm.png',
+          saint_jude_rosary: '/assets/icons/icon_jude_rosary.png',
+          consecrated_ash: '/assets/icons/icon_consecrated_ash.png',
+          dusk_balm: '/assets/icons/icon_dusk_balm.png',
+          holy_water: '/assets/icons/icon_holy_water.png',
+          oakhaven_crypt_key: '/assets/icons/icon_crypt_key.png',
+          relic_oakhaven_cross: '/assets/icons/icon_oakhaven_cross.png',
+          relic_willow_feather: '/assets/icons/icon_black_willow_feather.png'
+        };
+
+        if (iconMap[item.id]) {
+          iconEl.innerHTML = `<img src="${iconMap[item.id]}" style="width: 20px; height: 20px; image-rendering: pixelated; vertical-align: middle; border-radius: 2px;" alt="${item.name}" />`;
+        } else {
+          iconEl.innerText = item.icon;
+          iconEl.style.fontSize = '14px';
+        }
 
         const nameEl = document.createElement('div');
         nameEl.style.fontSize = '8px';
@@ -4555,7 +4590,24 @@ export class Oakhaven3DExperience {
       title.style.fontSize = '8px';
       title.style.fontWeight = 'bold';
       title.style.color = skill.isUnlocked ? '#ffd700' : '#dcd0ea';
-      title.innerText = `${skill.icon} ${skill.name}`;
+      title.style.display = 'flex';
+      title.style.alignItems = 'center';
+      title.style.gap = '5px';
+
+      const skillIconMap: Record<string, string> = {
+        thomas_shield_strike: '/assets/icons/icon_skill_shield_slam.png',
+        thomas_blade_mastery: '/assets/icons/icon_skill_holy_edge.png',
+        thomas_iron_will: '/assets/icons/icon_skill_unyielding.png',
+        khaterine_piercing_arrow: '/assets/icons/icon_skill_piercing_arrow.png',
+        khaterine_shadow_step: '/assets/icons/icon_skill_spectral_step.png',
+        khaterine_abyssal_ward: '/assets/icons/icon_skill_willow_sanctuary.png'
+      };
+
+      if (skillIconMap[skill.id]) {
+        title.innerHTML = `<img src="${skillIconMap[skill.id]}" style="width: 16px; height: 16px; image-rendering: pixelated; border-radius: 2px;" alt="${skill.name}" /> <span>${skill.name}</span>`;
+      } else {
+        title.innerText = `${skill.icon} ${skill.name}`;
+      }
 
       const costBadge = document.createElement('span');
       costBadge.style.fontSize = '7px';
@@ -4635,16 +4687,35 @@ export class Oakhaven3DExperience {
   }
 
   // =========================================================================
-  // SANCTUARY SAVE & RESTORATION
+  // PLAYER DEFEAT & RESPAWN (H16 CENTRALIZED POLICY)
+  // =========================================================================
+  private handlePlayerDefeatAndRespawn(): void {
+    const activeId = this.party.getActiveHeroId();
+    const bonusHp = this.progression && (activeId === 'thomas' || activeId === 'khaterine')
+      ? this.progression.getMaxHealthBonus(activeId as HeroType)
+      : 0;
+    this.party.reviveHeroAtCheckpoint(activeId, bonusHp);
+    this.playerGroup.position.set(0, 0, 4);
+    this.playerVelocity.set(0, 0, 0);
+    this.spawnFloatingText(this.playerGroup.position, '✝ BENDICIÓN: RESUCITADO EN EL SANTUARIO ✝', '#ffd700');
+    this.audio.playSfx('menu_select');
+    this.updateHUD();
+  }
+
+  // =========================================================================
+  // SANCTUARY SAVE & RESTORATION (H02 & H03 RESOLVED)
   // =========================================================================
   public executeSanctuarySave(): void {
     const distToCedric = this.playerGroup.position.distanceTo(this.cedricGroup.position);
     const isAtSanctuary = distToCedric < 6.5;
 
     if (isAtSanctuary) {
-      // Full shrine restoration
-      this.playerStats.health = this.playerStats.maxHealth;
-      this.playerStats.posture = this.playerStats.maxPosture;
+      // Full shrine restoration for the party
+      this.party.restoreFullSanctuary((id) =>
+        this.progression && (id === 'thomas' || id === 'khaterine')
+          ? this.progression.getMaxHealthBonus(id as HeroType)
+          : 0
+      );
 
       // Pulse sanctuary cross light
       if (this.sanctuaryCrossLight) {
@@ -4667,15 +4738,39 @@ export class Oakhaven3DExperience {
       this.spawnFloatingText(this.playerGroup.position, '💾 Partida Guardada en Punto de Control', '#a3ffc7');
     }
 
+    const activeId = (this.party.getActiveHeroId() === 'khaterine' ? 'khaterine' : 'thomas') as 'thomas' | 'khaterine';
+    const heroesState = {
+      thomas: {
+        health: this.party.getHero('thomas').health,
+        posture: this.party.getHero('thomas').posture,
+        isArmed: this.party.getHero('thomas').isArmed,
+        available: true
+      },
+      khaterine: {
+        health: this.party.getHero('khaterine').health,
+        posture: this.party.getHero('khaterine').posture,
+        isArmed: this.party.getHero('khaterine').isArmed,
+        available: true
+      }
+    };
+
     GameSaveManager.saveGame({
-      activeHero: this.activeHero,
+      activeHero: activeId,
+      heroes: heroesState,
       health: this.playerStats.health,
       maxHealth: this.playerStats.maxHealth,
       posture: this.playerStats.posture,
       maxPosture: this.playerStats.maxPosture,
       inventory: this.inventory.toJSON(),
       progression: this.progression.toJSON(),
-      sanctuaryVisited: isAtSanctuary
+      sanctuaryVisited: isAtSanctuary,
+      world: {
+        morwennaDefeated: this.morwennaState === 'DEAD',
+        morwennaPhase2: this.morwennaPhase === 2,
+        cemeteryGateOpen: this.cemeteryGateOpen,
+        checkpoint: { x: this.playerGroup.position.x, y: this.playerGroup.position.y, z: this.playerGroup.position.z },
+        destroyedPropIds: this.destructibles.filter((p: DestructibleProp3D) => p.isDestroyed).map((p: DestructibleProp3D) => p.id)
+      }
     });
 
     this.updateHUD();
@@ -4692,21 +4787,54 @@ export class Oakhaven3DExperience {
       if (save.inventory) {
         this.inventory = Inventory.fromJSON(save.inventory);
       }
-      if (save.activeHero && save.activeHero !== this.activeHero) {
-        this.toggleHero();
+
+      // Restore party state
+      if (save.heroes) {
+        this.party.deserialize({
+          activeHeroId: save.activeHero,
+          heroes: save.heroes as any
+        });
       }
-      if (save.maxHealth) {
-        this.playerStats.maxHealth = save.maxHealth;
+
+      this.updateHeroVisuals();
+
+      // H03 FIX: Strict finite number validation accepting 0
+      if (typeof save.health === 'number' && Number.isFinite(save.health)) {
+        this.playerStats.health = save.health;
       }
-      if (save.health) {
-        this.playerStats.health = Math.min(this.playerStats.maxHealth, save.health);
-      }
-      if (save.maxPosture) {
-        this.playerStats.maxPosture = save.maxPosture;
-      }
-      if (save.posture) {
+      if (typeof save.posture === 'number' && Number.isFinite(save.posture)) {
         this.playerStats.posture = save.posture;
       }
+
+      // H02 FIX: Restore world state
+      if (save.world) {
+        if (save.world.morwennaDefeated) {
+          this.morwennaState = 'DEAD';
+          this.morwennaEncounter.isDefeated = true;
+          this.morwennaHealth = 0;
+          this.morwennaGroup.visible = false;
+          if (this.morwennaCrucibleLight) this.morwennaCrucibleLight.visible = false;
+        }
+        if (save.world.morwennaPhase2 && this.morwennaPhase === 1) {
+          this.triggerMorwennaPhase2();
+        }
+        if (save.world.cemeteryGateOpen && !this.cemeteryGateOpen) {
+          this.openCemeteryGate();
+        }
+        if (save.world.checkpoint) {
+          this.playerGroup.position.set(save.world.checkpoint.x, save.world.checkpoint.y, save.world.checkpoint.z);
+        }
+        if (save.world.destroyedPropIds && Array.isArray(save.world.destroyedPropIds)) {
+          for (const propId of save.world.destroyedPropIds) {
+            const prop = this.destructibles.find((p: DestructibleProp3D) => p.id === propId);
+            if (prop && !prop.isDestroyed) {
+              prop.isDestroyed = true;
+              prop.mesh.visible = false;
+            }
+          }
+        }
+      }
+
       console.log('Sanctuary save loaded from:', save.dateStr);
     } catch (err) {
       console.warn('Error restoring sanctuary save data:', err);

@@ -139,6 +139,28 @@ export class Progression {
     return bonus;
   }
 
+  public getStaggerBonusPct(hero: HeroType): number {
+    let bonus = 0;
+    this.skills.forEach(s => {
+      if (s.isUnlocked && (s.hero === hero || s.hero === 'shared')) {
+        if (s.modifierType === 'stagger_bonus_pct') {
+          bonus += s.modifierValue;
+        }
+      }
+    });
+    return bonus;
+  }
+
+  public getWardMitigationBonusPct(): number {
+    let bonus = 0;
+    this.skills.forEach(s => {
+      if (s.isUnlocked && s.modifierType === 'ward_reflect_pct') {
+        bonus += s.modifierValue;
+      }
+    });
+    return bonus;
+  }
+
   public toJSON(): object {
     return {
       currentExp: this.currentExp,

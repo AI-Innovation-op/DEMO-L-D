@@ -60,6 +60,12 @@ describe('Progression & Skill Tree Domain', () => {
 
     prog.unlockSkill('khaterine_shadow_step'); // +30% dodge distance
     expect(prog.getDodgeDistanceBonusPct()).toBe(30);
+
+    prog.unlockSkill('khaterine_abyssal_ward'); // 50% ward damage reduction (H15)
+    expect(prog.getWardMitigationBonusPct()).toBe(50);
+
+    prog.unlockSkill('thomas_shield_strike'); // +35% stagger posture impact (H15)
+    expect(prog.getStaggerBonusPct('thomas')).toBe(35);
   });
 
   it('should serialize and restore progression from JSON', () => {
