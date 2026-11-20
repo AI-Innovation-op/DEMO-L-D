@@ -45,6 +45,8 @@ export interface DebrisParticle3D {
   maxLife: number;
 }
 
+export type InputContext = 'gameplay' | 'dialogue' | 'inventory' | 'skillTree' | 'defeated';
+
 export class Oakhaven3DExperience {
   private container: HTMLElement;
   private scene!: THREE.Scene;
@@ -59,10 +61,16 @@ export class Oakhaven3DExperience {
   private attackBuffMultiplier: number = 1.0;
   private attackBuffTimer: number = 0;
 
-  // Camera settings
+  // Camera & View Settings (OpenLara & Vice City Architecture)
   private cameraMode: 'isometric' | 'third_person' = 'isometric';
   private targetCameraPos = new THREE.Vector3();
   private targetCameraLook = new THREE.Vector3();
+  private currentCameraLook = new THREE.Vector3(0, 1.4, 4);
+  private cameraYaw: number = 0;
+  private targetCameraYaw: number = 0;
+  private isPointerDragging: boolean = false;
+  private pointerDragStartX: number = 0;
+  private lastManualOrbitTime: number = 0;
 
   // Dual Hero System (Thomas & Khaterine)
   public get activeHero(): 'thomas' | 'khaterine' {
@@ -236,6 +244,7 @@ export class Oakhaven3DExperience {
   private dialogueModalEl?: HTMLDivElement;
   private inventoryModalEl?: HTMLDivElement;
   private isDialogueOpen: boolean = false;
+  private isPlayerDefeated: boolean = false;
 
   // Environment & Lights
   private streetLamps: { light: THREE.PointLight; mesh: THREE.Mesh; baseIntensity: number }[] = [];
@@ -763,6 +772,8 @@ export class Oakhaven3DExperience {
     this.playerFistsGroup.visible = false;
     this.thomasModelGroup.add(this.playerFistsGroup);
 
+    // Standard local forward convention: -Z. Primitives constructed facing +Z are rotated by PI.
+    this.thomasModelGroup.rotation.y = Math.PI;
     this.playerGroup.add(this.thomasModelGroup);
 
     // -----------------------------------------------------------------------
@@ -813,6 +824,8 @@ export class Oakhaven3DExperience {
     this.khaterineBowMesh.rotation.set(0.2, -0.3, 0.2);
     this.khaterineModelGroup.add(this.khaterineBowMesh);
 
+    // Standard local forward convention: -Z. Primitives constructed facing +Z are rotated by PI.
+    this.khaterineModelGroup.rotation.y = Math.PI;
     this.khaterineModelGroup.visible = false;
     this.playerGroup.add(this.khaterineModelGroup);
 
@@ -1912,136 +1925,217 @@ export class Oakhaven3DExperience {
   }
 
   // =========================================================================
-  // INPUT HANDLERS
+  // INPUT CONTEXT & HANDLERS (VICE CITY & OPENLARA ARCHITECTURE)
   // =========================================================================
+  public getInputContext(): InputContext {
+    if (this.isPlayerDefeated) return 'defeated';
+    if (this.isDialogueOpen) return 'dialogue';
+    if (this.isInventoryOpen) return 'inventory';
+    if (this.isSkillTreeOpen) return 'skillTree';
+    return 'gameplay';
+  }
+
+  public isGameplayActive(): boolean {
+    return this.isRunning && this.getInputContext() === 'gameplay';
+  }
+
+  public releaseAllInputs(): void {
+    this.keys = {};
+    if (this.playerStats) {
+      this.playerStats.isGuarding = false;
+    }
+    if (this.wardBarrierMesh) {
+      this.wardBarrierMesh.visible = false;
+    }
+    this.isPointerDragging = false;
+  }
+
   private bindInputs(): void {
     window.addEventListener('keydown', this.handleKeyDown);
     window.addEventListener('keyup', this.handleKeyUp);
     window.addEventListener('resize', this.handleResize);
+    window.addEventListener('blur', this.handleBlur);
+    document.addEventListener('visibilitychange', this.handleVisibilityChange);
+
+    if (this.renderer && this.renderer.domElement) {
+      this.renderer.domElement.addEventListener('pointerdown', this.handlePointerDown);
+      window.addEventListener('pointermove', this.handlePointerMove);
+      window.addEventListener('pointerup', this.handlePointerUp);
+      this.renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
+    }
   }
 
-  private handleKeyDown = (e: KeyboardEvent): void => {
-    this.keys[e.key.toLowerCase()] = true;
+  private handleBlur = (): void => {
+    this.releaseAllInputs();
+  };
 
-    // Toggle Hero with [TAB]
-    if (e.key === 'Tab') {
-      e.preventDefault();
-      this.toggleHero();
-      return;
-    }
-
-    // Toggle Audio Mute with [M]
-    if (e.key.toLowerCase() === 'm') {
-      this.toggleAudio();
-      return;
-    }
-
-    // Toggle Camera with [C]
-    if (e.key.toLowerCase() === 'c') {
-      this.toggleCameraMode();
-      const btnCam = this.uiOverlay.querySelector('#btn-toggle-cam') as HTMLButtonElement;
-      if (btnCam) {
-        btnCam.innerText = `🎥 [C] CÁMARA: ${this.cameraMode === 'isometric' ? 'OBLICUA 3/4' : 'TERCERA PERSONA'}`;
-      }
-    }
-
-    // Modal dismiss with [ESC] or [SPACE] or [E]
-    if (this.isDialogueOpen && (e.key === 'Escape' || e.code === 'Space' || e.key.toLowerCase() === 'e')) {
-      this.closeDialogueModal();
-      return;
-    }
-
-    if (this.isDialogueOpen) {
-      return;
-    }
-
-    // Toggle Inventory Modal with [I] or dismiss with [ESC]
-    if (this.isInventoryOpen && (e.key === 'Escape' || e.key.toLowerCase() === 'i')) {
-      this.toggleInventoryModal();
-      return;
-    }
-
-    if (e.key.toLowerCase() === 'i') {
-      this.toggleInventoryModal();
-      return;
-    }
-
-    if (this.isInventoryOpen) {
-      return;
-    }
-
-    // Toggle Skill Tree Modal with [H] or dismiss with [ESC]
-    if (this.isSkillTreeOpen && (e.key === 'Escape' || e.key.toLowerCase() === 'h')) {
-      this.toggleSkillTreeModal();
-      return;
-    }
-
-    if (e.key.toLowerCase() === 'h') {
-      this.toggleSkillTreeModal();
-      return;
-    }
-
-    if (this.isSkillTreeOpen) {
-      return;
-    }
-
-    // Save Game at Sanctuary with [G]
-    if (e.key.toLowerCase() === 'g') {
-      this.executeSanctuarySave();
-      return;
-    }
-
-    // Quick Balm / Consumable with [Q]
-    if (e.key.toLowerCase() === 'q') {
-      this.useQuickConsumable();
-      return;
-    }
-
-    // Context Interaction / Pick up / Talk / Finisher with [E]
-    if (e.key.toLowerCase() === 'e') {
-      this.handleContextInteraction();
-      return;
-    }
-
-    // Light Attack / Shoot Arrow with [J]
-    if (e.key.toLowerCase() === 'j') {
-      this.executeAttack(false);
-    }
-
-    // Heavy Attack / Charged Arrow with [K]
-    if (e.key.toLowerCase() === 'k') {
-      this.executeAttack(true);
-    }
-
-    // Dodge with [SPACE]
-    if (e.code === 'Space') {
-      this.executeDodge();
-    }
-
-    // Guard / Abyssal Ward with [L]
-    if (e.key.toLowerCase() === 'l') {
-      this.playerStats.isGuarding = true;
-      this.lastGuardTime = performance.now();
-      if (this.activeHero === 'khaterine' && this.wardBarrierMesh) {
-        this.wardBarrierMesh.visible = true;
-      }
-      this.audio.playSfx('dodge');
-    }
-
-    // Throw Weapon with [T] (Thomas only)
-    if (e.key.toLowerCase() === 't') {
-      if (this.activeHero === 'thomas') {
-        this.executeThrowWeapon();
-      } else {
-        this.spawnFloatingText(this.playerGroup.position, '¡El arco abisal está imbuido a tu alma!', '#d999ff');
-      }
+  private handleVisibilityChange = (): void => {
+    if (document.hidden) {
+      this.releaseAllInputs();
     }
   };
 
-  private handleKeyUp = (e: KeyboardEvent): void => {
-    this.keys[e.key.toLowerCase()] = false;
+  private handlePointerDown = (e: PointerEvent): void => {
+    if (e.target !== this.renderer?.domElement) return;
+    this.isPointerDragging = true;
+    this.pointerDragStartX = e.clientX;
+    this.lastManualOrbitTime = performance.now();
+  };
 
-    if (e.key.toLowerCase() === 'l') {
+  private handlePointerMove = (e: PointerEvent): void => {
+    if (!this.isPointerDragging || this.cameraMode !== 'third_person') return;
+    const deltaX = e.clientX - this.pointerDragStartX;
+    this.pointerDragStartX = e.clientX;
+    this.cameraYaw -= deltaX * 0.005;
+    this.targetCameraYaw = this.cameraYaw;
+    this.lastManualOrbitTime = performance.now();
+  };
+
+  private handlePointerUp = (): void => {
+    this.isPointerDragging = false;
+  };
+
+  private handleKeyDown = (e: KeyboardEvent): void => {
+    const key = e.key.toLowerCase();
+    const context = this.getInputContext();
+
+    // Universal: Audio toggle with [M] (single-pulse)
+    if (key === 'm') {
+      if (!e.repeat) this.toggleAudio();
+      return;
+    }
+
+    // --- CONTEXT: DIALOGUE MODAL ---
+    if (context === 'dialogue') {
+      if (!e.repeat && (e.key === 'Escape' || e.code === 'Space' || key === 'e' || e.key === 'Enter')) {
+        this.closeDialogueModal();
+      }
+      return;
+    }
+
+    // --- CONTEXT: INVENTORY MODAL ---
+    if (context === 'inventory') {
+      if (!e.repeat && (e.key === 'Escape' || key === 'i')) {
+        this.toggleInventoryModal();
+      }
+      return;
+    }
+
+    // --- CONTEXT: SKILL TREE MODAL ---
+    if (context === 'skillTree') {
+      if (!e.repeat && (e.key === 'Escape' || key === 'h')) {
+        this.toggleSkillTreeModal();
+      }
+      return;
+    }
+
+    // --- CONTEXT: DEFEATED ---
+    if (context === 'defeated') {
+      return;
+    }
+
+    // --- CONTEXT: GAMEPLAY ---
+    // Toggle Hero with [TAB] (single-pulse only, ignores e.repeat)
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      if (!e.repeat) this.toggleHero();
+      return;
+    }
+
+    // Toggle Camera with [C] (single-pulse only)
+    if (key === 'c') {
+      if (!e.repeat) {
+        this.toggleCameraMode();
+        const btnCam = this.uiOverlay?.querySelector('#btn-toggle-cam') as HTMLButtonElement | null;
+        if (btnCam) {
+          btnCam.innerText = `🎥 [C] CÁMARA: ${this.cameraMode === 'isometric' ? 'OBLICUA 3/4' : 'TERCERA PERSONA'}`;
+        }
+      }
+      return;
+    }
+
+    // Toggle Inventory Modal with [I] (single-pulse)
+    if (key === 'i') {
+      if (!e.repeat) this.toggleInventoryModal();
+      return;
+    }
+
+    // Toggle Skill Tree Modal with [H] (single-pulse)
+    if (key === 'h') {
+      if (!e.repeat) this.toggleSkillTreeModal();
+      return;
+    }
+
+    // Save Game at Sanctuary with [G] (single-pulse)
+    if (key === 'g') {
+      if (!e.repeat) this.executeSanctuarySave();
+      return;
+    }
+
+    // Quick Balm / Consumable with [Q] (single-pulse)
+    if (key === 'q') {
+      if (!e.repeat) this.useQuickConsumable();
+      return;
+    }
+
+    // Context Interaction / Pick up / Talk / Finisher with [E] (single-pulse)
+    if (key === 'e') {
+      if (!e.repeat) this.handleContextInteraction();
+      return;
+    }
+
+    // Light Attack with [J] (single-pulse)
+    if (key === 'j') {
+      if (!e.repeat) this.executeAttack(false);
+      return;
+    }
+
+    // Heavy Attack with [K] (single-pulse)
+    if (key === 'k') {
+      if (!e.repeat) this.executeAttack(true);
+      return;
+    }
+
+    // Dodge with [SPACE] (single-pulse)
+    if (e.code === 'Space') {
+      if (!e.repeat) this.executeDodge();
+      return;
+    }
+
+    // Guard / Abyssal Ward with [L] (continuous hold)
+    if (key === 'l') {
+      if (!this.playerStats.isGuarding) {
+        this.playerStats.isGuarding = true;
+        this.lastGuardTime = performance.now();
+        if (this.activeHero === 'khaterine' && this.wardBarrierMesh) {
+          this.wardBarrierMesh.visible = true;
+        }
+        this.audio.playSfx('dodge');
+      }
+      return;
+    }
+
+    // Throw Weapon with [T] (single-pulse, Thomas only)
+    if (key === 't') {
+      if (!e.repeat) {
+        if (this.activeHero === 'thomas') {
+          this.executeThrowWeapon();
+        } else {
+          this.spawnFloatingText(this.playerGroup.position, '¡El arco abisal está imbuido a tu alma!', '#d999ff');
+        }
+      }
+      return;
+    }
+
+    // Continuous movement keys (WASD / Arrows)
+    this.keys[key] = true;
+  };
+
+  private handleKeyUp = (e: KeyboardEvent): void => {
+    const key = e.key.toLowerCase();
+    this.keys[key] = false;
+
+    if (key === 'l') {
       this.playerStats.isGuarding = false;
       if (this.wardBarrierMesh) {
         this.wardBarrierMesh.visible = false;
@@ -3027,6 +3121,7 @@ export class Oakhaven3DExperience {
   }
 
   public showDialogueModal(header: string, text: string, rewardText?: string): void {
+    this.releaseAllInputs();
     this.isDialogueOpen = true;
     if (this.proximityBadgeEl) {
       this.proximityBadgeEl.style.display = 'none';
@@ -3056,11 +3151,13 @@ export class Oakhaven3DExperience {
   public setPlayerPosition(x: number, y: number, z: number): void {
     if (this.playerGroup) {
       this.playerGroup.position.set(x, y, z);
+      this.currentCameraLook.set(x, y + 1.35, z);
+      this.targetCameraLook.set(x, y + 1.35, z);
     }
   }
 
   private updateProximityInteractions(): void {
-    if (this.isDialogueOpen) return;
+    if (!this.isGameplayActive()) return;
 
     const pPos = this.playerGroup.position;
     let targetFound: 'elowen' | 'cedric' | 'shalem' | 'khaterine' | 'thomas' | 'sword' | 'finisher' | 'cemetery_gate' | undefined;
@@ -3191,6 +3288,7 @@ export class Oakhaven3DExperience {
   // BOSS 3D: MOTHER MORWENNA LOGIC & COMBAT (PHASE 1 & PHASE 2 DESATADA)
   // =========================================================================
   private updateBossMorwenna(delta: number): void {
+    if (!this.isGameplayActive()) return;
     if (this.morwennaState === 'DORMANT') {
       // Trigger awakening when player crosses z <= -8
       if (this.playerGroup.position.z <= -8) {
@@ -3593,6 +3691,7 @@ export class Oakhaven3DExperience {
       this.skeletonGroup.position.y = -0.3;
       return;
     }
+    if (!this.isGameplayActive()) return;
 
     const toPlayer = this.playerGroup.position.clone().sub(this.skeletonGroup.position);
     toPlayer.y = 0;
@@ -3734,6 +3833,11 @@ export class Oakhaven3DExperience {
 
   private toggleCameraMode(): void {
     this.cameraMode = this.cameraMode === 'isometric' ? 'third_person' : 'isometric';
+    if (this.cameraMode === 'third_person') {
+      this.cameraYaw = this.playerGroup.rotation.y;
+      this.targetCameraYaw = this.playerGroup.rotation.y;
+      this.currentCameraLook.copy(this.targetCameraLook);
+    }
   }
 
   // =========================================================================
@@ -3776,12 +3880,12 @@ export class Oakhaven3DExperience {
   };
 
   private updatePlayer(delta: number): void {
-    if (this.isDialogueOpen) {
+    if (!this.isGameplayActive()) {
       this.playerVelocity.set(0, 0, 0);
       return;
     }
 
-    // 1. Movement Inputs (WASD)
+    // 1. Movement Inputs (WASD / Arrows)
     let moveX = 0;
     let moveZ = 0;
 
@@ -3790,22 +3894,45 @@ export class Oakhaven3DExperience {
     if (this.keys['a'] || this.keys['arrowleft']) moveX -= 1;
     if (this.keys['d'] || this.keys['arrowright']) moveX += 1;
 
-    const inputDir = new THREE.Vector3(moveX, 0, moveZ);
+    const inputDir = new THREE.Vector3(0, 0, 0);
+
+    if (this.cameraMode === 'isometric') {
+      inputDir.set(moveX, 0, moveZ);
+    } else {
+      // Third-person: movement is relative to horizontal camera orientation
+      const camFwd = new THREE.Vector3(-Math.sin(this.cameraYaw), 0, -Math.cos(this.cameraYaw));
+      const camRight = new THREE.Vector3(Math.cos(this.cameraYaw), 0, -Math.sin(this.cameraYaw));
+      if (moveZ < 0) inputDir.add(camFwd);
+      if (moveZ > 0) inputDir.sub(camFwd);
+      if (moveX > 0) inputDir.add(camRight);
+      if (moveX < 0) inputDir.sub(camRight);
+    }
+
     if (inputDir.lengthSq() > 0 && !this.playerStats.isDodging) {
       inputDir.normalize();
       const speed = this.playerStats.isArmed ? 4.8 : 5.6; // Slightly faster when disarmed
       this.playerVelocity.x = inputDir.x * speed;
       this.playerVelocity.z = inputDir.z * speed;
 
-      // Rotate player smoothly toward movement vector
-      const targetAngle = Math.atan2(inputDir.x, inputDir.z);
-      this.playerGroup.rotation.y = THREE.MathUtils.lerp(this.playerGroup.rotation.y, targetAngle, 0.2);
+      // Target yaw with local forward = (0, 0, -1)
+      const targetAngle = Math.atan2(-inputDir.x, -inputDir.z);
+      const currentAngle = this.playerGroup.rotation.y;
+      // Shortest angular arc difference
+      const angleDiff = Math.atan2(Math.sin(targetAngle - currentAngle), Math.cos(targetAngle - currentAngle));
+      const turnAlpha = 1 - Math.exp(-14.0 * delta);
+      this.playerGroup.rotation.y = currentAngle + angleDiff * turnAlpha;
+
+      if (this.cameraMode === 'third_person') {
+        this.targetCameraYaw = targetAngle;
+      }
 
       // Running subtle body wobble
       this.playerBody.rotation.z = Math.sin(this.clock.elapsedTime * 12) * 0.08;
     } else if (!this.playerStats.isDodging) {
-      this.playerVelocity.x *= 0.7;
-      this.playerVelocity.z *= 0.7;
+      // Frame-rate-independent deceleration
+      const friction = Math.exp(-12.0 * delta);
+      this.playerVelocity.x *= friction;
+      this.playerVelocity.z *= friction;
       this.playerBody.rotation.z = 0;
     }
 
@@ -3834,7 +3961,7 @@ export class Oakhaven3DExperience {
   // =========================================================================
   private updateEnemy(delta: number): void {
     if (this.enemyState === 'DEAD') return;
-    if (this.isDialogueOpen) return;
+    if (!this.isGameplayActive()) return;
 
     const toPlayer = this.playerGroup.position.clone().sub(this.enemyGroup.position);
     toPlayer.y = 0;
@@ -4004,7 +4131,7 @@ export class Oakhaven3DExperience {
   // =========================================================================
   private updateCultist(delta: number): void {
     if (this.cultistState === 'DEAD') return;
-    if (this.isDialogueOpen) return;
+    if (!this.isGameplayActive()) return;
 
     // Swing censer animation and bobbing
     if (this.cultistCenserMesh) {
@@ -4181,7 +4308,7 @@ export class Oakhaven3DExperience {
   // =========================================================================
   private updateZealot(delta: number): void {
     if (this.zealotState === 'DEAD') return;
-    if (this.isDialogueOpen) return;
+    if (!this.isGameplayActive()) return;
 
     // Chain & Flail ball swinging physics
     if (this.zealotChainGroup) {
@@ -4365,6 +4492,7 @@ export class Oakhaven3DExperience {
     if (!this.inventoryModalEl) return;
 
     if (this.isInventoryOpen) {
+      this.releaseAllInputs();
       this.inventoryModalEl.style.display = 'block';
       this.renderInventoryItems();
       this.audio.playSfx('menu_select');
@@ -4558,6 +4686,7 @@ export class Oakhaven3DExperience {
     if (!this.skillTreeModalEl) return;
 
     if (this.isSkillTreeOpen) {
+      this.releaseAllInputs();
       this.skillTreeModalEl.style.display = 'block';
       this.renderSkillTreeItems();
       this.audio.playSfx('menu_select');
@@ -4722,6 +4851,7 @@ export class Oakhaven3DExperience {
   // PLAYER DEFEAT & RESPAWN (H16 CENTRALIZED POLICY)
   // =========================================================================
   private handlePlayerDefeatAndRespawn(): void {
+    this.isPlayerDefeated = false;
     const activeId = this.party.getActiveHeroId();
     const bonusHp = this.progression && (activeId === 'thomas' || activeId === 'khaterine')
       ? this.progression.getMaxHealthBonus(activeId as HeroType)
@@ -4729,6 +4859,18 @@ export class Oakhaven3DExperience {
     this.party.reviveHeroAtCheckpoint(activeId, bonusHp);
     this.playerGroup.position.set(0, 0, 4);
     this.playerVelocity.set(0, 0, 0);
+    this.playerGroup.rotation.y = 0;
+    this.cameraYaw = 0;
+    this.targetCameraYaw = 0;
+    this.currentCameraLook.set(0, 1.35, 4);
+    if (this.cameraMode === 'isometric') {
+      this.targetCameraPos.set(0, 7.2, 12.8);
+    } else {
+      this.targetCameraPos.set(0, 2.4, 8.0);
+    }
+    this.camera.position.copy(this.targetCameraPos);
+    this.camera.lookAt(this.currentCameraLook);
+    this.releaseAllInputs();
     this.spawnFloatingText(this.playerGroup.position, '✝ BENDICIÓN: RESUCITADO EN EL SANTUARIO ✝', '#ffd700');
     this.audio.playSfx('menu_select');
     this.updateHUD();
@@ -4874,7 +5016,9 @@ export class Oakhaven3DExperience {
     }
   }
 
-  private updateCamera(_delta: number): void {
+  private updateCamera(delta: number): void {
+    const safeDelta = Math.min(delta, 0.1);
+
     if (this.cameraMode === 'isometric') {
       this.targetCameraPos.set(
         this.playerGroup.position.x * 0.5,
@@ -4887,18 +5031,75 @@ export class Oakhaven3DExperience {
         this.playerGroup.position.z
       );
     } else {
-      // Third Person Behind
-      const behind = new THREE.Vector3(0, 2.8, 4.2).applyEuler(this.playerGroup.rotation);
-      this.targetCameraPos.copy(this.playerGroup.position).add(behind);
+      // Third Person Follow Camera
+      // Smooth recentering towards targetCameraYaw if not actively orbiting with pointer
+      const isOrbiting = this.isPointerDragging || (performance.now() - this.lastManualOrbitTime < 900);
+      if (!isOrbiting) {
+        const yawDiff = Math.atan2(
+          Math.sin(this.targetCameraYaw - this.cameraYaw),
+          Math.cos(this.targetCameraYaw - this.cameraYaw)
+        );
+        const recenterAlpha = 1 - Math.exp(-3.5 * safeDelta);
+        this.cameraYaw += yawDiff * recenterAlpha;
+      }
+
+      // Look target with forward anticipation (look-ahead)
+      const lookAheadDist = 0.5;
+      const lookAheadX = THREE.MathUtils.clamp(this.playerVelocity.x * 0.12, -lookAheadDist, lookAheadDist);
+      const lookAheadZ = THREE.MathUtils.clamp(this.playerVelocity.z * 0.12, -lookAheadDist, lookAheadDist);
       this.targetCameraLook.set(
-        this.playerGroup.position.x,
-        this.playerGroup.position.y + 1.4,
-        this.playerGroup.position.z
+        this.playerGroup.position.x + lookAheadX,
+        this.playerGroup.position.y + 1.35,
+        this.playerGroup.position.z + lookAheadZ
       );
+
+      // Desired camera position behind player at cameraYaw
+      const cameraDist = 4.0;
+      const cameraHeight = 2.4;
+      let camX = this.playerGroup.position.x + Math.sin(this.cameraYaw) * cameraDist;
+      let camY = this.playerGroup.position.y + cameraHeight;
+      let camZ = this.playerGroup.position.z + Math.cos(this.cameraYaw) * cameraDist;
+
+      // Obstacle & Street boundary resolution (traceClip pullback)
+      // Street facades are at |x| = 5.25. If camera X approaches facades, pull camera closer along ray to target
+      const maxStreetX = 4.75;
+      if (Math.abs(camX) > maxStreetX) {
+        const boundX = Math.sign(camX) * maxStreetX;
+        if (Math.abs(this.targetCameraLook.x) < maxStreetX) {
+          const t = THREE.MathUtils.clamp((boundX - this.targetCameraLook.x) / (camX - this.targetCameraLook.x), 0.15, 0.95);
+          camX = THREE.MathUtils.lerp(this.targetCameraLook.x, camX, t);
+          camZ = THREE.MathUtils.lerp(this.targetCameraLook.z, camZ, t);
+          camY = THREE.MathUtils.lerp(this.targetCameraLook.y + 0.5, camY, t);
+        } else {
+          camX = boundX;
+        }
+      }
+
+      // Z boundary pullback (sanctuary back wall z=11, cemetery gate z=-23 or -46)
+      const minZLimit = (this.cemeteryGateOpen ? -45.5 : -22.0) - 1.0;
+      const maxZLimit = 11.2;
+      if (camZ > maxZLimit || camZ < minZLimit) {
+        const boundZ = camZ > maxZLimit ? maxZLimit : minZLimit;
+        if (this.targetCameraLook.z > minZLimit && this.targetCameraLook.z < maxZLimit) {
+          const t = THREE.MathUtils.clamp((boundZ - this.targetCameraLook.z) / (camZ - this.targetCameraLook.z), 0.15, 0.95);
+          camX = THREE.MathUtils.lerp(this.targetCameraLook.x, camX, t);
+          camZ = THREE.MathUtils.lerp(this.targetCameraLook.z, camZ, t);
+          camY = THREE.MathUtils.lerp(this.targetCameraLook.y + 0.5, camY, t);
+        } else {
+          camZ = boundZ;
+        }
+      }
+
+      this.targetCameraPos.set(camX, camY, camZ);
     }
 
-    this.camera.position.lerp(this.targetCameraPos, 0.08);
-    this.camera.lookAt(this.targetCameraLook);
+    // Frame-rate-independent exponential smoothing
+    const posAlpha = 1 - Math.exp(-6.5 * safeDelta);
+    this.camera.position.lerp(this.targetCameraPos, posAlpha);
+
+    const lookAlpha = 1 - Math.exp(-9.0 * safeDelta);
+    this.currentCameraLook.lerp(this.targetCameraLook, lookAlpha);
+    this.camera.lookAt(this.currentCameraLook);
   }
 
   private updateFlickeringLights(_delta: number): void {
@@ -5110,9 +5311,19 @@ export class Oakhaven3DExperience {
       cancelAnimationFrame(this.animationFrameId);
     }
 
+    this.releaseAllInputs();
+
     window.removeEventListener('keydown', this.handleKeyDown);
     window.removeEventListener('keyup', this.handleKeyUp);
     window.removeEventListener('resize', this.handleResize);
+    window.removeEventListener('blur', this.handleBlur);
+    document.removeEventListener('visibilitychange', this.handleVisibilityChange);
+
+    if (this.renderer && this.renderer.domElement) {
+      this.renderer.domElement.removeEventListener('pointerdown', this.handlePointerDown);
+      window.removeEventListener('pointermove', this.handlePointerMove);
+      window.removeEventListener('pointerup', this.handlePointerUp);
+    }
 
     this.floatingTexts.forEach(t => t.el.remove());
     this.floatingTexts = [];
