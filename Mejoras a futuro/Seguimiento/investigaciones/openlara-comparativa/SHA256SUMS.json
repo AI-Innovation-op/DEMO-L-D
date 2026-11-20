@@ -1,0 +1,62 @@
+[
+  {
+    "file": "CAMARA_Y_ARQUITECTURA.md",
+    "bytes": 21193,
+    "sha256": "9aef9f4b3ab82744d4edf7ab620ce7f0f0f1371a31017e331f3c4cbd23190254"
+  },
+  {
+    "file": "DOCUMENTACION_COMPLETA.md",
+    "bytes": 58866,
+    "sha256": "f02e93e7666f2be9ccbd9ddc7d73a7b7ff27fbcee70e95282a49ee1203786bbf"
+  },
+  {
+    "file": "LICENSE_OpenLara.txt",
+    "bytes": 1352,
+    "sha256": "e132a46ac1016453c3fee5a25953515e748fa31e5466191022d55bf0a614ea5f"
+  },
+  {
+    "file": "PERSONAJE_Y_ANIMACION.md",
+    "bytes": 20518,
+    "sha256": "577b1a1eb5849603b34202fcfa13dec1c85a28ccf037bb0bc39aa0c1925cbee6"
+  },
+  {
+    "file": "README.md",
+    "bytes": 1715,
+    "sha256": "d56cea21861d1fa959713fe690ec9888d045ae42d23bc9403ff5063d0d298f92"
+  },
+  {
+    "file": "REVISION_Y_COMPARATIVA.md",
+    "bytes": 16891,
+    "sha256": "7631fcac02e90562e1cb185d50ce5935d41b4e0c6897f97ff5a163d04aa55328"
+  },
+  {
+    "file": "evidencias\\alcance-runtime.json",
+    "bytes": 1093,
+    "sha256": "edfd1c198ad7d204acb2e273397c2cd1f90745eae26d77b6b3edffe873521324"
+  },
+  {
+    "file": "evidencias\\identidad-fuentes.json",
+    "bytes": 2733,
+    "sha256": "0e01d5636153b67115a2cff9d370c1ebb0f1af57042c9ec3358f68457f4ed2cd"
+  },
+  {
+    "file": "evidencias\\prueba-aritmetica-recentrado.json",
+    "bytes": 712,
+    "sha256": "75ff2eef821415bd05f4ceeb1a021813ecdbb62b2bbcc906729fd4f8678e66ff"
+  },
+  {
+    "file": "evidencias\\rea-checkpoint.json",
+    "bytes": 105,
+    "sha256": "000bef2a45fbd4b17adc4e2ab0acd65b076ef5c25f0d8479244c8088730de9cd"
+  },
+  {
+    "file": "evidencias\\rea-intento-demo.json",
+    "bytes": 7424,
+    "sha256": "f33c0c3c711cfb7c43be4d93f04b1a1ae3fd0f28ee697558c6e1e3e3b53fef6e"
+  },
+  {
+    "file": "evidencias\\verificacion-documentacion.json",
+    "bytes": 531,
+    "sha256": "cbcaee9e3d60b90bd7a56adf8ea6b11e9251898a01660cdc1cee0be57e3c9b22"
+  }
+]

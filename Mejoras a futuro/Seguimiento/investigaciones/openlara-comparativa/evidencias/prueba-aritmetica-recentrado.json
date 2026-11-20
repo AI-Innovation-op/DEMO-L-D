@@ -1,0 +1,22 @@
+{
+  "scope": "Arithmetic reproduction of the camera recenter expression; game not executed",
+  "commit": "3b268ca4bf986c380f44a26ffd9218bf6d376249",
+  "source": "src/camera.h:440-445; src/utils.h:93",
+  "deltaSeconds": 0.03333333333333333,
+  "interpolationFactor": 0.3333333333333333,
+  "floatEpsilon": 1.1920928955078125E-07,
+  "samples": [
+    {
+      "initialYaw": -0.5,
+      "interpolatedYaw": -0.33333333333333337,
+      "currentThreshold": 0.0,
+      "absoluteThreshold": -0.33333333333333337
+    },
+    {
+      "initialYaw": 0.5,
+      "interpolatedYaw": 0.33333333333333337,
+      "currentThreshold": 0.33333333333333337,
+      "absoluteThreshold": 0.33333333333333337
+    }
+  ]
+}

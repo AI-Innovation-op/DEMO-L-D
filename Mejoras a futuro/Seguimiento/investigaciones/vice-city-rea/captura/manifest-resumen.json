@@ -1,0 +1,212 @@
+{
+  "assetCount": 9403,
+  "build": "796678be4ed26a13c1256be98781ca9b90beb981",
+  "routes": [
+    "cdn.jsdelivr.net",
+    "fastly.jsdelivr.net",
+    "gcore.jsdelivr.net",
+    "cdn.jsdmirror.com",
+    "testingcf.jsdelivr.net"
+  ],
+  "runtime": {
+    "GamepadEmulator.js": {
+      "bytes": 26445,
+      "routes": [
+        "cdn.jsdelivr.net",
+        "fastly.jsdelivr.net",
+        "gcore.jsdelivr.net",
+        "cdn.jsdmirror.com",
+        "testingcf.jsdelivr.net"
+      ],
+      "sha256": "a30ae5c40b388892a3fd514ff6216ed46355ecc958cbdc8b2e267667ecc2e633",
+      "verifiedRoutes": [
+        "cdn.jsdelivr.net",
+        "fastly.jsdelivr.net",
+        "gcore.jsdelivr.net",
+        "cdn.jsdmirror.com",
+        "testingcf.jsdelivr.net"
+      ]
+    },
+    "index.data.part1": {
+      "bytes": 20866662,
+      "routes": [
+        "cdn.jsdelivr.net",
+        "fastly.jsdelivr.net",
+        "gcore.jsdelivr.net",
+        "cdn.jsdmirror.com",
+        "testingcf.jsdelivr.net"
+      ],
+      "sha256": "9a60372dc844f8472a447b46dddbdbacb082691610652f4eab0563d8801c6064",
+      "verifiedRoutes": [
+        "cdn.jsdelivr.net",
+        "fastly.jsdelivr.net",
+        "gcore.jsdelivr.net",
+        "cdn.jsdmirror.com",
+        "testingcf.jsdelivr.net"
+      ]
+    },
+    "index.data.part2": {
+      "bytes": 20866662,
+      "routes": [
+        "cdn.jsdelivr.net",
+        "fastly.jsdelivr.net",
+        "gcore.jsdelivr.net",
+        "cdn.jsdmirror.com",
+        "testingcf.jsdelivr.net"
+      ],
+      "sha256": "90b3ea0ff057b75c8bfbac288d80edd5ff8bdbbe95e5af2dd92886a2fb69d3d1",
+      "verifiedRoutes": [
+        "cdn.jsdelivr.net",
+        "fastly.jsdelivr.net",
+        "gcore.jsdelivr.net",
+        "cdn.jsdmirror.com",
+        "testingcf.jsdelivr.net"
+      ]
+    },
+    "index.data.part3": {
+      "bytes": 20866662,
+      "routes": [
+        "cdn.jsdelivr.net",
+        "fastly.jsdelivr.net",
+        "gcore.jsdelivr.net",
+        "cdn.jsdmirror.com",
+        "testingcf.jsdelivr.net"
+      ],
+      "sha256": "d22958d55cd83982a41aa3758e87d1d86a19421d21543ceff25dedc3705647f0",
+      "verifiedRoutes": [
+        "cdn.jsdelivr.net",
+        "fastly.jsdelivr.net",
+        "gcore.jsdelivr.net",
+        "cdn.jsdmirror.com",
+        "testingcf.jsdelivr.net"
+      ]
+    },
+    "index.data.part4": {
+      "bytes": 20866662,
+      "routes": [
+        "cdn.jsdelivr.net",
+        "fastly.jsdelivr.net",
+        "gcore.jsdelivr.net",
+        "cdn.jsdmirror.com",
+        "testingcf.jsdelivr.net"
+      ],
+      "sha256": "fc371672abf2264ab25ebdc462c8bf801c7d61e8d4419382f1728ff92f28ab4d",
+      "verifiedRoutes": [
+        "cdn.jsdelivr.net",
+        "fastly.jsdelivr.net",
+        "gcore.jsdelivr.net",
+        "cdn.jsdmirror.com",
+        "testingcf.jsdelivr.net"
+      ]
+    },
+    "index.data.part5": {
+      "bytes": 20866662,
+      "routes": [
+        "cdn.jsdelivr.net",
+        "fastly.jsdelivr.net",
+        "gcore.jsdelivr.net",
+        "cdn.jsdmirror.com",
+        "testingcf.jsdelivr.net"
+      ],
+      "sha256": "a230f053ae40f5c5edbf114c7b7041529a5907af71118480393a669e2280bbda",
+      "verifiedRoutes": [
+        "cdn.jsdelivr.net",
+        "fastly.jsdelivr.net",
+        "gcore.jsdelivr.net",
+        "cdn.jsdmirror.com",
+        "testingcf.jsdelivr.net"
+      ]
+    },
+    "index.data.part6": {
+      "bytes": 20866662,
+      "routes": [
+        "cdn.jsdelivr.net",
+        "fastly.jsdelivr.net",
+        "gcore.jsdelivr.net",
+        "cdn.jsdmirror.com",
+        "testingcf.jsdelivr.net"
+      ],
+      "sha256": "ce816b75d39c46cedb034f5e1ed006d5ebd7e5d471a3f8c8d385398ce5457406",
+      "verifiedRoutes": [
+        "cdn.jsdelivr.net",
+        "fastly.jsdelivr.net",
+        "gcore.jsdelivr.net",
+        "cdn.jsdmirror.com",
+        "testingcf.jsdelivr.net"
+      ]
+    },
+    "index.data.part7": {
+      "bytes": 10155139,
+      "routes": [
+        "cdn.jsdelivr.net",
+        "fastly.jsdelivr.net",
+        "gcore.jsdelivr.net",
+        "cdn.jsdmirror.com",
+        "testingcf.jsdelivr.net"
+      ],
+      "sha256": "e74a1ca3cc23133fbaf75c33d92bd2ecc71bb9eb36188c6cba3d2cd081284db2",
+      "verifiedRoutes": [
+        "cdn.jsdelivr.net",
+        "fastly.jsdelivr.net",
+        "gcore.jsdelivr.net",
+        "cdn.jsdmirror.com",
+        "testingcf.jsdelivr.net"
+      ]
+    },
+    "index.js": {
+      "bytes": 677387,
+      "routes": [
+        "cdn.jsdelivr.net",
+        "fastly.jsdelivr.net",
+        "gcore.jsdelivr.net",
+        "cdn.jsdmirror.com",
+        "testingcf.jsdelivr.net"
+      ],
+      "sha256": "f0c3415357ead8705a464651e6a0d2c47e5667d573e3262cbacdc21004a5f331",
+      "verifiedRoutes": [
+        "cdn.jsdelivr.net",
+        "fastly.jsdelivr.net",
+        "gcore.jsdelivr.net",
+        "cdn.jsdmirror.com",
+        "testingcf.jsdelivr.net"
+      ]
+    },
+    "index.wasm": {
+      "bytes": 7625729,
+      "routes": [
+        "cdn.jsdelivr.net",
+        "fastly.jsdelivr.net",
+        "gcore.jsdelivr.net",
+        "cdn.jsdmirror.com",
+        "testingcf.jsdelivr.net"
+      ],
+      "sha256": "43bc3a05e12fe0b40049f0b3f8d6b05c9dc16bf84c856d03b0892ae7aaa87a99",
+      "verifiedRoutes": [
+        "cdn.jsdelivr.net",
+        "fastly.jsdelivr.net",
+        "gcore.jsdelivr.net",
+        "cdn.jsdmirror.com",
+        "testingcf.jsdelivr.net"
+      ]
+    },
+    "style.css": {
+      "bytes": 79736,
+      "routes": [
+        "cdn.jsdelivr.net",
+        "fastly.jsdelivr.net",
+        "gcore.jsdelivr.net",
+        "cdn.jsdmirror.com",
+        "testingcf.jsdelivr.net"
+      ],
+      "sha256": "12d21453496a10fbd5dab74912a2fdd499a3337826146c965c4c5613919fe12c",
+      "verifiedRoutes": [
+        "cdn.jsdelivr.net",
+        "fastly.jsdelivr.net",
+        "gcore.jsdelivr.net",
+        "cdn.jsdmirror.com",
+        "testingcf.jsdelivr.net"
+      ]
+    }
+  },
+  "totalDeclaredBytes": 1005369603
+}

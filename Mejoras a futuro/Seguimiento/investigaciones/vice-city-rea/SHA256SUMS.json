@@ -1,0 +1,167 @@
+[
+  {
+    "file": "ANALISIS_TECNICO.md",
+    "bytes": 23008,
+    "sha256": "3d8d451a79f43c521405f8d49c7ab5630368eaa22c9436c5d82f4f7e3c56911b"
+  },
+  {
+    "file": "DOCUMENTACION_COMPLETA.md",
+    "bytes": 56383,
+    "sha256": "fc437e056e862e7f83db3b7691bc61df356e3bdf071f93e3be1738e9f064586a"
+  },
+  {
+    "file": "OBSERVACION_USUARIO.md",
+    "bytes": 6008,
+    "sha256": "10ad67e14736e4c7a51a63f82392129fbe7cafdddaf7cc068e6720de9c069c8d"
+  },
+  {
+    "file": "PERSONAJE_Y_CAMARA.md",
+    "bytes": 14706,
+    "sha256": "f7dccd602eb41fe635df077d30240da3e43618848237d41c1305b184d5fe92e3"
+  },
+  {
+    "file": "README.md",
+    "bytes": 1651,
+    "sha256": "aea3ca33e45dd75b83d9015112d00a7c60c736552ed4c9c26b6de3a8d1f499f0"
+  },
+  {
+    "file": "REVISION_DEL_JUEGO.md",
+    "bytes": 12363,
+    "sha256": "effd450064cdb78d30707e7e5721b374c1fddc8f58ff95d4512f895c4cadaa0d"
+  },
+  {
+    "file": "captura\\launcher.js",
+    "bytes": 62915,
+    "sha256": "555c520634fc80341006f29a336a469ae7f126e415909e1f22db0dbe256f29ce"
+  },
+  {
+    "file": "captura\\manifest-resumen.json",
+    "bytes": 5811,
+    "sha256": "79ebe0456a4907d4132eb2b5cf62f08195edec8bfdf7f039ad2a0c4e22dcdf5c"
+  },
+  {
+    "file": "captura\\release-metadata.json",
+    "bytes": 94,
+    "sha256": "7866835d9d2402a01079c15afedd8ad365d6a42f5e64211e6792b86c2953be46"
+  },
+  {
+    "file": "evidencias\\carga-intermedia-01.jpg",
+    "bytes": 66309,
+    "sha256": "c15436eadc467d8d56e54a6878f04892e82fc8c086059012c24bdf17b70f904a"
+  },
+  {
+    "file": "evidencias\\carga-intermedia-02.jpg",
+    "bytes": 65630,
+    "sha256": "81a12133f958f2a1ad9c9b2a011111885c09a88aa7aee334798ae682caea9ed8"
+  },
+  {
+    "file": "evidencias\\identidad-2026-11-18.json",
+    "bytes": 352,
+    "sha256": "09670f422d100334e51cb232de251101db922d23985e3afadc70860fb50ee3f0"
+  },
+  {
+    "file": "evidencias\\mapa-revisado.jpg",
+    "bytes": 160322,
+    "sha256": "24a937c669f5c1939e3c0cf96c275c25a1c9dfc7ab9eaf6803493e4c4d93fe6d"
+  },
+  {
+    "file": "evidencias\\mapa-vista-completa.jpg",
+    "bytes": 150914,
+    "sha256": "8d1b3bce9e9ab1b03bf980700dec6953db493707a03db56ae5041ddb84302165"
+  },
+  {
+    "file": "evidencias\\observacion-usuario-01.jpg",
+    "bytes": 105507,
+    "sha256": "6658ae6a47f10ac259ff497a8958c439bd12f4868960a5341c31cfcd0660f8cd"
+  },
+  {
+    "file": "evidencias\\observacion-usuario-02.jpg",
+    "bytes": 143562,
+    "sha256": "300e93ab8e4fb5823ee14c5df79f8f42838bc1bdbe6c4573e8e264f0b7408833"
+  },
+  {
+    "file": "evidencias\\observacion-usuario-03.jpg",
+    "bytes": 133095,
+    "sha256": "b930a9c59d14ebeefbe89a1b3039dc9c5ae9942302a40dd021fdd2ebf1782938"
+  },
+  {
+    "file": "evidencias\\observacion-usuario-04.jpg",
+    "bytes": 146627,
+    "sha256": "48f1ae8bb26292e8125683d80e720ce71ed8fb232011148167511f07f808f741"
+  },
+  {
+    "file": "evidencias\\observacion-usuario-05.jpg",
+    "bytes": 162237,
+    "sha256": "c858c5a699ca1151de47586a95bd2f3ca53492ca2f6c301beba0cd16fc3be9fc"
+  },
+  {
+    "file": "evidencias\\observacion-usuario-06.jpg",
+    "bytes": 173765,
+    "sha256": "0e93bed3d3cccdcf31952a8cc130e9049e28d203d3c0b731b8fbe5a9144b4a8f"
+  },
+  {
+    "file": "evidencias\\observacion-usuario-07.jpg",
+    "bytes": 171993,
+    "sha256": "60a2b2aef4f6ed596f1300bc545563cb2d5065ff0ffd35cce61a102f02f25cfb"
+  },
+  {
+    "file": "evidencias\\observacion-usuario-08.jpg",
+    "bytes": 154963,
+    "sha256": "1167af833dd8f5c105d36260367c7102ae4586e869a0fb62dcb766df9d981451"
+  },
+  {
+    "file": "evidencias\\personaje-camara-01.jpg",
+    "bytes": 114542,
+    "sha256": "9fe2027150b4fdbd997790402f1f156002e4433b1e7a5e0d6ff5160c1b806aed"
+  },
+  {
+    "file": "evidencias\\personaje-camara-02.jpg",
+    "bytes": 163451,
+    "sha256": "9ef25d95886af61061f644366333de6c41ba4bd9652677953eea22fdaeea5879"
+  },
+  {
+    "file": "evidencias\\personaje-camara-03.jpg",
+    "bytes": 166235,
+    "sha256": "d9935a2f904972fef21f69d86590e881895d01ee48894c1b767e592e7c7094c0"
+  },
+  {
+    "file": "evidencias\\personaje-camara-04.jpg",
+    "bytes": 143242,
+    "sha256": "ca0c08e01312ad81de1b512303d96bf5b1dedabd8a50c3435a8daa445b47df24"
+  },
+  {
+    "file": "evidencias\\personaje-camara-05.jpg",
+    "bytes": 149845,
+    "sha256": "15eb60a9687b412073d4c48bab0341a60bb8dfabc718a313d13715ccde911b18"
+  },
+  {
+    "file": "evidencias\\personaje-camara-06.jpg",
+    "bytes": 136139,
+    "sha256": "8036e3f0f2038894cfca58ba4c0d9caca2d34e3ed7ac6c6e51164110ae5d45eb"
+  },
+  {
+    "file": "evidencias\\personaje-camara-07.jpg",
+    "bytes": 132601,
+    "sha256": "0df0b57639ad0c73f0ade723cacc8338fe46d5993c1edd5596ebba95fd3df7c1"
+  },
+  {
+    "file": "evidencias\\personaje-junto-vehiculo.jpg",
+    "bytes": 74531,
+    "sha256": "5a8a53144187803d11b3872461d051e9a471d527bf327b8cb3b49b9d9cd47370"
+  },
+  {
+    "file": "evidencias\\rea-evidence-2026-11-18.json",
+    "bytes": 23237730,
+    "sha256": "d9ab1058ccca94bec24eef40d2be7977f50cd025d316cbed14c7450a2b4867ed"
+  },
+  {
+    "file": "runtime\\GamepadEmulator.js",
+    "bytes": 26445,
+    "sha256": "a30ae5c40b388892a3fd514ff6216ed46355ecc958cbdc8b2e267667ecc2e633"
+  },
+  {
+    "file": "runtime\\index.js",
+    "bytes": 677387,
+    "sha256": "f0c3415357ead8705a464651e6a0d2c47e5667d573e3262cbacdc21004a5f331"
+  }
+]

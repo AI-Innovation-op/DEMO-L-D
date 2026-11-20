@@ -1,0 +1,25 @@
+{
+  "review_date_local": "2026-11-18",
+  "timezone": "America/Lima",
+  "repository_commit": "3b268ca4bf986c380f44a26ffd9218bf6d376249",
+  "source_review": "static; normal src variant; selected mechanisms",
+  "demo_url_from_readme": "http://xproger.info/projects/OpenLara/",
+  "rea_attempt": {
+    "operation": "capture_browser_scenario",
+    "result": "failed before initial state capture",
+    "https_navigation_error": "net::ERR_BLOCKED_BY_CLIENT",
+    "owned_browser_cleanup": "terminated-owned-process",
+    "retained_game_evidence_records": 0,
+    "raw_result_file": "rea-intento-demo.json"
+  },
+  "integrated_browser_attempt": {
+    "url": "https://xproger.info/projects/OpenLara/",
+    "result": "net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH"
+  },
+  "gameplay_observed": false,
+  "public_build_matched_to_commit": false,
+  "engine_compiled_or_executed_locally": false,
+  "fps_memory_latency_measured": false,
+  "security_settings_changed": false,
+  "interpretation": "Access failures describe this environment; they do not establish failure in every browser or identify the server cause."
+}

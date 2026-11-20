@@ -1,0 +1,87 @@
+{
+  "repository": "https://github.com/XProger/OpenLara.git",
+  "commit": "3b268ca4bf986c380f44a26ffd9218bf6d376249",
+  "commitDate": "2026-07-26T19:56:52+03:00",
+  "reviewDateLocal": "2026-11-18",
+  "timezone": "America/Lima",
+  "trackedFiles": 606,
+  "workingTreeStatus": [],
+  "sourceVariant": "src normal; src/fixed not used for mechanisms described",
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 1445,
+      "sha256": "b7140ad830c821541a4906eb6e9afdc27bcdbf6bef2ce5bc0ad4de6d316d9ca0"
+    },
+    {
+      "path": "LICENSE",
+      "bytes": 1352,
+      "sha256": "e132a46ac1016453c3fee5a25953515e748fa31e5466191022d55bf0a614ea5f"
+    },
+    {
+      "path": "src/animation.h",
+      "bytes": 10439,
+      "sha256": "a9747aee12ebf7ef9c2f834d5a82a40dbc49afe059eb7a25ec8317ed68184a1b"
+    },
+    {
+      "path": "src/camera.h",
+      "bytes": 25240,
+      "sha256": "636b4a2a238156cd9c0e1a032a9cfdbd43bd0b510aadb648c514d1f353fe7180"
+    },
+    {
+      "path": "src/character.h",
+      "bytes": 10685,
+      "sha256": "0eb11b4c12b904211e8b377db089b8a130844f74a5fba4558e587b4ad1a1adfd"
+    },
+    {
+      "path": "src/controller.h",
+      "bytes": 55026,
+      "sha256": "e15daf1bc571244044952274c4c2951c57048f8e9c6b402196a8cb238a7579e6"
+    },
+    {
+      "path": "src/lara.h",
+      "bytes": 151302,
+      "sha256": "73cfc2bf8e23d1deb10c4d08b938aefab0a391eb0005a9a4340263277cdf00e8"
+    },
+    {
+      "path": "src/level.h",
+      "bytes": 130910,
+      "sha256": "844958621d4d3e305442c91d1e5ca24595f41db20db11da65046f73206e310f5"
+    },
+    {
+      "path": "src/game.h",
+      "bytes": 10202,
+      "sha256": "783926148aa6b446ddbc9942574a97c78f9b971f45ebedd5406a789ee34d2130"
+    },
+    {
+      "path": "src/savegame.h",
+      "bytes": 4571,
+      "sha256": "a1baeca68761be3621c6c63cb5e011999c13bf91658e81dfe9479afb477be204"
+    },
+    {
+      "path": "src/utils.h",
+      "bytes": 75772,
+      "sha256": "060e358891673f69b8140b6cb5684e81ef0482503328bb36df5e6018d8d1f937"
+    },
+    {
+      "path": "src/platform/web/main.cpp",
+      "bytes": 11113,
+      "sha256": "3b3778f4ff35c6974871d2716ecfbc03f815f9357cf243647e66c58a3a9d63c6"
+    },
+    {
+      "path": "src/platform/web/index.php",
+      "bytes": 11226,
+      "sha256": "340fa89b9552fdcae700d0b2c0101acd865a684c1d33ae1a1c5471482e5caf3c"
+    },
+    {
+      "path": "src/platform/web/build.bat",
+      "bytes": 582,
+      "sha256": "6bb90f567ce536ba2a32fab2e1ad0d1cc019b3070c39caaf8001d2ca7b931272"
+    },
+    {
+      "path": "src/platform/web/build_wasm.bat",
+      "bytes": 604,
+      "sha256": "ed8e6e8d0d80ac257c1263049d7025c19f588dc2a6166e5382d21ada0d8ec83c"
+    }
+  ]
+}
