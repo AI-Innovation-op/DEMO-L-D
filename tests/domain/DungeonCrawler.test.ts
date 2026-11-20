@@ -171,6 +171,19 @@ describe('Dungeon Crawler Domain - San Jude Crypts', () => {
       expect(areaManager.currentArea).toBe('surface');
     });
 
+    it('transitions to black_willow_forest and returns forest bounds', () => {
+      areaManager.enterBlackWillowForest();
+      expect(areaManager.currentArea).toBe('black_willow_forest');
+      const bounds = areaManager.getBounds();
+      expect(bounds.minZ).toBe(-172.0);
+      expect(bounds.maxZ).toBe(-125.0);
+      expect(bounds.minX).toBe(-7.5);
+      expect(bounds.maxX).toBe(7.5);
+
+      areaManager.exitForestToCrypts();
+      expect(areaManager.currentArea).toBe('crypts_interior');
+    });
+
     it('manages sarcophagi loot and ambush states', () => {
       const lootSarc = areaManager.getSarcophagus('sarcophagus_loot');
       expect(lootSarc?.isOpened).toBe(false);

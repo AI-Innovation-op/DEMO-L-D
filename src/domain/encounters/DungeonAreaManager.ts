@@ -1,4 +1,4 @@
-export type DungeonArea = 'surface' | 'crypts_interior';
+export type DungeonArea = 'surface' | 'crypts_interior' | 'black_willow_forest';
 
 export interface AreaBounds {
   minX: number;
@@ -54,7 +54,27 @@ export class DungeonAreaManager {
     this._currentArea = 'surface';
   }
 
+  public enterBlackWillowForest(): void {
+    this._currentArea = 'black_willow_forest';
+  }
+
+  public exitForestToCrypts(): void {
+    this._currentArea = 'crypts_interior';
+  }
+
   public getBounds(): AreaBounds {
+    if (this._currentArea === 'black_willow_forest') {
+      return {
+        minX: -7.5,
+        maxX: 7.5,
+        minZ: -172.0,
+        maxZ: -125.0,
+        camMinZ: -173.0,
+        camMaxZ: -124.0,
+        camMaxX: 7.2
+      };
+    }
+
     if (this._currentArea === 'crypts_interior') {
       return {
         minX: -5.5,

@@ -9,6 +9,19 @@ export interface UseItemResult {
   durationSeconds?: number;
 }
 
+export const CANONICAL_WILLOW_RELIC: InventoryItem = {
+  id: 'relic_willow_fang',
+  name: 'Colmillo del Sauce Negro',
+  description: 'Dagas gemelas del aquelarre ancestral. Permiten a Khaterine desatar el Eco del Aquelarre ([U]), invocando un vórtice espectral lacerante.',
+  category: 'relic',
+  icon: '🗡️',
+  quantity: 1,
+  maxQuantity: 1,
+  effectType: 'relic_willow_echo',
+  effectValue: 60,
+  isEquipped: true
+};
+
 export class Inventory {
   private items: Map<string, InventoryItem> = new Map();
   private maxRelicSlots: number = 2;
@@ -163,6 +176,11 @@ export class Inventory {
     return this.items.get(itemId);
   }
 
+  public hasItem(itemId: string): boolean {
+    const item = this.items.get(itemId);
+    return item !== undefined && item.quantity > 0;
+  }
+
   public getAllItems(): InventoryItem[] {
     return Array.from(this.items.values());
   }
@@ -274,6 +292,10 @@ export class Inventory {
     return this.getEquippedRelics()
       .filter(r => r.effectType === 'relic_dodge_cost')
       .reduce((acc, r) => acc + r.effectValue, 0);
+  }
+
+  public hasWillowFang(): boolean {
+    return this.hasItem('relic_willow_fang');
   }
 
   public toJSON(): object {

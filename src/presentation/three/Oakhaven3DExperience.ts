@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { WebAudioSoundAdapter } from '../../infrastructure/audio/WebAudioSoundAdapter';
-import { Inventory } from '../../domain/inventory/Inventory';
+import { Inventory, CANONICAL_WILLOW_RELIC } from '../../domain/inventory/Inventory';
 import { Progression } from '../../domain/progression/Progression';
 import { HeroType } from '../../domain/progression/Skill';
 import { GameSaveManager } from '../../infrastructure/storage/GameSaveManager';
@@ -12,6 +12,7 @@ import { CANONICAL_MATERIALS } from '../../domain/alchemy/AlchemyRecipe';
 import { DungeonAreaManager, DungeonArea } from '../../domain/encounters/DungeonAreaManager';
 import { SpikeTrap } from '../../domain/encounters/SpikeTrap';
 import { CatacombInquisitor } from '../../domain/encounters/CatacombInquisitor';
+import { RootProwler } from '../../domain/encounters/RootProwler';
 import { ArsenalManager, ArrowType } from '../../domain/combat/ArsenalManager';
 
 export interface CombatStats3D {
@@ -278,8 +279,26 @@ export class Oakhaven3DExperience {
   private zoneTitleEl?: HTMLDivElement;
   private zoneSubtitleEl?: HTMLDivElement;
 
+  // Black Willow Forest & Root Prowler (Zone 3 Expansion)
+  private rootProwlerEncounter: RootProwler = new RootProwler();
+  private rootProwlerGroup!: THREE.Group;
+  private rootProwlerHpBarContainer?: HTMLDivElement;
+  private rootProwlerHpBarFill?: HTMLDivElement;
+  private rootProwlerWarningMesh!: THREE.Mesh;
+  private rootProwlerEyesLight!: THREE.PointLight;
+  private rootProwlerTimer: number = 0;
+  private rootProwlerPatrolDir: number = 1;
+  private blackWillowForestGroup!: THREE.Group;
+  private willowSporesPoints!: THREE.Points;
+  private willowRelicMeshGroup!: THREE.Group;
+  private sisterAltarGroup!: THREE.Group;
+  private daggerVortexMeshGroup!: THREE.Group;
+  private isDaggerVortexActive: boolean = false;
+  private daggerVortexTimer: number = 0;
+  private daggerVortexCooldown: number = 0;
+
   // 3D Proximity Interactions & Modals
-  private activeInteractTarget?: 'elowen' | 'cauldron' | 'cedric' | 'shalem' | 'khaterine' | 'thomas' | 'sword' | 'finisher' | 'cemetery_gate' | 'crypt_entrance' | 'crypt_exit' | 'crypt_sarcophagus_loot' | 'crypt_sarcophagus_ambush';
+  private activeInteractTarget?: 'elowen' | 'cauldron' | 'cedric' | 'shalem' | 'khaterine' | 'thomas' | 'sword' | 'finisher' | 'cemetery_gate' | 'crypt_entrance' | 'crypt_exit' | 'crypt_sarcophagus_loot' | 'crypt_sarcophagus_ambush' | 'crypt_to_forest' | 'forest_to_crypt' | 'sister_altar';
   private proximityBadgeEl?: HTMLDivElement;
   private dialogueModalEl?: HTMLDivElement;
   private inventoryModalEl?: HTMLDivElement;
@@ -366,6 +385,9 @@ export class Oakhaven3DExperience {
     this.createCryptInterior();
     this.createInquisitorBoss();
     this.createCryptAmbushSkeleton();
+    this.createBlackWillowForest();
+    this.createRootProwlerBeast();
+    this.createDaggerVortexMesh();
 
     // 6. Build 3D UI Overlay
     this.createUIOverlay();
@@ -2036,6 +2058,32 @@ export class Oakhaven3DExperience {
     });
     this.cryptInteriorGroup.add(altarGroup);
 
+    // 10. Gateway Archway to El Bosque del Sauce Negro at z = -110.8
+    const forestPortalArch = new THREE.Mesh(new THREE.BoxGeometry(3.6, 4.6, 0.7), archMat);
+    forestPortalArch.position.set(0, 2.3, -110.8);
+
+    const forestPortalMat = new THREE.MeshBasicMaterial({
+      color: 0x8822cc,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.75
+    });
+    const forestPortalPlane = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 3.8), forestPortalMat);
+    forestPortalPlane.position.set(0, 1.9, -110.5);
+
+    const forestPortalLight = new THREE.PointLight(0xbb44ff, 2.2, 9);
+    forestPortalLight.position.set(0, 2.0, -110.0);
+
+    const rootMat = new THREE.MeshStandardMaterial({ color: 0x181014, roughness: 0.95 });
+    [-1.6, 1.6].forEach(rx => {
+      const rootTendril = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.22, 4.8, 6), rootMat);
+      rootTendril.position.set(rx, 2.4, -110.4);
+      rootTendril.rotation.z = rx > 0 ? -0.15 : 0.15;
+      this.cryptInteriorGroup.add(rootTendril);
+    });
+
+    this.cryptInteriorGroup.add(forestPortalArch, forestPortalPlane, forestPortalLight);
+
     this.scene.add(this.cryptInteriorGroup);
   }
 
@@ -2185,6 +2233,360 @@ export class Oakhaven3DExperience {
   }
 
   // =========================================================================
+  // ZONE 3: EL BOSQUE DEL SAUCE NEGRO (BLACK WILLOW FOREST)
+  // =========================================================================
+  private createBlackWillowForest(): void {
+    this.blackWillowForestGroup = new THREE.Group();
+
+    // 1. Dark Mossy Soil Ground (z: -125 to -172, x: -7.5 to 7.5)
+    const forestGroundGeo = new THREE.PlaneGeometry(16, 52, 16, 16);
+    const forestGroundMat = new THREE.MeshStandardMaterial({
+      color: 0x131a14, // dark mossy earthy green/black
+      roughness: 0.92,
+      metalness: 0.05
+    });
+    const forestGround = new THREE.Mesh(forestGroundGeo, forestGroundMat);
+    forestGround.rotation.x = -Math.PI / 2;
+    forestGround.position.set(0, 0, -148.5);
+    forestGround.receiveShadow = true;
+    this.blackWillowForestGroup.add(forestGround);
+
+    // 2. Gateway Arch returning to Crypts at z = -125.8
+    const stoneArchMat = new THREE.MeshStandardMaterial({ color: 0x222226, roughness: 0.9 });
+    const cryptReturnArch = new THREE.Mesh(new THREE.BoxGeometry(3.6, 4.6, 0.7), stoneArchMat);
+    cryptReturnArch.position.set(0, 2.3, -125.8);
+
+    const cryptReturnMat = new THREE.MeshBasicMaterial({
+      color: 0x00c8ff,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.75
+    });
+    const cryptReturnPlane = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 3.8), cryptReturnMat);
+    cryptReturnPlane.position.set(0, 1.9, -126.1);
+
+    const cryptReturnLight = new THREE.PointLight(0x00e5ff, 2.0, 8);
+    cryptReturnLight.position.set(0, 2.0, -126.5);
+    this.blackWillowForestGroup.add(cryptReturnArch, cryptReturnPlane, cryptReturnLight);
+
+    // 3. Ancient Gnarled Black Willows (14 trees scattered along the trail)
+    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x1a1210, roughness: 0.96 });
+    const leafMat = new THREE.MeshStandardMaterial({ color: 0x22132a, roughness: 0.85 }); // dark violet-tinged foliage
+
+    const willowConfigs = [
+      { x: -5.2, z: -129, scale: 1.1, rot: 0.2 },
+      { x: 4.8, z: -131, scale: 1.2, rot: -0.3 },
+      { x: -4.5, z: -136, scale: 1.0, rot: 0.5 },
+      { x: 5.5, z: -138, scale: 1.3, rot: -0.4 },
+      { x: -6.0, z: -143, scale: 1.25, rot: 0.1 },
+      { x: 6.2, z: -145, scale: 1.15, rot: -0.2 },
+      { x: -4.8, z: -152, scale: 1.35, rot: 0.4 },
+      { x: 5.2, z: -153, scale: 1.2, rot: -0.5 },
+      { x: -5.8, z: -160, scale: 1.1, rot: 0.3 },
+      { x: 5.6, z: -162, scale: 1.3, rot: -0.1 },
+      { x: -4.2, z: -167, scale: 1.15, rot: 0.2 },
+      { x: 4.5, z: -168, scale: 1.2, rot: -0.3 },
+      { x: -2.8, z: -171, scale: 1.0, rot: 0.1 },
+      { x: 2.8, z: -171, scale: 1.0, rot: -0.2 }
+    ];
+
+    willowConfigs.forEach(tc => {
+      const treeGroup = new THREE.Group();
+      treeGroup.position.set(tc.x, 0, tc.z);
+      treeGroup.rotation.y = tc.rot;
+      treeGroup.scale.set(tc.scale, tc.scale, tc.scale);
+
+      // Twisted Trunk
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.65, 5.2, 7), trunkMat);
+      trunk.position.y = 2.6;
+      trunk.castShadow = true;
+      treeGroup.add(trunk);
+
+      // Hanging weeping foliage canopy (cascade of 3 drooping layers)
+      [
+        { y: 4.8, r: 1.6, h: 2.2 },
+        { y: 3.8, r: 2.1, h: 2.0 },
+        { y: 2.9, r: 1.7, h: 1.6 }
+      ].forEach(layer => {
+        const foliage = new THREE.Mesh(new THREE.ConeGeometry(layer.r, layer.h, 7), leafMat);
+        foliage.position.y = layer.y;
+        foliage.castShadow = true;
+        treeGroup.add(foliage);
+      });
+
+      this.blackWillowForestGroup.add(treeGroup);
+    });
+
+    // 4. Monumental Central Black Willow (El Gran Sauce Negro) at (0, 0, -150)
+    const greatWillowGroup = new THREE.Group();
+    greatWillowGroup.position.set(0, 0, -150);
+
+    const greatTrunkMat = new THREE.MeshStandardMaterial({ color: 0x11090c, roughness: 0.98 });
+    const greatTrunk = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 2.4, 9.5, 9), greatTrunkMat);
+    greatTrunk.position.y = 4.75;
+    greatTrunk.castShadow = true;
+    greatWillowGroup.add(greatTrunk);
+
+    // 4 Massive Arching Root Buttresses
+    [0, Math.PI * 0.5, Math.PI, Math.PI * 1.5].forEach(ang => {
+      const rootArch = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.8, 4.5, 6), greatTrunkMat);
+      rootArch.position.set(Math.cos(ang) * 2.2, 1.8, Math.sin(ang) * 2.2);
+      rootArch.rotation.z = Math.sin(ang) * 0.45;
+      rootArch.rotation.x = Math.cos(ang) * 0.45;
+      greatWillowGroup.add(rootArch);
+    });
+
+    // Weeping Great Canopy
+    const greatLeafMat = new THREE.MeshStandardMaterial({
+      color: 0x2e183a, // deep royal midnight violet
+      roughness: 0.88,
+      emissive: 0x160820,
+      emissiveIntensity: 0.35
+    });
+
+    [
+      { y: 8.8, r: 3.8, h: 3.5 },
+      { y: 7.2, r: 4.9, h: 3.2 },
+      { y: 5.6, r: 4.2, h: 2.8 }
+    ].forEach(glayer => {
+      const gFoliage = new THREE.Mesh(new THREE.ConeGeometry(glayer.r, glayer.h, 8), greatLeafMat);
+      gFoliage.position.y = glayer.y;
+      gFoliage.castShadow = true;
+      greatWillowGroup.add(gFoliage);
+    });
+
+    // Ambient Ethereal Core Glow of the Great Willow
+    const greatWillowLight = new THREE.PointLight(0xaa33ff, 3.2, 22);
+    greatWillowLight.position.set(0, 4.0, 0);
+    greatWillowGroup.add(greatWillowLight);
+
+    this.blackWillowForestGroup.add(greatWillowGroup);
+
+    // 5. Altar del Aquelarre (Altar de las Nueve Hermanas) at (0, 0, -155)
+    this.sisterAltarGroup = new THREE.Group();
+    this.sisterAltarGroup.position.set(0, 0, -155);
+
+    const altarSlateMat = new THREE.MeshStandardMaterial({ color: 0x1e1e24, roughness: 0.85 });
+    // Circular dais
+    const dais = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.9, 0.45, 18), altarSlateMat);
+    dais.position.y = 0.22;
+    dais.receiveShadow = true;
+    this.sisterAltarGroup.add(dais);
+
+    // Glowing Runic Circle on Dais
+    const runicMat = new THREE.MeshBasicMaterial({
+      color: 0xcc66ff,
+      side: THREE.DoubleSide
+    });
+    const runicRing = new THREE.Mesh(new THREE.RingGeometry(1.3, 1.55, 32), runicMat);
+    runicRing.rotation.x = -Math.PI / 2;
+    runicRing.position.y = 0.46;
+    this.sisterAltarGroup.add(runicRing);
+
+    // 9 Standing Megalith Stones (Las Nueve Hermanas)
+    for (let i = 0; i < 9; i++) {
+      const angle = (i / 9) * Math.PI * 2;
+      const menhir = new THREE.Mesh(new THREE.BoxGeometry(0.32, 1.6, 0.32), altarSlateMat);
+      menhir.position.set(Math.cos(angle) * 2.3, 0.8, Math.sin(angle) * 2.3);
+      menhir.rotation.y = angle;
+      menhir.castShadow = true;
+      this.sisterAltarGroup.add(menhir);
+    }
+
+    // Central Offering Pedestal
+    const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, 1.1, 8), altarSlateMat);
+    pedestal.position.y = 0.95;
+    pedestal.castShadow = true;
+    this.sisterAltarGroup.add(pedestal);
+
+    // Floating Relic Mesh: Colmillo del Sauce Negro (Twin ritual daggers)
+    this.willowRelicMeshGroup = new THREE.Group();
+    this.willowRelicMeshGroup.position.set(0, 1.7, 0);
+
+    const daggerBladeMat = new THREE.MeshStandardMaterial({
+      color: 0x221133,
+      metalness: 0.85,
+      roughness: 0.25,
+      emissive: 0x9933ee,
+      emissiveIntensity: 0.6
+    });
+    const daggerHiltMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.9, roughness: 0.3 });
+
+    // Dagger 1
+    const d1 = new THREE.Group();
+    const blade1 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.65, 0.02), daggerBladeMat);
+    const guard1 = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.05, 0.04), daggerHiltMat);
+    guard1.position.y = -0.32;
+    const grip1 = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.22, 6), daggerHiltMat);
+    grip1.position.y = -0.45;
+    d1.add(blade1, guard1, grip1);
+    d1.rotation.z = 0.4;
+    d1.position.x = -0.15;
+
+    // Dagger 2
+    const d2 = new THREE.Group();
+    const blade2 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.65, 0.02), daggerBladeMat);
+    const guard2 = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.05, 0.04), daggerHiltMat);
+    guard2.position.y = -0.32;
+    const grip2 = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.22, 6), daggerHiltMat);
+    grip2.position.y = -0.45;
+    d2.add(blade2, guard2, grip2);
+    d2.rotation.z = -0.4;
+    d2.position.x = 0.15;
+
+    this.willowRelicMeshGroup.add(d1, d2);
+
+    const relicGlow = new THREE.PointLight(0xcc55ff, 2.5, 6);
+    this.willowRelicMeshGroup.add(relicGlow);
+
+    this.sisterAltarGroup.add(this.willowRelicMeshGroup);
+    this.blackWillowForestGroup.add(this.sisterAltarGroup);
+
+    // 6. Bioluminescent Spores Particles (120 drifting motes)
+    const sporeCount = 120;
+    const sporeGeo = new THREE.BufferGeometry();
+    const sporePositions = new Float32Array(sporeCount * 3);
+    for (let i = 0; i < sporeCount; i++) {
+      sporePositions[i * 3] = (Math.random() - 0.5) * 14;     // x: -7 to 7
+      sporePositions[i * 3 + 1] = 0.4 + Math.random() * 4.5; // y: 0.4 to 4.9
+      sporePositions[i * 3 + 2] = -126 - Math.random() * 44; // z: -126 to -170
+    }
+    sporeGeo.setAttribute('position', new THREE.BufferAttribute(sporePositions, 3));
+    const sporeMat = new THREE.PointsMaterial({
+      color: 0xbb55ff,
+      size: 0.18,
+      transparent: true,
+      opacity: 0.8
+    });
+    this.willowSporesPoints = new THREE.Points(sporeGeo, sporeMat);
+    this.blackWillowForestGroup.add(this.willowSporesPoints);
+
+    this.scene.add(this.blackWillowForestGroup);
+  }
+
+  // =========================================================================
+  // ENEMY: ACECHADOR DE RAÍCES DEL SAUCE NEGRO (ROOT PROWLER)
+  // =========================================================================
+  private createRootProwlerBeast(): void {
+    this.rootProwlerGroup = new THREE.Group();
+    this.rootProwlerGroup.position.set(0, 0, -140);
+
+    const rootWoodMat = new THREE.MeshStandardMaterial({
+      color: 0x1f140e,
+      roughness: 0.95,
+      metalness: 0.05
+    });
+    const spineThornMat = new THREE.MeshStandardMaterial({
+      color: 0x331c12,
+      roughness: 0.8
+    });
+    const beastEyesMat = new THREE.MeshBasicMaterial({ color: 0xbb44ff });
+
+    // 1. Quadruped Torso
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.65, 1.7), rootWoodMat);
+    torso.position.y = 0.8;
+    torso.castShadow = true;
+    this.rootProwlerGroup.add(torso);
+
+    // 2. Thorny Spine Ridge (4 thorny cones along the back)
+    for (let i = 0; i < 4; i++) {
+      const thorn = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.42, 5), spineThornMat);
+      thorn.position.set(0, 1.25, -0.6 + i * 0.4);
+      thorn.rotation.x = -0.2;
+      this.rootProwlerGroup.add(thorn);
+    }
+
+    // 3. Predatory Lupine/Feline Root Skull
+    const headGroup = new THREE.Group();
+    headGroup.position.set(0, 0.95, 0.95);
+
+    const cranium = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.45, 0.65), rootWoodMat);
+    cranium.castShadow = true;
+    const snout = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.3, 0.5), rootWoodMat);
+    snout.position.set(0, -0.08, 0.45);
+
+    // Glowing Violet Eyes
+    const eyeGeo = new THREE.SphereGeometry(0.06, 6, 6);
+    const eyeL = new THREE.Mesh(eyeGeo, beastEyesMat);
+    eyeL.position.set(-0.16, 0.08, 0.32);
+    const eyeR = new THREE.Mesh(eyeGeo, beastEyesMat);
+    eyeR.position.set(0.16, 0.08, 0.32);
+
+    this.rootProwlerEyesLight = new THREE.PointLight(0xbb44ff, 1.8, 5.0);
+    this.rootProwlerEyesLight.position.set(0, 0.1, 0.4);
+
+    headGroup.add(cranium, snout, eyeL, eyeR, this.rootProwlerEyesLight);
+    this.rootProwlerGroup.add(headGroup);
+
+    // 4. Quadruped Limbs (4 clawed root legs)
+    const legGeo = new THREE.CylinderGeometry(0.1, 0.07, 0.85, 6);
+    const legOffsets = [
+      { x: -0.42, z: 0.6 },
+      { x: 0.42, z: 0.6 },
+      { x: -0.42, z: -0.6 },
+      { x: 0.42, z: -0.6 }
+    ];
+    legOffsets.forEach(lo => {
+      const leg = new THREE.Mesh(legGeo, rootWoodMat);
+      leg.position.set(lo.x, 0.42, lo.z);
+      leg.castShadow = true;
+      this.rootProwlerGroup.add(leg);
+    });
+
+    // 5. Warning Telegraph Ring (for lunging pounce attack)
+    const warnMat = new THREE.MeshBasicMaterial({
+      color: 0xff2266,
+      transparent: true,
+      opacity: 0.65,
+      side: THREE.DoubleSide
+    });
+    this.rootProwlerWarningMesh = new THREE.Mesh(new THREE.RingGeometry(0.8, 2.2, 24), warnMat);
+    this.rootProwlerWarningMesh.rotation.x = -Math.PI / 2;
+    this.rootProwlerWarningMesh.position.set(0, 0.04, 0);
+    this.rootProwlerWarningMesh.visible = false;
+    this.rootProwlerGroup.add(this.rootProwlerWarningMesh);
+
+    this.scene.add(this.rootProwlerGroup);
+  }
+
+  // =========================================================================
+  // KHATERINE SPECIAL: ECO DEL AQUELARRE SPECTRAL DAGGER VORTEX
+  // =========================================================================
+  private createDaggerVortexMesh(): void {
+    this.daggerVortexMeshGroup = new THREE.Group();
+
+    const spectralMat = new THREE.MeshBasicMaterial({
+      color: 0xcc66ff,
+      transparent: true,
+      opacity: 0.85,
+      side: THREE.DoubleSide
+    });
+
+    // 2 Spectral Daggers orbiting at 180 degrees
+    [-1.6, 1.6].forEach(dx => {
+      const dMesh = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.95, 4), spectralMat);
+      dMesh.rotation.z = Math.PI / 2;
+      dMesh.position.set(dx, 0.9, 0);
+      this.daggerVortexMeshGroup.add(dMesh);
+    });
+
+    // Swirling trail ring
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xbb33ff,
+      transparent: true,
+      opacity: 0.45,
+      side: THREE.DoubleSide
+    });
+    const vortexRing = new THREE.Mesh(new THREE.RingGeometry(1.4, 1.8, 32), ringMat);
+    vortexRing.rotation.x = -Math.PI / 2;
+    vortexRing.position.y = 0.9;
+    this.daggerVortexMeshGroup.add(vortexRing);
+
+    this.daggerVortexMeshGroup.visible = false;
+    this.scene.add(this.daggerVortexMeshGroup);
+  }
+
+  // =========================================================================
   // SUBTERRANEAN ZONE TRANSITION & SARCOPHAGI INTERACTION
   // =========================================================================
   public transitionToArea(targetArea: DungeonArea): void {
@@ -2193,7 +2595,10 @@ export class Oakhaven3DExperience {
     this.audio.playCryptDoor?.();
 
     if (this.zoneTitleEl && this.zoneSubtitleEl && this.zoneTransitionOverlay) {
-      if (targetArea === 'crypts_interior') {
+      if (targetArea === 'black_willow_forest') {
+        this.zoneTitleEl.innerText = '🌿 EL BOSQUE DEL SAUCE NEGRO 🌿';
+        this.zoneSubtitleEl.innerText = '«Entre raíces retorcidas y esporas luminiscentes, el eco del aquelarre ancestral aún palpita»';
+      } else if (targetArea === 'crypts_interior') {
         this.zoneTitleEl.innerText = '⚔ CRIPTAS SUBTERRÁNEAS DE SAN JUDE ⚔';
         this.zoneSubtitleEl.innerText = '«Bajo las losas de piedra, la penumbra custodia los secretos del Santo Oficio»';
       } else {
@@ -2204,11 +2609,35 @@ export class Oakhaven3DExperience {
     }
 
     setTimeout(() => {
-      if (targetArea === 'crypts_interior') {
-        this.dungeonAreaManager.enterCrypts();
-        this.setPlayerPosition(0, 0, -73);
+      if (targetArea === 'black_willow_forest') {
+        this.dungeonAreaManager.enterBlackWillowForest();
+        this.setPlayerPosition(0, 0, -128);
         this.cameraYaw = 0;
         this.targetCameraYaw = 0;
+        if (this.inquisitorHpBarContainer) {
+          this.inquisitorHpBarContainer.style.display = 'none';
+        }
+        this.audio.playWillowWhisper?.();
+        this.setDialogueToast(
+          'Bosque del Sauce Negro',
+          '«La savia ancestral empapa la tierra. El Gran Sauce Negro vigila desde el centro del aquelarre.»',
+          '/assets/icons/icon_black_willow_feather.png',
+          '#bb44ff'
+        );
+      } else if (targetArea === 'crypts_interior') {
+        const wasInForest = this.dungeonAreaManager.currentArea === 'black_willow_forest';
+        if (wasInForest) {
+          this.dungeonAreaManager.exitForestToCrypts();
+          this.setPlayerPosition(0, 0, -107);
+        } else {
+          this.dungeonAreaManager.enterCrypts();
+          this.setPlayerPosition(0, 0, -73);
+        }
+        this.cameraYaw = 0;
+        this.targetCameraYaw = 0;
+        if (this.rootProwlerHpBarContainer) {
+          this.rootProwlerHpBarContainer.style.display = 'none';
+        }
         this.setDialogueToast(
           'Criptas de San Jude',
           '«El aire es frío y huele a polvo consagrado. Cuidado con las baldosas de hierro y las sombras que vigilan el altar.»',
@@ -2222,6 +2651,9 @@ export class Oakhaven3DExperience {
         this.targetCameraYaw = 0;
         if (this.inquisitorHpBarContainer) {
           this.inquisitorHpBarContainer.style.display = 'none';
+        }
+        if (this.rootProwlerHpBarContainer) {
+          this.rootProwlerHpBarContainer.style.display = 'none';
         }
         this.setDialogueToast(
           'Cementerio de Oakhaven',
@@ -2329,6 +2761,270 @@ export class Oakhaven3DExperience {
           this.inquisitorHpBarContainer.style.display = 'none';
         }
       }, 2500);
+    }
+  }
+
+  // =========================================================================
+  // ZONE 3: SISTER ALTAR, ROOT PROWLER BEAST & ECO DEL AQUELARRE
+  // =========================================================================
+  public interactWithSisterAltar(): void {
+    if (this.inventory.hasWillowFang()) {
+      this.showDialogueModal(
+        '✦ ALTAR DEL AQUELARRE — LAS NUEVE HERMANAS ✦',
+        '«El altar de piedra descansa en serena comunión con las raíces del Gran Sauce Negro. El Colmillo del Sauce reposa a tu cinto: pulsa [U] para liberar el Eco del Aquelarre siempre que las sombras te rodeen.»',
+        '✦ ALTAR SAGRADO CONSAGRADO — ECO DEL AQUELARRE [U] DISPONIBLE ✦'
+      );
+      return;
+    }
+
+    this.inventory.addItem(CANONICAL_WILLOW_RELIC);
+    this.audio.playWillowWhisper?.();
+    this.triggerHolyFlash(0.5);
+
+    if (this.willowRelicMeshGroup) {
+      this.willowRelicMeshGroup.visible = false;
+    }
+
+    this.spawnFloatingText(
+      this.playerGroup.position,
+      '✨ ¡COLMILLO DEL SAUCE NEGRO RECLAMADO! [U] DESBLOQUEADO',
+      '#cc66ff'
+    );
+
+    this.showDialogueModal(
+      '✦ ALTAR DEL AQUELARRE — EL COLMILLO DEL SAUCE NEGRO ✦',
+      '«Khaterine... Sientes la sangre antigua hervir en tus venas ante los monolitos de tus hermanas caídas. De las raíces pétreas emerge el Colmillo del Sauce Negro: dagas gemelas de obsidiana consagradas con la memoria del aquelarre. Ahora puedes pulsar [U] para liberar el Eco del Aquelarre, un vórtice espectral lacerante que desgarra a todos los enemigos a tu alrededor y te confiere invulnerabilidad momentánea.»',
+      '✦ RECOMPENSA: RELIQUIA COLMILLO DEL SAUCE NEGRO & HABILIDAD [U] DESBLOQUEADA ✦'
+    );
+    this.updateHUD();
+  }
+
+  public handleRootProwlerDefeat(): void {
+    this.rootProwlerEncounter.setState('DEAD');
+    this.rootProwlerGroup.position.y = -0.4;
+    this.rootProwlerEyesLight.intensity = 0;
+    this.audio.playFinisherSound(true);
+
+    const reward = this.rootProwlerEncounter.claimRewards(this.inventory, this.progression);
+    if (reward.claimed) {
+      this.spawnFloatingText(
+        this.rootProwlerGroup.position,
+        `🌿 ¡ACECHADOR PURIFICADO! (+${reward.expAwarded} EXP & ESENCIA DEL SAUCE)`,
+        '#bb44ff'
+      );
+      this.setDialogueToast(
+        'Acechador de Raíces Purificado',
+        '«La savia corrupta del Sauce Negro se evapora. Las raíces retroceden abriendo el paso hacia el Altar de las Hermanas.»',
+        '/assets/icons/icon_black_willow_feather.png',
+        '#bb44ff'
+      );
+    }
+    if (this.rootProwlerHpBarContainer) {
+      setTimeout(() => {
+        if (this.rootProwlerHpBarContainer) {
+          this.rootProwlerHpBarContainer.style.display = 'none';
+        }
+      }, 2500);
+    }
+    this.updateHUD();
+  }
+
+  public executeKhaterineEchoVortex(): void {
+    if (this.activeHero !== 'khaterine') {
+      this.spawnFloatingText(this.playerGroup.position, '¡Solo Khaterine puede desatar el Eco del Aquelarre!', '#bb44ff');
+      return;
+    }
+
+    if (!this.inventory.hasWillowFang()) {
+      this.audio.playSfx('warning');
+      this.spawnFloatingText(this.playerGroup.position, '🔒 Requiere el Colmillo del Sauce Negro (Altar de las Hermanas)', '#bb44ff');
+      return;
+    }
+
+    if (this.daggerVortexCooldown > 0) {
+      this.audio.playSfx('warning');
+      this.spawnFloatingText(this.playerGroup.position, `⌛ En recarga (${this.daggerVortexCooldown.toFixed(1)}s)`, '#ffd700');
+      return;
+    }
+
+    this.daggerVortexCooldown = 6.0;
+    this.isDaggerVortexActive = true;
+    this.daggerVortexTimer = 0.8;
+    this.playerStats.isDodging = true;
+    setTimeout(() => { this.playerStats.isDodging = false; }, 600);
+
+    this.audio.playDaggerVortex?.();
+    this.triggerScreenShake(0.5);
+    this.spawnFloatingText(this.playerGroup.position, '🗡️ ¡ECO DEL AQUELARRE!', '#cc66ff');
+
+    const vortexRadius = 3.6;
+    const pPos = this.playerGroup.position;
+
+    // 1. Check Root Prowler in Forest
+    if (this.dungeonAreaManager.currentArea === 'black_willow_forest' && !this.rootProwlerEncounter.isDefeated) {
+      if (pPos.distanceTo(this.rootProwlerGroup.position) <= vortexRadius) {
+        const hitRes = this.rootProwlerEncounter.takeDamage(60, false);
+        this.spawnFloatingText(this.rootProwlerGroup.position, `🗡️ -${hitRes.actualDamage} (VÓRTICE)`, '#cc66ff');
+        this.rootProwlerEncounter.setState('STUNNED');
+        this.rootProwlerTimer = 1.3;
+        if (this.rootProwlerHpBarFill) {
+          this.rootProwlerHpBarFill.style.width = `${Math.max(0, (this.rootProwlerEncounter.health / this.rootProwlerEncounter.maxHealth) * 100)}%`;
+        }
+        if (hitRes.defeated) {
+          this.handleRootProwlerDefeat();
+        }
+      }
+    }
+
+    // 2. Check Catacomb Inquisitor
+    if (this.dungeonAreaManager.currentArea === 'crypts_interior' && !this.inquisitorEncounter.isDefeated) {
+      if (pPos.distanceTo(this.inquisitorGroup.position) <= vortexRadius) {
+        const hitRes = this.inquisitorEncounter.takeDamage(60, false);
+        this.spawnFloatingText(this.inquisitorGroup.position, `🗡️ -${hitRes.actualDamage} (VÓRTICE)`, '#cc66ff');
+        if (this.inquisitorHpBarFill) {
+          this.inquisitorHpBarFill.style.width = `${Math.max(0, (this.inquisitorEncounter.health / this.inquisitorEncounter.maxHealth) * 100)}%`;
+        }
+        if (hitRes.defeated) {
+          this.handleInquisitorDefeat();
+        }
+      }
+    }
+
+    // 3. Check Standard Enemies
+    [
+      { grp: this.enemyGroup, alive: this.enemyState !== 'DEAD', applyDmg: (dmg: number) => { this.enemyHealth = Math.max(0, this.enemyHealth - dmg); if (this.enemyHealth <= 0) { this.enemyState = 'DEAD'; this.enemyGroup.position.y = -0.3; this.awardEnemyKillRewards('hound', false); } } },
+      { grp: this.cultistGroup, alive: this.cultistState !== 'DEAD', applyDmg: (dmg: number) => { this.cultistHealth = Math.max(0, this.cultistHealth - dmg); if (this.cultistHealth <= 0) { this.cultistState = 'DEAD'; this.cultistGroup.position.y = -0.3; this.awardEnemyKillRewards('cultist', false); } } },
+      { grp: this.zealotGroup, alive: this.zealotState !== 'DEAD', applyDmg: (dmg: number) => { this.zealotHealth = Math.max(0, this.zealotHealth - dmg); if (this.zealotHealth <= 0) { this.zealotState = 'DEAD'; this.zealotGroup.position.y = -0.3; this.awardEnemyKillRewards('zealot', false); } } },
+      { grp: this.skeletonGroup, alive: this.skeletonState !== 'DEAD', applyDmg: (dmg: number) => { this.skeletonHealth = Math.max(0, this.skeletonHealth - dmg); if (this.skeletonHealth <= 0) { this.skeletonState = 'DEAD'; this.skeletonGroup.position.y = -0.3; this.awardEnemyKillRewards('skeleton', false); } } },
+      { grp: this.cryptAmbushSkeletonGroup, alive: this.cryptAmbushAwakened && !this.cryptAmbushDead, applyDmg: (dmg: number) => { this.cryptAmbushHp = Math.max(0, this.cryptAmbushHp - dmg); if (this.cryptAmbushHp <= 0) { this.cryptAmbushDead = true; this.cryptAmbushSkeletonGroup.position.y = -0.3; this.awardEnemyKillRewards('crypt_ambush', false); } } }
+    ].forEach(e => {
+      if (e.alive && pPos.distanceTo(e.grp.position) <= vortexRadius) {
+        e.applyDmg(60);
+        this.spawnFloatingText(e.grp.position, '🗡️ -60 (VÓRTICE)', '#cc66ff');
+      }
+    });
+
+    // 4. Check Morwenna
+    if (this.morwennaState !== 'DORMANT' && this.morwennaState !== 'DEAD' && pPos.distanceTo(this.morwennaGroup.position) <= vortexRadius) {
+      const mResult = this.morwennaEncounter.takeDamage(60);
+      this.morwennaHealth = mResult.currentHealth;
+      this.spawnFloatingText(this.morwennaGroup.position, '🗡️ -60 (VÓRTICE)', '#cc66ff');
+      if (mResult.transitionedToPhase2) {
+        this.triggerMorwennaPhase2();
+      } else if (mResult.defeated) {
+        this.handleMorwennaDefeat();
+      }
+    }
+
+    this.updateHUD();
+  }
+
+  private updateRootProwler(delta: number): void {
+    if (this.dungeonAreaManager.currentArea !== 'black_willow_forest') {
+      if (this.rootProwlerHpBarContainer) {
+        this.rootProwlerHpBarContainer.style.display = 'none';
+      }
+      return;
+    }
+
+    if (this.rootProwlerEncounter.isDefeated) {
+      this.rootProwlerEyesLight.intensity = 0;
+      this.rootProwlerGroup.position.y = -0.4;
+      return;
+    }
+
+    const pPos = this.playerGroup.position;
+    const prowlerPos = this.rootProwlerGroup.position;
+    const distToPlayer = prowlerPos.distanceTo(pPos);
+
+    if (this.rootProwlerHpBarContainer) {
+      this.rootProwlerHpBarContainer.style.display = distToPlayer <= 14 ? 'block' : 'none';
+    }
+
+    if (this.rootProwlerEncounter.state === 'PATROL') {
+      prowlerPos.x += this.rootProwlerPatrolDir * delta * 1.6;
+      if (prowlerPos.x > 3.5) {
+        prowlerPos.x = 3.5;
+        this.rootProwlerPatrolDir = -1;
+      } else if (prowlerPos.x < -3.5) {
+        prowlerPos.x = -3.5;
+        this.rootProwlerPatrolDir = 1;
+      }
+      this.rootProwlerGroup.rotation.y = this.rootProwlerPatrolDir > 0 ? Math.PI * 0.5 : -Math.PI * 0.5;
+
+      if (distToPlayer <= 7.5) {
+        this.rootProwlerEncounter.setState('ALERT');
+        this.rootProwlerTimer = 0.6;
+        this.audio.playBeastRoar?.();
+        this.spawnFloatingText(prowlerPos, '🐾 ¡ACECHADOR DE RAÍCES ALERTA!', '#bb44ff');
+      }
+    } else if (this.rootProwlerEncounter.state === 'ALERT') {
+      this.rootProwlerTimer -= delta;
+      this.rootProwlerGroup.lookAt(pPos.x, prowlerPos.y, pPos.z);
+      if (this.rootProwlerTimer <= 0) {
+        this.rootProwlerEncounter.setState('CHASE');
+      }
+    } else if (this.rootProwlerEncounter.state === 'CHASE') {
+      this.rootProwlerGroup.lookAt(pPos.x, prowlerPos.y, pPos.z);
+      const dir = pPos.clone().sub(prowlerPos).normalize();
+      prowlerPos.addScaledVector(dir, delta * 3.4);
+
+      if (distToPlayer <= 2.2) {
+        this.rootProwlerEncounter.setState('WINDUP');
+        this.rootProwlerTimer = 0.45;
+        this.rootProwlerWarningMesh.visible = false;
+      } else if (distToPlayer <= 4.2 && distToPlayer > 2.8) {
+        this.rootProwlerEncounter.setState('WINDUP');
+        this.rootProwlerTimer = 0.65;
+        this.rootProwlerWarningMesh.visible = true;
+      }
+    } else if (this.rootProwlerEncounter.state === 'WINDUP') {
+      this.rootProwlerTimer -= delta;
+      this.rootProwlerGroup.lookAt(pPos.x, prowlerPos.y, pPos.z);
+      if (this.rootProwlerTimer <= 0) {
+        const isPounce = this.rootProwlerWarningMesh.visible;
+        this.rootProwlerWarningMesh.visible = false;
+        this.rootProwlerEncounter.setState('ATTACK');
+
+        const atkRes = this.rootProwlerEncounter.evaluateAttack(distToPlayer, this.playerStats.isDodging, isPounce);
+        if (atkRes.hit) {
+          if (this.playerStats.isGuarding) {
+            this.playerStats.posture = Math.max(0, this.playerStats.posture - (isPounce ? 35 : 20));
+            this.audio.playSfx('parry');
+            this.spawnFloatingText(pPos, '🛡️ ¡ZARPA BLOQUEADA!', '#ffd700');
+          } else {
+            const dmg = this.calculateIncomingDamage(atkRes.damage, 6);
+            this.playerStats.health = Math.max(0, this.playerStats.health - dmg);
+            this.triggerScreenShake(isPounce ? 0.4 : 0.2);
+            this.triggerDamageVignette(0.6);
+            this.audio.playCombatHit(true);
+            this.spawnFloatingText(pPos, `-${dmg} (ZARPAS DE RAÍZ)`, '#ff3344');
+
+            if (this.playerStats.health <= 0) {
+              this.handlePlayerDefeatAndRespawn();
+            }
+          }
+        } else if (this.playerStats.isDodging) {
+          this.audio.playSfx('dodge');
+          this.spawnFloatingText(pPos, '⚡ ¡ESQUIVADO PERFECTO!', '#00e5ff');
+        }
+
+        this.rootProwlerEncounter.setState('RECOVERY');
+        this.rootProwlerTimer = 1.0;
+        this.updateHUD();
+      }
+    } else if (this.rootProwlerEncounter.state === 'RECOVERY') {
+      this.rootProwlerTimer -= delta;
+      if (this.rootProwlerTimer <= 0) {
+        this.rootProwlerEncounter.setState('CHASE');
+      }
+    } else if (this.rootProwlerEncounter.state === 'STUNNED') {
+      this.rootProwlerTimer -= delta;
+      this.rootProwlerGroup.position.y = -0.15;
+      if (this.rootProwlerTimer <= 0) {
+        this.rootProwlerGroup.position.y = 0;
+        this.rootProwlerEncounter.setState('CHASE');
+      }
     }
   }
 
@@ -2493,6 +3189,16 @@ export class Oakhaven3DExperience {
         </div>
       </div>
 
+      <!-- Beast: Acechador de Raíces 3D Target HUD -->
+      <div id="p3d-root-prowler-hud" style="position: absolute; top: 122px; left: 50%; transform: translateX(-50%); background: rgba(18, 12, 28, 0.95); border: 1.2px solid #bb44ff; border-radius: 4px; padding: 4px 12px; width: 235px; text-align: center; box-shadow: 0 4px 20px rgba(187, 68, 255, 0.45); display: none;">
+        <div style="font-size: 7.5px; font-weight: bold; color: #eeddff; margin-bottom: 2px; letter-spacing: 0.5px;">
+          🌿 ACECHADOR DE RAÍCES DEL SAUCE NEGRO 🌿
+        </div>
+        <div style="width: 100%; height: 6px; background: #231233; border: 1px solid #7722aa; border-radius: 2px; overflow: hidden;">
+          <div id="p3d-root-prowler-hp-fill" style="width: 100%; height: 100%; background: #bb44ff; transition: width 0.15s ease;"></div>
+        </div>
+      </div>
+
       <!-- Floating Proximity Action Pill (Interactive [E]) -->
       <div id="p3d-proximity-badge" style="position: absolute; bottom: 58px; left: 50%; transform: translateX(-50%); background: rgba(18, 9, 32, 0.96); border: 1.5px solid #ffd700; border-radius: 4px; padding: 4px 14px; font-family: monospace; font-size: 8.5px; font-weight: bold; color: #ffd700; display: none; box-shadow: 0 4px 20px rgba(0,0,0,0.85); z-index: 50; cursor: pointer; pointer-events: auto; text-align: center; letter-spacing: 0.5px;">
         [E] INTERACTUAR
@@ -2593,7 +3299,7 @@ export class Oakhaven3DExperience {
 
       <!-- Bottom Controls Bar -->
       <div style="position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); background: rgba(8, 4, 14, 0.95); border: 1px solid #3d2852; border-radius: 3px; padding: 2px 10px; font-family: monospace; font-size: 7px; color: #c5b4db; white-space: nowrap;">
-        WASD: Moverse 3D | TAB: Héroe | I: Inventario | B: Botica/Alquimia | H: Habilidades | Q: Curar | G: Guardar Santuario | J/K: Ataque | L: Guardia | Espacio: Esquivar | T: Lanzar | E: Hablar/Recoger | M: Audio | C: Cámara
+        WASD: Moverse 3D | TAB: Héroe | I: Inventario | B: Botica/Alquimia | H: Habilidades | Q: Curar | G: Guardar Santuario | J/K: Ataque | L: Guardia | Espacio: Esquivar | T: Lanzar | U: Eco Aquelarre | E: Hablar/Recoger | M: Audio | C: Cámara
       </div>
     `;
 
@@ -2705,6 +3411,8 @@ export class Oakhaven3DExperience {
 
     this.inquisitorHpBarContainer = this.uiOverlay.querySelector('#p3d-inquisitor-hud') as HTMLDivElement;
     this.inquisitorHpBarFill = this.uiOverlay.querySelector('#p3d-inquisitor-hp-fill') as HTMLDivElement;
+    this.rootProwlerHpBarContainer = this.uiOverlay.querySelector('#p3d-root-prowler-hud') as HTMLDivElement;
+    this.rootProwlerHpBarFill = this.uiOverlay.querySelector('#p3d-root-prowler-hp-fill') as HTMLDivElement;
     this.zoneTransitionOverlay = this.uiOverlay.querySelector('#p3d-zone-transition') as HTMLDivElement;
     this.zoneTitleEl = this.uiOverlay.querySelector('#p3d-zone-title') as HTMLDivElement;
     this.zoneSubtitleEl = this.uiOverlay.querySelector('#p3d-zone-subtitle') as HTMLDivElement;
@@ -2943,6 +3651,24 @@ export class Oakhaven3DExperience {
       this.handleInquisitorDefeat();
       return;
     }
+    if (key === '6' && !e.repeat) {
+      this.transitionToArea('black_willow_forest');
+      setTimeout(() => {
+        this.setPlayerPosition(0, 0, -135);
+        this.updateProximityInteractions();
+      }, 450);
+      return;
+    }
+    if (key === '7' && !e.repeat) {
+      this.dungeonAreaManager.enterBlackWillowForest();
+      this.setPlayerPosition(0, 0, -153);
+      this.updateProximityInteractions();
+      return;
+    }
+    if (key === '8' && !e.repeat) {
+      this.handleRootProwlerDefeat();
+      return;
+    }
 
     // Toggle Camera with [C] (single-pulse only)
     if (key === 'c') {
@@ -3031,6 +3757,14 @@ export class Oakhaven3DExperience {
         } else {
           this.spawnFloatingText(this.playerGroup.position, '¡El arco abisal está imbuido a tu alma!', '#d999ff');
         }
+      }
+      return;
+    }
+
+    // Eco del Aquelarre with [U] (single-pulse, Khaterine only with Colmillo del Sauce Negro)
+    if (key === 'u') {
+      if (!e.repeat) {
+        this.executeKhaterineEchoVortex();
       }
       return;
     }
@@ -3399,6 +4133,34 @@ export class Oakhaven3DExperience {
         }
       }
     }
+
+    // Hit Detection against Root Prowler in Black Willow Forest
+    if (this.dungeonAreaManager.currentArea === 'black_willow_forest' && !this.rootProwlerEncounter.isDefeated) {
+      const distToProwler = this.playerGroup.position.distanceTo(this.rootProwlerGroup.position);
+      if (distToProwler <= reach + 0.6) {
+        const baseDmg = this.playerStats.isArmed ? (isHeavy ? 42 : 26) : (isHeavy ? 22 : 14);
+        const skillBonus = 1.0 + (this.progression.getDamageBonusPct(this.activeHero) / 100);
+        const dmg = Math.round(baseDmg * this.attackBuffMultiplier * skillBonus);
+
+        const hitRes = this.rootProwlerEncounter.takeDamage(dmg, false);
+        this.spawnFloatingText(this.rootProwlerGroup.position, `-${hitRes.actualDamage}`, isHeavy ? '#ffd700' : '#bb44ff');
+        this.audio.playCombatHit(isHeavy);
+
+        if (isHeavy) {
+          this.rootProwlerEncounter.setState('STUNNED');
+          this.rootProwlerTimer = 1.3;
+          this.spawnFloatingText(this.rootProwlerGroup.position, '⚡ ¡ATURDIDO! [E] ¡REMATAR!', '#ffaa44');
+        }
+
+        if (this.rootProwlerHpBarFill) {
+          this.rootProwlerHpBarFill.style.width = `${Math.max(0, (this.rootProwlerEncounter.health / this.rootProwlerEncounter.maxHealth) * 100)}%`;
+        }
+
+        if (hitRes.defeated) {
+          this.handleRootProwlerDefeat();
+        }
+      }
+    }
   }
 
   // =========================================================================
@@ -3723,7 +4485,44 @@ export class Oakhaven3DExperience {
         }
       }
 
-      // 8. Check Destructibles collision
+      // 8. Check Root Prowler (Acechador de Raíces) collision in Black Willow Forest
+      if (!collided && this.dungeonAreaManager.currentArea === 'black_willow_forest' && !this.rootProwlerEncounter.isDefeated) {
+        const dProwler = p.mesh.position.distanceTo(this.rootProwlerGroup.position.clone().add(new THREE.Vector3(0, 0.8, 0)));
+        if (dProwler <= 1.8) {
+          collided = true;
+          if (p.isThrownFlask) {
+            this.explodeHolyFireFlask(p.mesh.position.clone(), p.damage);
+          } else {
+            const isFire = p.arrowType === 'fire';
+            const hitRes = this.rootProwlerEncounter.takeDamage(p.damage, isFire);
+            const label = isFire ? '¡VULNERABILIDAD FUEGO (+50%)!' : p.arrowType === 'silver' ? 'FLECHA DE PLATA' : 'FLECHA ABISAL';
+            this.spawnFloatingText(this.rootProwlerGroup.position, `-${hitRes.actualDamage} (${label})`, isFire ? '#ff7722' : p.isHeavy ? '#ffd700' : '#bb44ff');
+            this.audio.playCombatHit(p.isHeavy || isFire);
+
+            if (isFire) {
+              this.activeBurnEffects.push({ targetId: 'root_prowler', ticksLeft: 6, dmgPerTick: 6, timer: 0.5 });
+              this.spawnFloatingText(this.rootProwlerGroup.position, '🔥 ¡RAÍCES EN LLAMAS!', '#ff7722');
+            }
+
+            if (p.isHeavy || isFire) {
+              this.rootProwlerEncounter.setState('STUNNED');
+              this.rootProwlerTimer = 1.4;
+              this.spawnFloatingText(this.rootProwlerGroup.position, '⚡ ¡ATURDIDO! [E] ¡REMATAR!', '#ffaa44');
+            }
+
+            if (this.rootProwlerHpBarFill) {
+              this.rootProwlerHpBarFill.style.width = `${Math.max(0, (this.rootProwlerEncounter.health / this.rootProwlerEncounter.maxHealth) * 100)}%`;
+            }
+
+            if (hitRes.defeated) {
+              this.handleRootProwlerDefeat();
+            }
+            this.updateHUD();
+          }
+        }
+      }
+
+      // 9. Check Destructibles collision
       if (!collided) {
         for (const prop of this.destructibles) {
           if (!prop.isDestroyed) {
@@ -4158,6 +4957,21 @@ export class Oakhaven3DExperience {
       }
     }
 
+    // Check Root Prowler (Acechador de Raíces) in Black Willow Forest
+    if (this.dungeonAreaManager.currentArea === 'black_willow_forest' && !this.rootProwlerEncounter.isDefeated && pos.distanceTo(this.rootProwlerGroup.position) <= radius) {
+      const hitRes = this.rootProwlerEncounter.takeDamage(dmg, true); // Fire triggers 1.5x vulnerability
+      this.spawnFloatingText(this.rootProwlerGroup.position, `-${hitRes.actualDamage} 🔥 ¡VULNERABLE AL FUEGO!`, '#ff5500');
+      this.activeBurnEffects.push({ targetId: 'root_prowler', ticksLeft: 6, dmgPerTick: 6, timer: 0.5 });
+      this.rootProwlerEncounter.setState('STUNNED');
+      this.rootProwlerTimer = 1.5;
+      if (this.rootProwlerHpBarFill) {
+        this.rootProwlerHpBarFill.style.width = `${Math.max(0, (this.rootProwlerEncounter.health / this.rootProwlerEncounter.maxHealth) * 100)}%`;
+      }
+      if (hitRes.defeated) {
+        this.handleRootProwlerDefeat();
+      }
+    }
+
     // Check Destructibles
     for (const prop of this.destructibles) {
       if (!prop.isDestroyed && pos.distanceTo(prop.position) <= radius + 0.5) {
@@ -4218,6 +5032,15 @@ export class Oakhaven3DExperience {
         break;
       case 'crypt_sarcophagus_ambush':
         this.interactWithAmbushSarcophagus();
+        break;
+      case 'crypt_to_forest':
+        this.transitionToArea('black_willow_forest');
+        break;
+      case 'forest_to_crypt':
+        this.transitionToArea('crypts_interior');
+        break;
+      case 'sister_altar':
+        this.interactWithSisterAltar();
         break;
     }
   }
@@ -4428,6 +5251,17 @@ export class Oakhaven3DExperience {
         return;
       }
     }
+
+    // Check if Root Prowler is stunned
+    if (this.dungeonAreaManager.currentArea === 'black_willow_forest' && this.rootProwlerEncounter.state === 'STUNNED') {
+      const distToProwler = this.playerGroup.position.distanceTo(this.rootProwlerGroup.position);
+      if (distToProwler <= 3.5) {
+        this.handleRootProwlerDefeat();
+        this.playerLight.intensity = 4.0;
+        setTimeout(() => { if (this.playerLight) this.playerLight.intensity = 1.4; }, 300);
+        return;
+      }
+    }
   }
 
   public showDialogueModal(header: string, text: string, rewardText?: string): void {
@@ -4620,6 +5454,45 @@ export class Oakhaven3DExperience {
         targetFound = 'crypt_sarcophagus_ambush';
         badgeText = this.cryptAmbushAwakened ? '🪦 SARCÓFAGO ABIERTO' : '🪦 [E] REGISTRAR SARCÓFAGO SELLADO';
         badgeColor = this.cryptAmbushAwakened ? '#aaaaaa' : '#ff6666';
+      }
+      // Portal to Black Willow Forest at z = -110
+      else if (pPos.z <= -108.0 && pPos.z >= -112.0 && Math.abs(pPos.x) <= 2.8) {
+        if (!this.inquisitorEncounter.isDefeated) {
+          targetFound = undefined;
+          badgeText = '🔒 LAS CADENAS DEL INQUISIDOR SELLAN EL PORTAL AL SAUCE NEGRO';
+          badgeColor = '#ff6666';
+        } else {
+          targetFound = 'crypt_to_forest';
+          badgeText = '🌿 [E] ADENTRARSE EN EL BOSQUE DEL SAUCE NEGRO';
+          badgeColor = '#cc66ff';
+        }
+      }
+    }
+
+    // 11. Black Willow Forest Interactions (when inside forest)
+    if (!targetFound && this.dungeonAreaManager.currentArea === 'black_willow_forest') {
+      // Exit gate back to crypts
+      if (pPos.z >= -127.5 && pPos.z <= -124.5 && Math.abs(pPos.x) <= 3.0) {
+        targetFound = 'forest_to_crypt';
+        badgeText = '🚪 [E] REGRESAR A LAS CRIPTAS DE SAN JUDE';
+        badgeColor = '#00e5ff';
+      }
+      // Altar of the Nine Sisters at (0, 0, -155)
+      else if (pPos.distanceTo(new THREE.Vector3(0, 0, -155)) <= 3.2) {
+        targetFound = 'sister_altar';
+        if (this.inventory.hasWillowFang()) {
+          badgeText = '🔮 ALTAR DE LAS NUEVE HERMANAS (CONSAGRADO)';
+          badgeColor = '#aaaaaa';
+        } else {
+          badgeText = '🔮 [E] RECLAMAR EL COLMILLO DEL SAUCE NEGRO';
+          badgeColor = '#cc66ff';
+        }
+      }
+      // Stunned Root Prowler Finisher
+      else if (this.rootProwlerEncounter.state === 'STUNNED' && pPos.distanceTo(this.rootProwlerGroup.position) <= 3.0) {
+        targetFound = 'finisher';
+        badgeText = '⚡ [E] ¡REMATAR AL ACECHADOR DE RAÍCES!';
+        badgeColor = '#ffd700';
       }
     }
 
@@ -5450,6 +6323,7 @@ export class Oakhaven3DExperience {
     this.updateSpikeTraps(delta);
     this.updateInquisitor(delta);
     this.updateCryptAmbush(delta);
+    this.updateRootProwler(delta);
     this.updateProximityInteractions();
     this.updateCamera(delta);
     this.updateFlickeringLights(delta);
@@ -5468,6 +6342,41 @@ export class Oakhaven3DExperience {
     if (this.wardBarrierMesh && this.wardBarrierMesh.visible) {
       this.wardBarrierMesh.rotation.y += delta * 2.5;
       this.wardBarrierMesh.rotation.x += delta * 1.5;
+    }
+
+    // Oscillate willow spores in Black Willow Forest
+    if (this.willowSporesPoints && this.dungeonAreaManager.currentArea === 'black_willow_forest') {
+      const posAttr = this.willowSporesPoints.geometry.getAttribute('position') as THREE.BufferAttribute;
+      const t = this.clock.elapsedTime;
+      for (let i = 0; i < posAttr.count; i++) {
+        const yOrig = posAttr.getY(i);
+        posAttr.setY(i, yOrig + Math.sin(t * 1.5 + i) * 0.005);
+      }
+      posAttr.needsUpdate = true;
+    }
+
+    // Float & rotate willow relic over altar if still present
+    if (this.willowRelicMeshGroup && this.willowRelicMeshGroup.visible) {
+      this.willowRelicMeshGroup.rotation.y += delta * 1.2;
+      this.willowRelicMeshGroup.position.y = 1.7 + Math.sin(this.clock.elapsedTime * 2.5) * 0.08;
+    }
+
+    // Update Dagger Vortex if active
+    if (this.isDaggerVortexActive && this.daggerVortexMeshGroup) {
+      this.daggerVortexTimer -= delta;
+      this.daggerVortexMeshGroup.visible = true;
+      this.daggerVortexMeshGroup.position.copy(this.playerGroup.position);
+      this.daggerVortexMeshGroup.rotation.y += delta * 18.0;
+
+      if (this.daggerVortexTimer <= 0) {
+        this.isDaggerVortexActive = false;
+        this.daggerVortexMeshGroup.visible = false;
+      }
+    }
+
+    // Dagger vortex cooldown tick
+    if (this.daggerVortexCooldown > 0) {
+      this.daggerVortexCooldown = Math.max(0, this.daggerVortexCooldown - delta);
     }
 
     this.renderer.render(this.scene, this.camera);
@@ -5567,6 +6476,16 @@ export class Oakhaven3DExperience {
         this.cryptAmbushSkeletonGroup.position.y = -0.3;
         this.spawnFloatingText(this.cryptAmbushSkeletonGroup.position, '¡PENITENTE PURIFICADO! (+80 EXP)', '#00e5ff');
         this.awardEnemyKillRewards('crypt_ambush', false);
+      }
+      this.updateHUD();
+    } else if (targetId === 'root_prowler' && !this.rootProwlerEncounter.isDefeated) {
+      const hitRes = this.rootProwlerEncounter.takeDamage(dmg, true);
+      this.spawnFloatingText(this.rootProwlerGroup.position, `🔥 -${hitRes.actualDamage} (FUEGO)`, '#ff7722');
+      if (this.rootProwlerHpBarFill) {
+        this.rootProwlerHpBarFill.style.width = `${Math.max(0, (this.rootProwlerEncounter.health / this.rootProwlerEncounter.maxHealth) * 100)}%`;
+      }
+      if (hitRes.defeated) {
+        this.handleRootProwlerDefeat();
       }
       this.updateHUD();
     }
@@ -6760,6 +7679,9 @@ export class Oakhaven3DExperience {
     this.dungeonAreaManager.exitToSurface();
     if (this.inquisitorHpBarContainer) {
       this.inquisitorHpBarContainer.style.display = 'none';
+    }
+    if (this.rootProwlerHpBarContainer) {
+      this.rootProwlerHpBarContainer.style.display = 'none';
     }
     const activeId = this.party.getActiveHeroId();
     const bonusHp = this.progression && (activeId === 'thomas' || activeId === 'khaterine')

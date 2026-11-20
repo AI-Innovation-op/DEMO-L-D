@@ -22,6 +22,9 @@ export interface IAudioPort {
   playHolyFlash?(): void;
   playFlaskExplosion?(): void;
   playArrowSwitch?(): void;
+  playWillowWhisper?(): void;
+  playBeastRoar?(): void;
+  playDaggerVortex?(): void;
 }
 
 export interface DialogueLine {

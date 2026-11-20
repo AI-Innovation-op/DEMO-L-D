@@ -763,4 +763,104 @@ export class WebAudioSoundAdapter implements IAudioPort {
       osc.stop(now + 0.1);
     } catch {}
   }
+
+  public playWillowWhisper(): void {
+    if (this.isMuted) return;
+    try {
+      const ctx = this.initContext();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+
+      // Ethereal dual sine resonance with gentle chorus sweep
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc1.type = 'sine';
+      osc2.type = 'triangle';
+      osc1.frequency.setValueAtTime(380, now);
+      osc1.frequency.exponentialRampToValueAtTime(440, now + 0.4);
+      osc1.frequency.exponentialRampToValueAtTime(290, now + 0.9);
+
+      osc2.frequency.setValueAtTime(570, now);
+      osc2.frequency.exponentialRampToValueAtTime(660, now + 0.4);
+      osc2.frequency.exponentialRampToValueAtTime(435, now + 0.9);
+
+      gain.gain.setValueAtTime(0.01, now);
+      gain.gain.linearRampToValueAtTime(0.22, now + 0.25);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.95);
+
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc1.start(now);
+      osc2.start(now);
+      osc1.stop(now + 0.96);
+      osc2.stop(now + 0.96);
+    } catch {}
+  }
+
+  public playBeastRoar(): void {
+    if (this.isMuted) return;
+    try {
+      const ctx = this.initContext();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+
+      // Low guttural growl with harmonic distortion sweep
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc1.type = 'sawtooth';
+      osc2.type = 'square';
+
+      osc1.frequency.setValueAtTime(140, now);
+      osc1.frequency.linearRampToValueAtTime(85, now + 0.35);
+      osc1.frequency.linearRampToValueAtTime(55, now + 0.7);
+
+      osc2.frequency.setValueAtTime(70, now);
+      osc2.frequency.linearRampToValueAtTime(45, now + 0.7);
+
+      gain.gain.setValueAtTime(0.35, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.72);
+
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc1.start(now);
+      osc2.start(now);
+      osc1.stop(now + 0.73);
+      osc2.stop(now + 0.73);
+    } catch {}
+  }
+
+  public playDaggerVortex(): void {
+    if (this.isMuted) return;
+    try {
+      const ctx = this.initContext();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+
+      // Fast slicing metallic sweep + resonant ring
+      for (let i = 0; i < 3; i++) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(880 + i * 220, now + i * 0.08);
+        osc.frequency.exponentialRampToValueAtTime(220, now + i * 0.08 + 0.22);
+
+        gain.gain.setValueAtTime(0.24, now + i * 0.08);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.22);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(now + i * 0.08);
+        osc.stop(now + i * 0.08 + 0.23);
+      }
+    } catch {}
+  }
 }

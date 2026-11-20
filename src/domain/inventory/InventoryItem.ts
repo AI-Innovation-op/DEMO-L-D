@@ -8,6 +8,7 @@ export type ItemEffectType =
   | 'relic_parry_window'
   | 'relic_dodge_cost'
   | 'relic_danger_sense'
+  | 'relic_willow_echo'
   | 'special_ammo'
   | 'throwable_flask'
   | 'unlock_gate'
