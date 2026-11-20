@@ -498,4 +498,162 @@ export class WebAudioSoundAdapter implements IAudioPort {
       osc.stop(now + 0.23);
     } catch {}
   }
+
+  public playSpikeTrap(): void {
+    if (this.isMuted) return;
+    try {
+      const ctx = this.initContext();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+
+      // 1. Sharp mechanical trigger snap (high sawtooth burst)
+      const snapOsc = ctx.createOscillator();
+      const snapGain = ctx.createGain();
+      snapOsc.type = 'sawtooth';
+      snapOsc.frequency.setValueAtTime(1400, now);
+      snapOsc.frequency.exponentialRampToValueAtTime(180, now + 0.08);
+
+      snapGain.gain.setValueAtTime(0.25, now);
+      snapGain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+      snapOsc.connect(snapGain);
+      snapGain.connect(ctx.destination);
+      snapOsc.start(now);
+      snapOsc.stop(now + 0.09);
+
+      // 2. Iron spikes piercing upward (clang + metal friction)
+      const clangOsc = ctx.createOscillator();
+      const clangGain = ctx.createGain();
+      clangOsc.type = 'square';
+      clangOsc.frequency.setValueAtTime(320, now + 0.02);
+      clangOsc.frequency.exponentialRampToValueAtTime(80, now + 0.25);
+
+      clangGain.gain.setValueAtTime(0.28, now + 0.02);
+      clangGain.gain.exponentialRampToValueAtTime(0.001, now + 0.26);
+      clangOsc.connect(clangGain);
+      clangGain.connect(ctx.destination);
+      clangOsc.start(now + 0.02);
+      clangOsc.stop(now + 0.27);
+    } catch {}
+  }
+
+  public playCryptDoor(): void {
+    if (this.isMuted) return;
+    try {
+      const ctx = this.initContext();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+
+      // Heavy grinding stone slab rumble (low frequency triangle with sub-bass drone)
+      const stoneOsc = ctx.createOscillator();
+      const stoneGain = ctx.createGain();
+      stoneOsc.type = 'triangle';
+      stoneOsc.frequency.setValueAtTime(85, now);
+      stoneOsc.frequency.linearRampToValueAtTime(45, now + 0.7);
+
+      stoneGain.gain.setValueAtTime(0.32, now);
+      stoneGain.gain.exponentialRampToValueAtTime(0.001, now + 0.75);
+      stoneOsc.connect(stoneGain);
+      stoneGain.connect(ctx.destination);
+      stoneOsc.start(now);
+      stoneOsc.stop(now + 0.76);
+
+      // Resonant iron hinges / lock mechanism click
+      const hingeOsc = ctx.createOscillator();
+      const hingeGain = ctx.createGain();
+      hingeOsc.type = 'sawtooth';
+      hingeOsc.frequency.setValueAtTime(420, now + 0.1);
+      hingeOsc.frequency.exponentialRampToValueAtTime(110, now + 0.45);
+
+      hingeGain.gain.setValueAtTime(0.18, now + 0.1);
+      hingeGain.gain.exponentialRampToValueAtTime(0.001, now + 0.48);
+      hingeOsc.connect(hingeGain);
+      hingeGain.connect(ctx.destination);
+      hingeOsc.start(now + 0.1);
+      hingeOsc.stop(now + 0.5);
+    } catch {}
+  }
+
+  public playHolyCurse(): void {
+    if (this.isMuted) return;
+    try {
+      const ctx = this.initContext();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+
+      // Ominous dissonant choir / corrupted holy flare
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc1.type = 'sawtooth';
+      osc2.type = 'sine';
+      osc1.frequency.setValueAtTime(220, now);
+      osc1.frequency.linearRampToValueAtTime(110, now + 0.6);
+      osc2.frequency.setValueAtTime(330, now);
+      osc2.frequency.linearRampToValueAtTime(165, now + 0.6);
+
+      gain.gain.setValueAtTime(0.3, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
+
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc1.start(now);
+      osc2.start(now);
+      osc1.stop(now + 0.66);
+      osc2.stop(now + 0.66);
+    } catch {}
+  }
+
+  public playMaceImpact(): void {
+    if (this.isMuted) return;
+    try {
+      const ctx = this.initContext();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+
+      // Heavy blunt iron mace crunch
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(180, now);
+      osc.frequency.exponentialRampToValueAtTime(40, now + 0.28);
+
+      gain.gain.setValueAtTime(0.35, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.31);
+    } catch {}
+  }
+
+  public playCauldronBubble(): void {
+    if (this.isMuted) return;
+    try {
+      const ctx = this.initContext();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+
+      // Rapid playful bubbling pops
+      [0, 0.05, 0.11, 0.16].forEach((delay, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        const startFreq = 420 + idx * 80;
+        osc.frequency.setValueAtTime(startFreq, now + delay);
+        osc.frequency.exponentialRampToValueAtTime(startFreq + 260, now + delay + 0.045);
+
+        gain.gain.setValueAtTime(0.14, now + delay);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.045);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + delay);
+        osc.stop(now + delay + 0.05);
+      });
+    } catch {}
+  }
 }

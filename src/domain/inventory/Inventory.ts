@@ -94,14 +94,16 @@ export class Inventory {
   }
 
   public addItem(item: InventoryItem, qty: number = item.quantity || 1): boolean {
+    const maxQty = item.maxQuantity ?? 99;
     const existing = this.items.get(item.id);
     if (existing) {
-      existing.quantity = Math.min(existing.maxQuantity, existing.quantity + qty);
+      existing.quantity = Math.min(existing.maxQuantity ?? maxQty, existing.quantity + qty);
       return true;
     } else {
       this.items.set(item.id, {
         ...item,
-        quantity: Math.min(item.maxQuantity, qty),
+        maxQuantity: maxQty,
+        quantity: Math.min(maxQty, qty),
         isEquipped: item.isEquipped ?? false
       });
       return true;

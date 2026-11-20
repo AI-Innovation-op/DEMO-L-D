@@ -9,6 +9,9 @@ import { HeroId, HERO_DEFINITIONS } from '../../domain/party/HeroCombatState';
 import { MorwennaEncounter } from '../../domain/encounters/MorwennaEncounter';
 import { AlchemyPot } from '../../domain/alchemy/AlchemyPot';
 import { CANONICAL_MATERIALS } from '../../domain/alchemy/AlchemyRecipe';
+import { DungeonAreaManager, DungeonArea } from '../../domain/encounters/DungeonAreaManager';
+import { SpikeTrap } from '../../domain/encounters/SpikeTrap';
+import { CatacombInquisitor } from '../../domain/encounters/CatacombInquisitor';
 
 export interface CombatStats3D {
   health: number;
@@ -248,8 +251,32 @@ export class Oakhaven3DExperience {
   private skeletonHpBarFill?: HTMLDivElement;
   private skeletonSwordMesh!: THREE.Mesh;
 
+  // Subterranean Crypts (Dungeon Crawler Expansion)
+  private dungeonAreaManager: DungeonAreaManager = new DungeonAreaManager();
+  private spikeTraps: { trap: SpikeTrap; meshGroup: THREE.Group; spikeMeshes: THREE.Mesh[] }[] = [];
+  private inquisitorEncounter: CatacombInquisitor = new CatacombInquisitor();
+  private inquisitorGroup!: THREE.Group;
+  private inquisitorHpBarContainer?: HTMLDivElement;
+  private inquisitorHpBarFill?: HTMLDivElement;
+  private inquisitorWarningMesh!: THREE.Mesh;
+  private inquisitorSlamTelegraphMesh!: THREE.Mesh;
+  private inquisitorTimer: number = 0;
+  private inquisitorSpecialCooldown: number = 4.0;
+  private cryptInteriorGroup!: THREE.Group;
+  private cryptSarcophagusLootGroup!: THREE.Group;
+  private cryptSarcophagusAmbushGroup!: THREE.Group;
+  private cryptAmbushSkeletonGroup!: THREE.Group;
+  private cryptAmbushAwakened: boolean = false;
+  private cryptAmbushDead: boolean = false;
+  private cryptAmbushHp: number = 70;
+  private cryptAmbushTimer: number = 0;
+  private isZoneTransitioning: boolean = false;
+  private zoneTransitionOverlay?: HTMLDivElement;
+  private zoneTitleEl?: HTMLDivElement;
+  private zoneSubtitleEl?: HTMLDivElement;
+
   // 3D Proximity Interactions & Modals
-  private activeInteractTarget?: 'elowen' | 'cauldron' | 'cedric' | 'shalem' | 'khaterine' | 'thomas' | 'sword' | 'finisher' | 'cemetery_gate';
+  private activeInteractTarget?: 'elowen' | 'cauldron' | 'cedric' | 'shalem' | 'khaterine' | 'thomas' | 'sword' | 'finisher' | 'cemetery_gate' | 'crypt_entrance' | 'crypt_exit' | 'crypt_sarcophagus_loot' | 'crypt_sarcophagus_ambush';
   private proximityBadgeEl?: HTMLDivElement;
   private dialogueModalEl?: HTMLDivElement;
   private inventoryModalEl?: HTMLDivElement;
@@ -321,6 +348,9 @@ export class Oakhaven3DExperience {
     this.createBossMorwenna();
     this.createCemeteryAndCrypts();
     this.createSkeletonEnemy();
+    this.createCryptInterior();
+    this.createInquisitorBoss();
+    this.createCryptAmbushSkeleton();
 
     // 6. Build 3D UI Overlay
     this.createUIOverlay();
@@ -1815,6 +1845,478 @@ export class Oakhaven3DExperience {
   }
 
   // =========================================================================
+  // SUBTERRANEAN CRYPTS (DUNGEON CRAWLER EXPANSION)
+  // =========================================================================
+  private createCryptInterior(): void {
+    this.cryptInteriorGroup = new THREE.Group();
+    // Crypt spans from z: -68 to z: -114 (46 meters long), x: -6.5 to +6.5 (13 meters wide)
+    const cryptStoneMat = new THREE.MeshStandardMaterial({ color: 0x14121a, roughness: 0.95 });
+    const wallStoneMat = new THREE.MeshStandardMaterial({ color: 0x1a1822, roughness: 0.9 });
+    const archMat = new THREE.MeshStandardMaterial({ color: 0x22202a, roughness: 0.85 });
+    const darkIronMat = new THREE.MeshStandardMaterial({ color: 0x181820, metalness: 0.85, roughness: 0.35 });
+    const bronzeGrateMat = new THREE.MeshStandardMaterial({ color: 0x3d2812, metalness: 0.7, roughness: 0.5 });
+    const ironSpikeMat = new THREE.MeshStandardMaterial({ color: 0x2b2b33, metalness: 0.9, roughness: 0.25 });
+    const torchWoodMat = new THREE.MeshStandardMaterial({ color: 0x201408, roughness: 0.9 });
+    const torchFlameMat = new THREE.MeshBasicMaterial({ color: 0xff8822 });
+    const cyanFlameMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff });
+
+    // 1. Crypt Flagstone Floor
+    const floorGeo = new THREE.PlaneGeometry(13, 46);
+    const cryptFloor = new THREE.Mesh(floorGeo, cryptStoneMat);
+    cryptFloor.rotation.x = -Math.PI / 2;
+    cryptFloor.position.set(0, 0.01, -91);
+    cryptFloor.receiveShadow = true;
+    this.cryptInteriorGroup.add(cryptFloor);
+
+    // 2. Vaulted Ceiling (y = 5.2)
+    const ceilingGeo = new THREE.PlaneGeometry(13, 46);
+    const cryptCeiling = new THREE.Mesh(ceilingGeo, wallStoneMat);
+    cryptCeiling.rotation.x = Math.PI / 2;
+    cryptCeiling.position.set(0, 5.2, -91);
+    this.cryptInteriorGroup.add(cryptCeiling);
+
+    // 3. Side Walls (Left x = -6.5, Right x = 6.5)
+    const wallGeo = new THREE.BoxGeometry(0.8, 5.2, 46);
+    const wallL = new THREE.Mesh(wallGeo, wallStoneMat);
+    wallL.position.set(-6.5, 2.6, -91);
+    wallL.receiveShadow = true;
+    const wallR = new THREE.Mesh(wallGeo, wallStoneMat);
+    wallR.position.set(6.5, 2.6, -91);
+    wallR.receiveShadow = true;
+    this.cryptInteriorGroup.add(wallL, wallR);
+
+    // 4. Entrance End Wall (z = -68) and Deep Altar Wall (z = -114)
+    const endWallGeo = new THREE.BoxGeometry(13, 5.2, 0.8);
+    const wallEntrance = new THREE.Mesh(endWallGeo, wallStoneMat);
+    wallEntrance.position.set(0, 2.6, -68);
+    const wallDeep = new THREE.Mesh(endWallGeo, wallStoneMat);
+    wallDeep.position.set(0, 2.6, -114);
+    this.cryptInteriorGroup.add(wallEntrance, wallDeep);
+
+    // 5. Entrance Staircase & Exit Portal at z = -70
+    for (let s = 0; s < 5; s++) {
+      const stepMesh = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.25, 0.6), archMat);
+      stepMesh.position.set(0, 0.125 + s * 0.22, -68.8 - s * 0.5);
+      this.cryptInteriorGroup.add(stepMesh);
+    }
+    const exitArch = new THREE.Mesh(new THREE.BoxGeometry(3.8, 4.0, 0.6), archMat);
+    exitArch.position.set(0, 2.0, -69.2);
+    const exitPortalMat = new THREE.MeshBasicMaterial({ color: 0x050d1a });
+    const exitPortal = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 3.2), exitPortalMat);
+    exitPortal.position.set(0, 1.6, -68.8);
+    const exitLight = new THREE.PointLight(0x4488ff, 1.8, 7);
+    exitLight.position.set(0, 1.8, -70.0);
+    this.cryptInteriorGroup.add(exitArch, exitPortal, exitLight);
+
+    // 6. Transverse Gothic Rib Arches & Heavy Pillars every 6m
+    const archZPositions = [-74, -80, -86, -92, -98, -104, -110];
+    archZPositions.forEach(az => {
+      // Left Pillar
+      const pilL = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.42, 5.2, 8), archMat);
+      pilL.position.set(-4.5, 2.6, az);
+      pilL.castShadow = true;
+      // Right Pillar
+      const pilR = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.42, 5.2, 8), archMat);
+      pilR.position.set(4.5, 2.6, az);
+      pilR.castShadow = true;
+      // Gothic Rib Beam across ceiling
+      const archBeam = new THREE.Mesh(new THREE.BoxGeometry(9.6, 0.4, 0.6), archMat);
+      archBeam.position.set(0, 5.0, az);
+
+      this.cryptInteriorGroup.add(pilL, pilR, archBeam);
+
+      // Iron Torch Sconces on Pillars
+      [-4.1, 4.1].forEach((tx) => {
+        const torchSconce = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.4, 0.25), torchWoodMat);
+        torchSconce.position.set(tx, 2.4, az);
+        const flame = new THREE.Mesh(new THREE.DodecahedronGeometry(0.12), torchFlameMat);
+        flame.position.set(tx, 2.65, az);
+        const light = new THREE.PointLight(0xff7722, 1.6, 8);
+        light.position.set(tx, 2.7, az);
+        this.cryptInteriorGroup.add(torchSconce, flame, light);
+      });
+    });
+
+    // 7. Spike Traps (Trap 1: x: -1.2, z: -80 | Trap 2: x: 1.5, z: -91)
+    const trapConfigs = [
+      { x: -1.2, z: -80 },
+      { x: 1.5, z: -91 }
+    ];
+    this.spikeTraps = [];
+    trapConfigs.forEach(tc => {
+      const trapDomain = new SpikeTrap({ x: tc.x, z: tc.z, triggerRadius: 1.2, damage: 25, resetCooldown: 2.2 });
+      const trapMeshGroup = new THREE.Group();
+      trapMeshGroup.position.set(tc.x, 0.02, tc.z);
+
+      // Iron frame grate
+      const frameMesh = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.04, 1.8), bronzeGrateMat);
+      trapMeshGroup.add(frameMesh);
+
+      // Spikes (8 spikes inside slots)
+      const spikes: THREE.Mesh[] = [];
+      const spikeGeo = new THREE.ConeGeometry(0.06, 0.75, 6);
+      for (let ix = -0.6; ix <= 0.6; ix += 0.4) {
+        for (let iz = -0.4; iz <= 0.4; iz += 0.8) {
+          const spike = new THREE.Mesh(spikeGeo, ironSpikeMat);
+          spike.position.set(ix, -0.35, iz);
+          trapMeshGroup.add(spike);
+          spikes.push(spike);
+        }
+      }
+
+      this.cryptInteriorGroup.add(trapMeshGroup);
+      this.spikeTraps.push({
+        trap: trapDomain,
+        meshGroup: trapMeshGroup,
+        spikeMeshes: spikes
+      });
+    });
+
+    // 8. Sarcophagi
+    // Sarcophagus 1 (Loot): Profaned sarcophagus at (-3.8, 0, -85)
+    this.cryptSarcophagusLootGroup = new THREE.Group();
+    this.cryptSarcophagusLootGroup.position.set(-3.8, 0, -85);
+    const sarcBase1 = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.8, 2.4), archMat);
+    sarcBase1.position.y = 0.4;
+    sarcBase1.castShadow = true;
+    const sarcLid1 = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.25, 2.5), archMat);
+    sarcLid1.position.set(0, 0.9, 0);
+    sarcLid1.name = 'sarcLid1';
+    this.cryptSarcophagusLootGroup.add(sarcBase1, sarcLid1);
+    this.cryptInteriorGroup.add(this.cryptSarcophagusLootGroup);
+
+    // Sarcophagus 2 (Ambush): Sealed tomb at (3.8, 0, -97)
+    this.cryptSarcophagusAmbushGroup = new THREE.Group();
+    this.cryptSarcophagusAmbushGroup.position.set(3.8, 0, -97);
+    const sarcBase2 = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.8, 2.4), archMat);
+    sarcBase2.position.y = 0.4;
+    sarcBase2.castShadow = true;
+    const sarcLid2 = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.25, 2.5), archMat);
+    sarcLid2.position.set(0, 0.9, 0);
+    sarcLid2.name = 'sarcLid2';
+    this.cryptSarcophagusAmbushGroup.add(sarcBase2, sarcLid2);
+    this.cryptInteriorGroup.add(this.cryptSarcophagusAmbushGroup);
+
+    // 9. Great Inquisitor Altar at z = -108
+    const altarGroup = new THREE.Group();
+    altarGroup.position.set(0, 0, -108);
+    const altarBase = new THREE.Mesh(new THREE.BoxGeometry(5.0, 1.1, 2.4), archMat);
+    altarBase.position.y = 0.55;
+    altarBase.castShadow = true;
+    const altarCross = new THREE.Mesh(new THREE.BoxGeometry(0.2, 2.2, 0.15), archMat);
+    altarCross.position.set(0, 2.2, 0);
+    const altarCrossH = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.2, 0.15), archMat);
+    altarCrossH.position.set(0, 2.6, 0);
+    altarGroup.add(altarBase, altarCross, altarCrossH);
+
+    // 2 Cyan Spectral Pebeteros flanking the altar
+    [-2.8, 2.8].forEach(px => {
+      const brazer = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.2, 1.2, 8), darkIronMat);
+      brazer.position.set(px, 0.6, -106);
+      const brazerFlame = new THREE.Mesh(new THREE.DodecahedronGeometry(0.18), cyanFlameMat);
+      brazerFlame.position.set(px, 1.35, -106);
+      const brazerLight = new THREE.PointLight(0x00e5ff, 2.5, 9);
+      brazerLight.position.set(px, 1.5, -106);
+      altarGroup.add(brazer, brazerFlame, brazerLight);
+    });
+    this.cryptInteriorGroup.add(altarGroup);
+
+    this.scene.add(this.cryptInteriorGroup);
+  }
+
+  // =========================================================================
+  // SUB-BOSS: EL INQUISIDOR CAÍDO DE LAS CATACUMBAS
+  // =========================================================================
+  private createInquisitorBoss(): void {
+    this.inquisitorGroup = new THREE.Group();
+    this.inquisitorGroup.position.set(0, 0, -105);
+
+    const darkIronMat = new THREE.MeshStandardMaterial({ color: 0x14141c, metalness: 0.88, roughness: 0.3 });
+    const goldTrimMat = new THREE.MeshStandardMaterial({ color: 0x8a6d2b, metalness: 0.8, roughness: 0.4 });
+    const clothMat = new THREE.MeshStandardMaterial({ color: 0x220c18, roughness: 0.95 });
+    const boneMat = new THREE.MeshStandardMaterial({ color: 0xd2c7b2, roughness: 0.7 });
+    const violetGlowMat = new THREE.MeshBasicMaterial({ color: 0x9b59b6 });
+    const redGlowMat = new THREE.MeshBasicMaterial({ color: 0xff1144 });
+
+    // Armored Torso / Breastplate
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.9, 0.42), darkIronMat);
+    torso.position.y = 1.35;
+    torso.castShadow = true;
+    this.inquisitorGroup.add(torso);
+
+    // Gold Inquisitorial Cross on breastplate
+    const crossV = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.6, 0.05), goldTrimMat);
+    crossV.position.set(0, 1.35, 0.22);
+    const crossH = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.08, 0.05), goldTrimMat);
+    crossH.position.set(0, 1.5, 0.22);
+    this.inquisitorGroup.add(crossV, crossH);
+
+    // Pauldrons (Spiked Shoulder Guards)
+    [-0.52, 0.52].forEach(px => {
+      const pauldron = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.32, 0.4), darkIronMat);
+      pauldron.position.set(px, 1.8, 0);
+      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.25, 4), darkIronMat);
+      spike.position.set(px, 2.05, 0);
+      this.inquisitorGroup.add(pauldron, spike);
+    });
+
+    // Skull Head
+    const skull = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.36, 0.34), boneMat);
+    skull.position.set(0, 2.0, 0);
+    this.inquisitorGroup.add(skull);
+
+    // Glowing Eyes
+    const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.04, 6, 6), redGlowMat);
+    eyeL.position.set(-0.08, 2.02, 0.18);
+    const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.04, 6, 6), redGlowMat);
+    eyeR.position.set(0.08, 2.02, 0.18);
+    const eyeLight = new THREE.PointLight(0xff1144, 2.0, 5);
+    eyeLight.position.set(0, 2.05, 0.3);
+    this.inquisitorGroup.add(eyeL, eyeR, eyeLight);
+
+    // Inquisitor Wide-Brimmed Hat
+    const hatBrim = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.65, 0.06, 16), clothMat);
+    hatBrim.position.set(0, 2.22, 0);
+    const hatCrown = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.75, 8), clothMat);
+    hatCrown.position.set(0, 2.62, 0);
+    this.inquisitorGroup.add(hatBrim, hatCrown);
+
+    // Ragged Cloak & Tabard
+    const tabard = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.1, 0.06), clothMat);
+    tabard.position.set(0, 0.85, 0.15);
+    const cloak = new THREE.Mesh(new THREE.BoxGeometry(0.85, 1.4, 0.08), clothMat);
+    cloak.position.set(0, 1.05, -0.22);
+    this.inquisitorGroup.add(tabard, cloak);
+
+    // Armored Legs
+    [-0.22, 0.22].forEach(lx => {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.9, 0.24), darkIronMat);
+      leg.position.set(lx, 0.45, 0);
+      leg.castShadow = true;
+      this.inquisitorGroup.add(leg);
+    });
+
+    // Weapon: Spiked Morningstar / Mace (Right Hand)
+    const maceGroup = new THREE.Group();
+    maceGroup.position.set(0.62, 1.1, 0.2);
+    const maceHaft = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.1, 6), darkIronMat);
+    maceHaft.rotation.x = Math.PI / 4;
+    const maceHead = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), darkIronMat);
+    maceHead.position.set(0, 0.45, 0.45);
+    maceGroup.add(maceHaft, maceHead);
+
+    for (let i = 0; i < 6; i++) {
+      const sp = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.16, 4), darkIronMat);
+      const angle = (i / 6) * Math.PI * 2;
+      sp.position.set(Math.cos(angle) * 0.2, 0.45 + Math.sin(angle) * 0.2, 0.45);
+      maceGroup.add(sp);
+    }
+    this.inquisitorGroup.add(maceGroup);
+
+    // Offhand: Corrupted Shield of Dark Fire (Left Hand)
+    const shieldGroup = new THREE.Group();
+    shieldGroup.position.set(-0.62, 1.25, 0.3);
+    const shieldPlate = new THREE.Mesh(new THREE.BoxGeometry(0.55, 1.0, 0.08), darkIronMat);
+    shieldPlate.castShadow = true;
+    const shieldCross = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.7, 0.1), violetGlowMat);
+    shieldCross.position.z = 0.02;
+    const shieldLight = new THREE.PointLight(0x9b59b6, 1.5, 4);
+    shieldLight.position.set(0, 0, 0.25);
+    shieldGroup.add(shieldPlate, shieldCross, shieldLight);
+    this.inquisitorGroup.add(shieldGroup);
+
+    // Warning mesh above head for windup
+    const warnGeo = new THREE.ConeGeometry(0.18, 0.4, 4);
+    this.inquisitorWarningMesh = new THREE.Mesh(warnGeo, redGlowMat);
+    this.inquisitorWarningMesh.position.set(0, 3.2, 0);
+    this.inquisitorWarningMesh.visible = false;
+    this.inquisitorGroup.add(this.inquisitorWarningMesh);
+
+    // Ground Slam AoE Telegraph Mesh
+    const telegraphGeo = new THREE.RingGeometry(0.3, CatacombInquisitor.SLAM_RADIUS, 32);
+    const telegraphMat = new THREE.MeshBasicMaterial({ color: 0x9b59b6, transparent: true, opacity: 0.45, side: THREE.DoubleSide });
+    this.inquisitorSlamTelegraphMesh = new THREE.Mesh(telegraphGeo, telegraphMat);
+    this.inquisitorSlamTelegraphMesh.rotation.x = -Math.PI / 2;
+    this.inquisitorSlamTelegraphMesh.position.set(0, 0.05, 0);
+    this.inquisitorSlamTelegraphMesh.visible = false;
+    this.scene.add(this.inquisitorSlamTelegraphMesh);
+
+    this.scene.add(this.inquisitorGroup);
+  }
+
+  // =========================================================================
+  // AMBUSH SKELETON IN SARCOPHAGUS 2
+  // =========================================================================
+  private createCryptAmbushSkeleton(): void {
+    this.cryptAmbushSkeletonGroup = new THREE.Group();
+    this.cryptAmbushSkeletonGroup.position.set(3.8, -1.0, -97);
+    this.cryptAmbushSkeletonGroup.visible = false;
+
+    const boneMat = new THREE.MeshStandardMaterial({ color: 0xc8baa0, roughness: 0.75 });
+    const spine = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 1.0, 6), boneMat);
+    spine.position.y = 0.9;
+    const skull = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.3, 0.28), boneMat);
+    skull.position.set(0, 1.6, 0);
+    const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.03, 4, 4), new THREE.MeshBasicMaterial({ color: 0x00e5ff }));
+    eyeL.position.set(-0.06, 1.62, 0.14);
+    const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.03, 4, 4), new THREE.MeshBasicMaterial({ color: 0x00e5ff }));
+    eyeR.position.set(0.06, 1.62, 0.14);
+
+    const sword = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.1, 0.04), new THREE.MeshStandardMaterial({ color: 0x3a3028, roughness: 0.8 }));
+    sword.position.set(0.45, 1.1, 0.2);
+
+    this.cryptAmbushSkeletonGroup.add(spine, skull, eyeL, eyeR, sword);
+    this.scene.add(this.cryptAmbushSkeletonGroup);
+  }
+
+  // =========================================================================
+  // SUBTERRANEAN ZONE TRANSITION & SARCOPHAGI INTERACTION
+  // =========================================================================
+  public transitionToArea(targetArea: DungeonArea): void {
+    if (this.isZoneTransitioning) return;
+    this.isZoneTransitioning = true;
+    this.audio.playCryptDoor?.();
+
+    if (this.zoneTitleEl && this.zoneSubtitleEl && this.zoneTransitionOverlay) {
+      if (targetArea === 'crypts_interior') {
+        this.zoneTitleEl.innerText = '⚔ CRIPTAS SUBTERRÁNEAS DE SAN JUDE ⚔';
+        this.zoneSubtitleEl.innerText = '«Bajo las losas de piedra, la penumbra custodia los secretos del Santo Oficio»';
+      } else {
+        this.zoneTitleEl.innerText = '🌲 SUPERFICIE DE OAKHAVEN — CEMENTERIO 🌲';
+        this.zoneSubtitleEl.innerText = '«El viento helado de la noche susurra entre las tumbas y las cruces»';
+      }
+      this.zoneTransitionOverlay.style.opacity = '1';
+    }
+
+    setTimeout(() => {
+      if (targetArea === 'crypts_interior') {
+        this.dungeonAreaManager.enterCrypts();
+        this.setPlayerPosition(0, 0, -73);
+        this.cameraYaw = 0;
+        this.targetCameraYaw = 0;
+        this.setDialogueToast(
+          'Criptas de San Jude',
+          '«El aire es frío y huele a polvo consagrado. Cuidado con las baldosas de hierro y las sombras que vigilan el altar.»',
+          '/assets/icons/icon_crypt_key.png',
+          '#00e5ff'
+        );
+      } else {
+        this.dungeonAreaManager.exitToSurface();
+        this.setPlayerPosition(0, 0, -42);
+        this.cameraYaw = 0;
+        this.targetCameraYaw = 0;
+        if (this.inquisitorHpBarContainer) {
+          this.inquisitorHpBarContainer.style.display = 'none';
+        }
+        this.setDialogueToast(
+          'Cementerio de Oakhaven',
+          '«Has regresado a la superficie. La niebla de Oakhaven te envuelve una vez más.»',
+          '/assets/icons/icon_crypt_key.png',
+          '#ffd700'
+        );
+      }
+
+      setTimeout(() => {
+        if (this.zoneTransitionOverlay) {
+          this.zoneTransitionOverlay.style.opacity = '0';
+        }
+        setTimeout(() => {
+          this.isZoneTransitioning = false;
+        }, 350);
+      }, 400);
+    }, 380);
+  }
+
+  public interactWithLootSarcophagus(): void {
+    const sarc = this.dungeonAreaManager.getSarcophagus('sarcophagus_loot');
+    if (!sarc || sarc.isOpened) {
+      this.spawnFloatingText(new THREE.Vector3(-3.8, 1.2, -85), 'El sarcófago ya está vacío.', '#aaaaaa');
+      return;
+    }
+
+    this.dungeonAreaManager.openSarcophagus('sarcophagus_loot');
+    this.audio.playCryptDoor?.();
+
+    // Slide lid open
+    const lid = this.cryptSarcophagusLootGroup.getObjectByName('sarcLid1');
+    if (lid) {
+      lid.position.z += 0.9;
+    }
+
+    this.progression.addExp(40);
+    this.inventory.addItem(CANONICAL_MATERIALS.herb_silverleaf, 2);
+    this.inventory.addItem(CANONICAL_MATERIALS.water_blessed, 1);
+    this.spawnFloatingText(new THREE.Vector3(-3.8, 1.5, -85), '✦ +40 EXP • 2 HOJA DE PLATA • 1 AGUA BENDITA ✦', '#ffd700');
+    this.updateHUD();
+
+    this.setDialogueToast(
+      'Sarcófago Profanado',
+      '«Dentro del ataúd de piedra reposaban frascos de agua bendita y hierbas de plata usadas en los antiguos ritos funerarios.»',
+      '/assets/icons/icon_water_blessed.png',
+      '#a3ffc7'
+    );
+  }
+
+  public interactWithAmbushSarcophagus(): void {
+    if (this.cryptAmbushAwakened) {
+      this.spawnFloatingText(new THREE.Vector3(3.8, 1.2, -97), 'El sarcófago ha sido forzado.', '#aaaaaa');
+      return;
+    }
+
+    this.cryptAmbushAwakened = true;
+    this.dungeonAreaManager.openSarcophagus('sarcophagus_ambush');
+
+    // Slide lid
+    const lid = this.cryptSarcophagusAmbushGroup.getObjectByName('sarcLid2');
+    if (lid) {
+      lid.position.x += 1.0;
+    }
+
+    this.cryptAmbushSkeletonGroup.visible = true;
+    this.cryptAmbushSkeletonGroup.position.set(3.8, 0, -97);
+    this.audio.playGlassShatter?.();
+    this.audio.playSfx('warning');
+    this.spawnFloatingText(this.cryptAmbushSkeletonGroup.position, '⚠️ ¡EMBOSCADA DE PENITENTE!', '#ff4444');
+
+    this.setDialogueToast(
+      'Penitente de las Catacumbas',
+      '«¡Malditos seáis los profanadores del santuario! ¡Vuestra sangre sellará esta cripta!»',
+      '/assets/icons/icon_crypt_key.png',
+      '#ff4444'
+    );
+  }
+
+  public handleInquisitorDefeat(): void {
+    this.audio.playFinisherSound(true);
+    this.spawnFloatingText(this.inquisitorGroup.position, '👑 ¡INQUISIDOR PURIFICADO! (+250 EXP)', '#ffd700');
+    this.inquisitorGroup.position.y = -0.4;
+
+    const rewards = this.inquisitorEncounter.claimRewards(this.inventory, this.progression);
+    if (rewards.claimed) {
+      this.awardEnemyKillRewards('inquisitor', true);
+      // Restore player health to max
+      this.playerStats.health = this.playerStats.maxHealth;
+      this.spawnFloatingText(this.playerGroup.position, '✝ SALUD RESTAURADA AL MÁXIMO ✝', '#88ffaa');
+      this.updateHUD();
+
+      this.setDialogueToast(
+        'El Inquisidor Caído',
+        '«Las cadenas del fanatismo se rompen... El Sello de la Inquisición es tuyo. Llévalo ante la luz.»',
+        '/assets/icons/icon_inquisition_sigil.png',
+        '#ffd700'
+      );
+    }
+
+    if (this.inquisitorHpBarContainer) {
+      setTimeout(() => {
+        if (this.inquisitorHpBarContainer) {
+          this.inquisitorHpBarContainer.style.display = 'none';
+        }
+      }, 2500);
+    }
+  }
+
+  // =========================================================================
   // HTML / HUD OVERLAY FOR 3D EXPERIENCE
   // =========================================================================
   private createUIOverlay(): void {
@@ -1895,6 +2397,14 @@ export class Oakhaven3DExperience {
           <button id="btn-toggle-cam" style="background: #141f2a; color: #99ddff; border: 1px solid #336699; padding: 3px 8px; border-radius: 4px; font-family: monospace; font-size: 7.5px; cursor: pointer;">
             🎥 [C] CÁMARA: OBLICUA 3/4
           </button>
+          <!-- Crypts Inspection Shortcuts -->
+          <div style="display: flex; gap: 3px; margin-top: 2px;">
+            <button id="btn-dbg-portal" style="background: #1a162b; color: #a3ffc7; border: 1px solid #2ecc71; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer;">[1] PORTAL</button>
+            <button id="btn-dbg-criptas" style="background: #1a162b; color: #a3ffc7; border: 1px solid #2ecc71; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer;">[2] CRIPTAS</button>
+            <button id="btn-dbg-sarcofago" style="background: #1a162b; color: #a3ffc7; border: 1px solid #2ecc71; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer;">[3] BOTÍN</button>
+            <button id="btn-dbg-inquisidor" style="background: #1a162b; color: #a3ffc7; border: 1px solid #2ecc71; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer;">[4] JEFE</button>
+            <button id="btn-dbg-derrota" style="background: #1a162b; color: #a3ffc7; border: 1px solid #2ecc71; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer;">[5] VICTORIA</button>
+          </div>
         </div>
       </div>
 
@@ -1945,6 +2455,16 @@ export class Oakhaven3DExperience {
         </div>
         <div style="width: 100%; height: 6px; background: #3b0d14; border: 1px solid #8b1824; border-radius: 2px; overflow: hidden;">
           <div id="p3d-boss-hp-fill" style="width: 100%; height: 100%; background: #ff2233; transition: width 0.15s ease;"></div>
+        </div>
+      </div>
+
+      <!-- Sub-boss: Inquisidor de las Catacumbas 3D Target HUD -->
+      <div id="p3d-inquisitor-hud" style="position: absolute; top: 122px; left: 50%; transform: translateX(-50%); background: rgba(22, 8, 22, 0.95); border: 1.2px solid #9b59b6; border-radius: 4px; padding: 4px 12px; width: 225px; text-align: center; box-shadow: 0 4px 20px rgba(155, 89, 182, 0.45); display: none;">
+        <div style="font-size: 7.5px; font-weight: bold; color: #eeddff; margin-bottom: 2px; letter-spacing: 0.5px;">
+          ⚔ EL INQUISIDOR CAÍDO DE SAN JUDE ⚔
+        </div>
+        <div style="width: 100%; height: 6px; background: #260c2b; border: 1px solid #6c2d7a; border-radius: 2px; overflow: hidden;">
+          <div id="p3d-inquisitor-hp-fill" style="width: 100%; height: 100%; background: #9b59b6; transition: width 0.15s ease;"></div>
         </div>
       </div>
 
@@ -2036,6 +2556,12 @@ export class Oakhaven3DExperience {
         </div>
       </div>
 
+      <!-- Subterranean Zone Transition Overlay -->
+      <div id="p3d-zone-transition" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #05040a; opacity: 0; pointer-events: none; transition: opacity 0.35s ease; z-index: 250; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
+        <div id="p3d-zone-title" style="font-family: 'Cinzel', Georgia, serif; font-size: 18px; font-weight: bold; color: #ffd700; letter-spacing: 2px; margin-bottom: 8px; text-shadow: 0 0 15px rgba(255,215,0,0.6);"></div>
+        <div id="p3d-zone-subtitle" style="font-family: Georgia, serif; font-size: 11px; font-style: italic; color: #c5b4db; letter-spacing: 1px;"></div>
+      </div>
+
       <!-- Bottom Controls Bar -->
       <div style="position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); background: rgba(8, 4, 14, 0.95); border: 1px solid #3d2852; border-radius: 3px; padding: 2px 10px; font-family: monospace; font-size: 7px; color: #c5b4db; white-space: nowrap;">
         WASD: Moverse 3D | TAB: Héroe | I: Inventario | B: Botica/Alquimia | H: Habilidades | Q: Curar | G: Guardar Santuario | J/K: Ataque | L: Guardia | Espacio: Esquivar | T: Lanzar | E: Hablar/Recoger | M: Audio | C: Cámara
@@ -2089,6 +2615,53 @@ export class Oakhaven3DExperience {
       btnCam.innerText = `🎥 [C] CÁMARA: ${this.cameraMode === 'isometric' ? 'OBLICUA 3/4' : 'TERCERA PERSONA'}`;
     });
 
+    // Crypts Inspection Debug Buttons
+    const btnDbgPortal = this.uiOverlay.querySelector('#btn-dbg-portal') as HTMLButtonElement | null;
+    if (btnDbgPortal) {
+      btnDbgPortal.addEventListener('click', () => {
+        this.openCemeteryGate();
+        this.setPlayerPosition(0, 0, -44);
+        this.updateProximityInteractions();
+      });
+    }
+
+    const btnDbgCriptas = this.uiOverlay.querySelector('#btn-dbg-criptas') as HTMLButtonElement | null;
+    if (btnDbgCriptas) {
+      btnDbgCriptas.addEventListener('click', () => {
+        this.transitionToArea('crypts_interior');
+        setTimeout(() => {
+          this.setPlayerPosition(-1.2, 0, -79);
+          this.updateProximityInteractions();
+        }, 450);
+      });
+    }
+
+    const btnDbgSarcofago = this.uiOverlay.querySelector('#btn-dbg-sarcofago') as HTMLButtonElement | null;
+    if (btnDbgSarcofago) {
+      btnDbgSarcofago.addEventListener('click', () => {
+        this.dungeonAreaManager.enterCrypts();
+        this.setPlayerPosition(-3.8, 0, -84.2);
+        this.interactWithLootSarcophagus();
+        this.updateProximityInteractions();
+      });
+    }
+
+    const btnDbgInquisidor = this.uiOverlay.querySelector('#btn-dbg-inquisidor') as HTMLButtonElement | null;
+    if (btnDbgInquisidor) {
+      btnDbgInquisidor.addEventListener('click', () => {
+        this.dungeonAreaManager.enterCrypts();
+        this.setPlayerPosition(0, 0, -99);
+        this.updateProximityInteractions();
+      });
+    }
+
+    const btnDbgDerrota = this.uiOverlay.querySelector('#btn-dbg-derrota') as HTMLButtonElement | null;
+    if (btnDbgDerrota) {
+      btnDbgDerrota.addEventListener('click', () => {
+        this.handleInquisitorDefeat();
+      });
+    }
+
     this.enemyHpBarContainer = this.uiOverlay.querySelector('#p3d-enemy-hud') as HTMLDivElement;
     this.enemyHpBarFill = this.uiOverlay.querySelector('#p3d-enemy-hp-fill') as HTMLDivElement;
 
@@ -2100,6 +2673,12 @@ export class Oakhaven3DExperience {
 
     this.skeletonHpBarContainer = this.uiOverlay.querySelector('#p3d-skeleton-hud') as HTMLDivElement;
     this.skeletonHpBarFill = this.uiOverlay.querySelector('#p3d-skeleton-hp-fill') as HTMLDivElement;
+
+    this.inquisitorHpBarContainer = this.uiOverlay.querySelector('#p3d-inquisitor-hud') as HTMLDivElement;
+    this.inquisitorHpBarFill = this.uiOverlay.querySelector('#p3d-inquisitor-hp-fill') as HTMLDivElement;
+    this.zoneTransitionOverlay = this.uiOverlay.querySelector('#p3d-zone-transition') as HTMLDivElement;
+    this.zoneTitleEl = this.uiOverlay.querySelector('#p3d-zone-title') as HTMLDivElement;
+    this.zoneSubtitleEl = this.uiOverlay.querySelector('#p3d-zone-subtitle') as HTMLDivElement;
 
     this.proximityBadgeEl = this.uiOverlay.querySelector('#p3d-proximity-badge') as HTMLDivElement;
     if (this.proximityBadgeEl) {
@@ -2258,6 +2837,39 @@ export class Oakhaven3DExperience {
     if (e.key === 'Tab') {
       e.preventDefault();
       if (!e.repeat) this.toggleHero();
+      return;
+    }
+
+    // Crypts Inspection Hotkeys (1, 2, 3, 4, 5)
+    if (key === '1' && !e.repeat) {
+      this.openCemeteryGate();
+      this.setPlayerPosition(0, 0, -44);
+      this.updateProximityInteractions();
+      return;
+    }
+    if (key === '2' && !e.repeat) {
+      this.transitionToArea('crypts_interior');
+      setTimeout(() => {
+        this.setPlayerPosition(-1.2, 0, -79);
+        this.updateProximityInteractions();
+      }, 450);
+      return;
+    }
+    if (key === '3' && !e.repeat) {
+      this.dungeonAreaManager.enterCrypts();
+      this.setPlayerPosition(-3.8, 0, -84.2);
+      this.interactWithLootSarcophagus();
+      this.updateProximityInteractions();
+      return;
+    }
+    if (key === '4' && !e.repeat) {
+      this.dungeonAreaManager.enterCrypts();
+      this.setPlayerPosition(0, 0, -99);
+      this.updateProximityInteractions();
+      return;
+    }
+    if (key === '5' && !e.repeat) {
+      this.handleInquisitorDefeat();
       return;
     }
 
@@ -2662,6 +3274,57 @@ export class Oakhaven3DExperience {
         this.handleMorwennaDefeat();
       }
     }
+
+    // Hit Detection against Catacomb Inquisitor
+    if (this.dungeonAreaManager.currentArea === 'crypts_interior' && !this.inquisitorEncounter.isDefeated) {
+      const distToInq = this.playerGroup.position.distanceTo(this.inquisitorGroup.position);
+      if (distToInq <= reach + 0.6) {
+        const baseDmg = this.playerStats.isArmed ? (isHeavy ? 45 : 28) : (isHeavy ? 24 : 14);
+        const skillBonus = 1.0 + (this.progression.getDamageBonusPct(this.activeHero) / 100);
+        const dmg = Math.round(baseDmg * this.attackBuffMultiplier * skillBonus);
+
+        const toInq = this.inquisitorGroup.position.clone().sub(this.playerGroup.position).normalize();
+        const inqFwd = new THREE.Vector3(0, 0, 1).applyQuaternion(this.inquisitorGroup.quaternion);
+        const isFrontal = toInq.dot(inqFwd) < -0.2;
+
+        const hitRes = this.inquisitorEncounter.takeDamage(dmg, isFrontal);
+        if (hitRes.blocked) {
+          this.spawnFloatingText(this.inquisitorGroup.position, `-${hitRes.actualDamage} (¡ESCUDO BLOQUEA 60%!)`, '#9b59b6');
+          this.audio.playMaceImpact?.();
+        } else {
+          this.spawnFloatingText(this.inquisitorGroup.position, `-${hitRes.actualDamage}`, isHeavy ? '#ffd700' : '#ff4466');
+          this.audio.playCombatHit(isHeavy);
+        }
+
+        if (this.inquisitorHpBarFill) {
+          this.inquisitorHpBarFill.style.width = `${Math.max(0, (this.inquisitorEncounter.health / this.inquisitorEncounter.maxHealth) * 100)}%`;
+        }
+
+        if (hitRes.defeated) {
+          this.handleInquisitorDefeat();
+        }
+      }
+    }
+
+    // Hit Detection against Crypt Ambush Skeleton
+    if (this.dungeonAreaManager.currentArea === 'crypts_interior' && this.cryptAmbushAwakened && !this.cryptAmbushDead) {
+      const distToAmbush = this.playerGroup.position.distanceTo(this.cryptAmbushSkeletonGroup.position);
+      if (distToAmbush <= reach) {
+        const baseDmg = this.playerStats.isArmed ? (isHeavy ? 40 : 25) : (isHeavy ? 20 : 12);
+        const skillBonus = 1.0 + (this.progression.getDamageBonusPct(this.activeHero) / 100);
+        const dmg = Math.round(baseDmg * this.attackBuffMultiplier * skillBonus);
+        this.cryptAmbushHp = Math.max(0, this.cryptAmbushHp - dmg);
+        this.spawnFloatingText(this.cryptAmbushSkeletonGroup.position, `-${dmg}`, isHeavy ? '#ffd700' : '#00e5ff');
+        this.audio.playCombatHit(isHeavy);
+
+        if (this.cryptAmbushHp <= 0) {
+          this.cryptAmbushDead = true;
+          this.cryptAmbushSkeletonGroup.position.y = -0.3;
+          this.spawnFloatingText(this.cryptAmbushSkeletonGroup.position, '¡PENITENTE PURIFICADO! (+80 EXP)', '#00e5ff');
+          this.awardEnemyKillRewards('crypt_ambush', false);
+        }
+      }
+    }
   }
 
   // =========================================================================
@@ -2858,7 +3521,43 @@ export class Oakhaven3DExperience {
         }
       }
 
-      // 5. Check Destructibles collision
+      // 6. Check Catacomb Inquisitor collision
+      if (!collided && this.dungeonAreaManager.currentArea === 'crypts_interior' && !this.inquisitorEncounter.isDefeated) {
+        const dInq = p.mesh.position.distanceTo(this.inquisitorGroup.position.clone().add(new THREE.Vector3(0, 1.3, 0)));
+        if (dInq <= 1.8) {
+          collided = true;
+          const hitRes = this.inquisitorEncounter.takeDamage(p.damage, false);
+          this.spawnFloatingText(this.inquisitorGroup.position, `-${hitRes.actualDamage} (DISPARO ABISAL)`, p.isHeavy ? '#ffd700' : '#ff4466');
+          this.audio.playCombatHit(p.isHeavy);
+          if (this.inquisitorHpBarFill) {
+            this.inquisitorHpBarFill.style.width = `${Math.max(0, (this.inquisitorEncounter.health / this.inquisitorEncounter.maxHealth) * 100)}%`;
+          }
+          if (hitRes.defeated) {
+            this.handleInquisitorDefeat();
+          }
+          this.updateHUD();
+        }
+      }
+
+      // 7. Check Crypt Ambush Skeleton collision
+      if (!collided && this.dungeonAreaManager.currentArea === 'crypts_interior' && this.cryptAmbushAwakened && !this.cryptAmbushDead) {
+        const dAmbush = p.mesh.position.distanceTo(this.cryptAmbushSkeletonGroup.position.clone().add(new THREE.Vector3(0, 1.0, 0)));
+        if (dAmbush <= 1.5) {
+          collided = true;
+          this.cryptAmbushHp = Math.max(0, this.cryptAmbushHp - p.damage);
+          this.spawnFloatingText(this.cryptAmbushSkeletonGroup.position, `-${p.damage} (FLECHA ABISAL)`, p.isHeavy ? '#ffd700' : '#00e5ff');
+          this.audio.playCombatHit(p.isHeavy);
+          if (this.cryptAmbushHp <= 0) {
+            this.cryptAmbushDead = true;
+            this.cryptAmbushSkeletonGroup.position.y = -0.3;
+            this.spawnFloatingText(this.cryptAmbushSkeletonGroup.position, '¡PENITENTE PURIFICADO! (+80 EXP)', '#00e5ff');
+            this.awardEnemyKillRewards('crypt_ambush', false);
+          }
+          this.updateHUD();
+        }
+      }
+
+      // 8. Check Destructibles collision
       if (!collided) {
         for (const prop of this.destructibles) {
           if (!prop.isDestroyed) {
@@ -2880,7 +3579,7 @@ export class Oakhaven3DExperience {
     }
   }
 
-  private awardEnemyKillRewards(enemyType: 'hound' | 'cultist' | 'zealot' | 'skeleton', isFinisher: boolean = false): void {
+  private awardEnemyKillRewards(enemyType: 'hound' | 'cultist' | 'zealot' | 'skeleton' | 'inquisitor' | 'crypt_ambush', isFinisher: boolean = false): void {
     if (enemyType === 'hound') {
       const exp = isFinisher ? 75 : 40;
       this.progression.addExp(exp);
@@ -2904,6 +3603,13 @@ export class Oakhaven3DExperience {
       this.inventory.addItem(CANONICAL_MATERIALS.water_blessed, 1);
       this.inventory.addItem(CANONICAL_MATERIALS.ash_purified, 1);
       this.spawnFloatingText(this.playerGroup.position, '💧 +1 Agua Bendita | ✨ +1 Ceniza Purificada', '#66ccff');
+    } else if (enemyType === 'crypt_ambush') {
+      const exp = isFinisher ? 140 : 80;
+      this.progression.addExp(exp);
+      this.inventory.addItem(CANONICAL_MATERIALS.water_blessed, 1);
+      this.spawnFloatingText(this.playerGroup.position, '💧 +1 Agua Bendita obtenida', '#66ccff');
+    } else if (enemyType === 'inquisitor') {
+      this.spawnFloatingText(this.playerGroup.position, '👑 +2 Agua Bendita | +2 Ceniza Purificada | +Sello de Inquisición', '#ffd700');
     }
   }
 
@@ -3093,6 +3799,18 @@ export class Oakhaven3DExperience {
       case 'cemetery_gate':
         this.interactWithCemeteryGate();
         break;
+      case 'crypt_entrance':
+        this.transitionToArea('crypts_interior');
+        break;
+      case 'crypt_exit':
+        this.transitionToArea('surface');
+        break;
+      case 'crypt_sarcophagus_loot':
+        this.interactWithLootSarcophagus();
+        break;
+      case 'crypt_sarcophagus_ambush':
+        this.interactWithAmbushSarcophagus();
+        break;
     }
   }
 
@@ -3120,6 +3838,7 @@ export class Oakhaven3DExperience {
   public openCemeteryGate(): void {
     if (this.cemeteryGateOpen) return;
     this.cemeteryGateOpen = true;
+    this.dungeonAreaManager.setCemeteryGateOpen(true);
     this.audio.playSfx('parry');
     this.spawnFloatingText(new THREE.Vector3(0, 2.5, -23.5), '🚪 ¡VERJA DEL CEMENTERIO ABIERTA!', '#00e5ff');
   }
@@ -3275,6 +3994,31 @@ export class Oakhaven3DExperience {
         this.morwennaTimer = 0.8;
       }
       this.updateHUD();
+      return;
+    }
+
+    // Check if Inquisitor is in recovery / vulnerable
+    if (this.dungeonAreaManager.currentArea === 'crypts_interior' && !this.inquisitorEncounter.isDefeated) {
+      const distToInq = this.playerGroup.position.distanceTo(this.inquisitorGroup.position);
+      if ((this.inquisitorEncounter.state === 'RECOVERY' || !this.inquisitorEncounter.isBlocking) && distToInq <= 3.6) {
+        const finisherDmg = 65;
+        const inqResult = this.inquisitorEncounter.takeDamage(finisherDmg, false);
+        this.audio.playFinisherSound(true);
+        this.spawnFloatingText(this.inquisitorGroup.position, `⚡ ¡REMATADO! -${finisherDmg} DAÑO`, '#ffd700');
+        this.progression.addExp(60);
+        this.playerLight.intensity = 4.0;
+        setTimeout(() => { if (this.playerLight) this.playerLight.intensity = 1.4; }, 300);
+
+        if (this.inquisitorHpBarFill) {
+          this.inquisitorHpBarFill.style.width = `${Math.max(0, (this.inquisitorEncounter.health / this.inquisitorEncounter.maxHealth) * 100)}%`;
+        }
+
+        if (inqResult.defeated) {
+          this.handleInquisitorDefeat();
+        }
+        this.updateHUD();
+        return;
+      }
     }
   }
 
@@ -3318,7 +4062,7 @@ export class Oakhaven3DExperience {
     if (!this.isGameplayActive()) return;
 
     const pPos = this.playerGroup.position;
-    let targetFound: 'elowen' | 'cauldron' | 'cedric' | 'shalem' | 'khaterine' | 'thomas' | 'sword' | 'finisher' | 'cemetery_gate' | undefined;
+    let targetFound: typeof this.activeInteractTarget;
     let badgeText = '';
     let badgeColor = '#ffd700';
 
@@ -3436,6 +4180,38 @@ export class Oakhaven3DExperience {
           badgeText = '🔒 [E] VERJA SELLADA (REQUIERE LLAVE DE MORWENNA)';
           badgeColor = '#ff6666';
         }
+      }
+    }
+
+    // 9. Surface Crypt Mausoleum Entrance (when on surface)
+    if (!targetFound && this.dungeonAreaManager.currentArea === 'surface') {
+      if (this.cemeteryGateOpen && pPos.z <= -43.0 && pPos.z >= -46.5 && Math.abs(pPos.x) <= 2.6) {
+        targetFound = 'crypt_entrance';
+        badgeText = '🚪 [E] DESCENDER A LAS CRIPTAS DE SAN JUDE';
+        badgeColor = '#00e5ff';
+      }
+    }
+
+    // 10. Subterranean Crypt Interactions (when inside crypts)
+    if (!targetFound && this.dungeonAreaManager.currentArea === 'crypts_interior') {
+      // Exit staircase
+      if (pPos.z >= -73.5 && pPos.z <= -69.5 && Math.abs(pPos.x) <= 2.8) {
+        targetFound = 'crypt_exit';
+        badgeText = '🚪 [E] SUBIR A LA SUPERFICIE DE OAKHAVEN';
+        badgeColor = '#00e5ff';
+      }
+      // Sarcophagus 1 (Loot) at (-3.8, 0, -85)
+      else if (pPos.distanceTo(new THREE.Vector3(-3.8, 0, -85)) <= 2.6) {
+        targetFound = 'crypt_sarcophagus_loot';
+        const isOpened = this.dungeonAreaManager.getSarcophagus('sarcophagus_loot')?.isOpened;
+        badgeText = isOpened ? '🪦 SARCÓFAGO PROFANADO (VACÍO)' : '🪦 [E] ABRIR SARCÓFAGO PROFANADO';
+        badgeColor = isOpened ? '#aaaaaa' : '#ffd700';
+      }
+      // Sarcophagus 2 (Ambush) at (3.8, 0, -97)
+      else if (pPos.distanceTo(new THREE.Vector3(3.8, 0, -97)) <= 2.6) {
+        targetFound = 'crypt_sarcophagus_ambush';
+        badgeText = this.cryptAmbushAwakened ? '🪦 SARCÓFAGO ABIERTO' : '🪦 [E] REGISTRAR SARCÓFAGO SELLADO';
+        badgeColor = this.cryptAmbushAwakened ? '#aaaaaa' : '#ff6666';
       }
     }
 
@@ -3999,6 +4775,238 @@ export class Oakhaven3DExperience {
     this.skeletonTimer = 0.75;
   }
 
+  // =========================================================================
+  // SUBTERRANEAN CRYPTS LOGIC (SPIKE TRAPS, INQUISITOR & AMBUSH)
+  // =========================================================================
+  private updateSpikeTraps(delta: number): void {
+    if (this.dungeonAreaManager.currentArea !== 'crypts_interior') return;
+
+    const pPos = this.playerGroup.position;
+    for (const st of this.spikeTraps) {
+      st.trap.update(delta);
+
+      // Step on detection
+      const res = st.trap.stepOn(pPos.x, pPos.z);
+      if (res.triggered) {
+        const dmg = this.calculateIncomingDamage(res.damage, 10);
+        this.playerStats.health = Math.max(0, this.playerStats.health - dmg);
+        this.audio.playSpikeTrap?.();
+        this.spawnFloatingText(this.playerGroup.position, `-${dmg} (¡TRAMPA DE ESPINAS!)`, '#ff2255');
+        this.updateHUD();
+
+        if (this.playerStats.health <= 0) {
+          this.handlePlayerDefeatAndRespawn();
+          return;
+        }
+      }
+
+      // Animate spikes
+      const isUp = st.trap.state === 'TRIGGERED' || (st.trap.state === 'RESETTING' && st.trap.cooldownRemaining > 1.2);
+      const targetY = isUp ? 0.45 : -0.35;
+      for (const sm of st.spikeMeshes) {
+        sm.position.y = THREE.MathUtils.lerp(sm.position.y, targetY, delta * 14.0);
+      }
+    }
+  }
+
+  private updateInquisitor(delta: number): void {
+    if (this.dungeonAreaManager.currentArea !== 'crypts_interior') return;
+    if (this.inquisitorEncounter.isDefeated) {
+      this.inquisitorGroup.position.y = -0.4;
+      return;
+    }
+    if (!this.isGameplayActive()) return;
+
+    if (this.inquisitorSpecialCooldown > 0) {
+      this.inquisitorSpecialCooldown -= delta;
+    }
+
+    const toPlayer = this.playerGroup.position.clone().sub(this.inquisitorGroup.position);
+    toPlayer.y = 0;
+    const distToPlayer = toPlayer.length();
+
+    // Idle / Awake trigger
+    if (this.inquisitorEncounter.state === 'DORMANT') {
+      if (this.playerGroup.position.z <= -93) {
+        this.inquisitorEncounter.awaken();
+        this.inquisitorTimer = 0.65;
+        this.inquisitorWarningMesh.visible = true;
+        if (this.inquisitorHpBarContainer) {
+          this.inquisitorHpBarContainer.style.display = 'block';
+        }
+        this.audio.playHolyCurse?.();
+        this.spawnFloatingText(this.inquisitorGroup.position, '👑 ¡EL INQUISIDOR CAÍDO SE ALZA!', '#9b59b6');
+        this.setDialogueToast(
+          'El Inquisidor Caído',
+          '«¿Quién osa profanar el reposo de los mártires? ¡Arrepentíos en la ceniza de San Jude!»',
+          '/assets/icons/icon_crypt_key.png',
+          '#9b59b6'
+        );
+      }
+      return;
+    }
+
+    // Orient towards player
+    if (this.inquisitorEncounter.state !== 'RECOVERY') {
+      const targetAngle = Math.atan2(toPlayer.x, toPlayer.z);
+      this.inquisitorGroup.rotation.y = THREE.MathUtils.lerp(this.inquisitorGroup.rotation.y, targetAngle, 0.1);
+    }
+
+    if (this.inquisitorEncounter.state === 'ALERT') {
+      this.inquisitorTimer -= delta;
+      this.inquisitorWarningMesh.visible = Math.floor(this.clock.elapsedTime * 20) % 2 === 0;
+      if (this.inquisitorTimer <= 0) {
+        this.inquisitorEncounter.setState('CHASE');
+        this.inquisitorWarningMesh.visible = false;
+      }
+    } else if (this.inquisitorEncounter.state === 'CHASE') {
+      this.inquisitorWarningMesh.visible = false;
+      this.inquisitorGroup.position.y = Math.sin(this.clock.elapsedTime * 2.5) * 0.05;
+
+      if (distToPlayer > 2.6) {
+        toPlayer.normalize();
+        this.inquisitorGroup.position.add(toPlayer.multiplyScalar(2.3 * delta));
+      } else {
+        // Choose attack
+        if (this.inquisitorSpecialCooldown <= 0 || Math.random() < 0.4) {
+          // Telegraph ground slam AoE
+          this.inquisitorEncounter.setState('SLAM_TELEGRAPH');
+          this.inquisitorTimer = 0.85;
+          this.inquisitorSpecialCooldown = 5.5;
+          this.inquisitorWarningMesh.visible = true;
+          this.inquisitorSlamTelegraphMesh.position.set(this.inquisitorGroup.position.x, 0.05, this.inquisitorGroup.position.z);
+          this.inquisitorSlamTelegraphMesh.visible = true;
+          this.audio.playHolyCurse?.();
+          this.spawnFloatingText(this.inquisitorGroup.position, '⚠️ ¡GOLPE DEVASTADOR DE INQUISICIÓN!', '#ff1144');
+        } else {
+          // Melee swing
+          this.inquisitorEncounter.setState('MELEE_ATTACK');
+          this.inquisitorTimer = 0.55;
+          this.inquisitorWarningMesh.visible = true;
+          this.audio.playSfx('warning');
+        }
+      }
+    } else if (this.inquisitorEncounter.state === 'SLAM_TELEGRAPH') {
+      this.inquisitorTimer -= delta;
+      this.inquisitorWarningMesh.rotation.y += delta * 8;
+      const mat = this.inquisitorSlamTelegraphMesh.material as THREE.MeshBasicMaterial;
+      mat.opacity = 0.35 + Math.sin(this.clock.elapsedTime * 15) * 0.2;
+
+      if (this.inquisitorTimer <= 0) {
+        this.inquisitorEncounter.setState('SLAM_IMPACT');
+        this.inquisitorWarningMesh.visible = false;
+        this.inquisitorSlamTelegraphMesh.visible = false;
+        this.audio.playMaceImpact?.();
+        this.audio.playHolyCurse?.();
+
+        this.camera.position.y += 0.25;
+
+        // Evaluate hit
+        const slamRes = this.inquisitorEncounter.evaluateSlam(distToPlayer, this.playerStats.isDodging);
+        if (slamRes.hit) {
+          const dmg = this.calculateIncomingDamage(slamRes.damage, 14);
+          this.playerStats.health = Math.max(0, this.playerStats.health - dmg);
+          this.spawnFloatingText(this.playerGroup.position, `-${dmg} (¡SLAM DE INQUISICIÓN!)`, '#ff2255');
+          const push = this.playerGroup.position.clone().sub(this.inquisitorGroup.position).normalize();
+          this.playerVelocity.copy(push.multiplyScalar(8.5));
+          this.updateHUD();
+
+          if (this.playerStats.health <= 0) {
+            this.handlePlayerDefeatAndRespawn();
+            return;
+          }
+        } else if (this.playerStats.isDodging && distToPlayer <= CatacombInquisitor.SLAM_RADIUS) {
+          this.spawnFloatingText(this.playerGroup.position, '¡ESQUIVA PERFECTA!', '#88ffaa');
+        }
+
+        this.inquisitorEncounter.setState('RECOVERY');
+        this.inquisitorTimer = 1.3;
+        this.inquisitorEncounter.isBlocking = false;
+        this.spawnFloatingText(this.inquisitorGroup.position, '⚡ ¡DESPROTEGIDO! (+VULNERABLE)', '#ffd700');
+      }
+    } else if (this.inquisitorEncounter.state === 'MELEE_ATTACK') {
+      this.inquisitorTimer -= delta;
+      if (this.inquisitorTimer <= 0) {
+        this.inquisitorWarningMesh.visible = false;
+        if (distToPlayer <= 2.8) {
+          if (this.playerStats.isDodging) {
+            this.spawnFloatingText(this.playerGroup.position, '¡ESQUIVA PERFECTA!', '#88ffaa');
+          } else {
+            const parryWindow = 280 + this.inventory.getParryBonusMs();
+            const isParry = this.playerStats.isGuarding && (performance.now() - this.lastGuardTime) <= parryWindow;
+            if (isParry) {
+              this.audio.playSfx('parry');
+              this.inquisitorEncounter.setState('RECOVERY');
+              this.inquisitorTimer = 2.0;
+              this.inquisitorEncounter.isBlocking = false;
+              this.spawnFloatingText(this.playerGroup.position, '¡PARRY DE MAZO (+70ms)!', '#66ccff');
+              this.spawnFloatingText(this.inquisitorGroup.position, '⚡ ¡ATURDIDO! [E] ¡REMATAR!', '#ffd700');
+              return;
+            }
+
+            const dmg = this.calculateIncomingDamage(CatacombInquisitor.MELEE_DAMAGE, 7);
+            this.playerStats.health = Math.max(0, this.playerStats.health - dmg);
+            this.audio.playMaceImpact?.();
+            this.spawnFloatingText(this.playerGroup.position, `-${dmg} (MAZO ESPINADO)`, '#ff4444');
+            this.updateHUD();
+
+            if (this.playerStats.health <= 0) {
+              this.handlePlayerDefeatAndRespawn();
+              return;
+            }
+          }
+        }
+
+        this.inquisitorEncounter.setState('RECOVERY');
+        this.inquisitorTimer = 0.8;
+      }
+    } else if (this.inquisitorEncounter.state === 'RECOVERY') {
+      this.inquisitorTimer -= delta;
+      if (this.inquisitorTimer <= 0) {
+        this.inquisitorEncounter.isBlocking = true;
+        this.inquisitorEncounter.setState('CHASE');
+      }
+    }
+  }
+
+  private updateCryptAmbush(delta: number): void {
+    if (this.dungeonAreaManager.currentArea !== 'crypts_interior') return;
+    if (!this.cryptAmbushAwakened || this.cryptAmbushDead) return;
+    if (!this.isGameplayActive()) return;
+
+    const toPlayer = this.playerGroup.position.clone().sub(this.cryptAmbushSkeletonGroup.position);
+    toPlayer.y = 0;
+    const dist = toPlayer.length();
+
+    const targetAngle = Math.atan2(toPlayer.x, toPlayer.z);
+    this.cryptAmbushSkeletonGroup.rotation.y = THREE.MathUtils.lerp(this.cryptAmbushSkeletonGroup.rotation.y, targetAngle, 0.1);
+    this.cryptAmbushSkeletonGroup.position.y = Math.sin(this.clock.elapsedTime * 2.8) * 0.05;
+
+    if (dist > 2.2) {
+      toPlayer.normalize();
+      this.cryptAmbushSkeletonGroup.position.add(toPlayer.multiplyScalar(2.5 * delta));
+    } else {
+      if (this.cryptAmbushTimer > 0) {
+        this.cryptAmbushTimer -= delta;
+      } else {
+        this.cryptAmbushTimer = 1.2;
+        if (this.playerStats.isDodging) {
+          this.spawnFloatingText(this.playerGroup.position, '¡ESQUIVA PERFECTA!', '#88ffaa');
+        } else {
+          const dmg = this.calculateIncomingDamage(18, 5);
+          this.playerStats.health = Math.max(0, this.playerStats.health - dmg);
+          this.audio.playCombatHit(false);
+          this.spawnFloatingText(this.playerGroup.position, `-${dmg} (CORTE DE SOMBRA)`, '#ff6666');
+          this.updateHUD();
+
+          if (this.playerStats.health <= 0) {
+            this.handlePlayerDefeatAndRespawn();
+          }
+        }
+      }
+    }
+  }
+
   private toggleCameraMode(): void {
     this.cameraMode = this.cameraMode === 'isometric' ? 'third_person' : 'isometric';
     if (this.cameraMode === 'third_person') {
@@ -4026,6 +5034,9 @@ export class Oakhaven3DExperience {
     this.updateProjectiles(delta);
     this.updateDebris(delta);
     this.updateCauldron(delta);
+    this.updateSpikeTraps(delta);
+    this.updateInquisitor(delta);
+    this.updateCryptAmbush(delta);
     this.updateProximityInteractions();
     this.updateCamera(delta);
     this.updateFlickeringLights(delta);
@@ -4109,9 +5120,9 @@ export class Oakhaven3DExperience {
     this.playerGroup.position.x += this.playerVelocity.x * delta;
     this.playerGroup.position.z += this.playerVelocity.z * delta;
 
-    this.playerGroup.position.x = THREE.MathUtils.clamp(this.playerGroup.position.x, -5.2, 5.2);
-    const minZ = this.cemeteryGateOpen ? -46.5 : -23;
-    this.playerGroup.position.z = THREE.MathUtils.clamp(this.playerGroup.position.z, minZ, 11);
+    const bounds = this.dungeonAreaManager.getBounds();
+    this.playerGroup.position.x = THREE.MathUtils.clamp(this.playerGroup.position.x, bounds.minX, bounds.maxX);
+    this.playerGroup.position.z = THREE.MathUtils.clamp(this.playerGroup.position.z, bounds.minZ, bounds.maxZ);
 
     // Timers
     if (this.dodgeTimer > 0) this.dodgeTimer -= delta;
@@ -5183,6 +6194,10 @@ export class Oakhaven3DExperience {
   // =========================================================================
   private handlePlayerDefeatAndRespawn(): void {
     this.isPlayerDefeated = false;
+    this.dungeonAreaManager.exitToSurface();
+    if (this.inquisitorHpBarContainer) {
+      this.inquisitorHpBarContainer.style.display = 'none';
+    }
     const activeId = this.party.getActiveHeroId();
     const bonusHp = this.progression && (activeId === 'thomas' || activeId === 'khaterine')
       ? this.progression.getMaxHealthBonus(activeId as HeroType)
@@ -5397,9 +6412,9 @@ export class Oakhaven3DExperience {
       let camY = this.playerGroup.position.y + cameraHeight;
       let camZ = this.playerGroup.position.z + Math.cos(this.cameraYaw) * cameraDist;
 
-      // Obstacle & Street boundary resolution (traceClip pullback)
-      // Street facades are at |x| = 5.25. If camera X approaches facades, pull camera closer along ray to target
-      const maxStreetX = 4.75;
+      // Obstacle & Street/Crypt boundary resolution (traceClip pullback)
+      const bounds = this.dungeonAreaManager.getBounds();
+      const maxStreetX = bounds.camMaxX;
       if (Math.abs(camX) > maxStreetX) {
         const boundX = Math.sign(camX) * maxStreetX;
         if (Math.abs(this.targetCameraLook.x) < maxStreetX) {
@@ -5412,9 +6427,9 @@ export class Oakhaven3DExperience {
         }
       }
 
-      // Z boundary pullback (sanctuary back wall z=11, cemetery gate z=-23 or -46)
-      const minZLimit = (this.cemeteryGateOpen ? -45.5 : -22.0) - 1.0;
-      const maxZLimit = 11.2;
+      // Z boundary pullback
+      const minZLimit = bounds.camMinZ;
+      const maxZLimit = bounds.camMaxZ;
       if (camZ > maxZLimit || camZ < minZLimit) {
         const boundZ = camZ > maxZLimit ? maxZLimit : minZLimit;
         if (this.targetCameraLook.z > minZLimit && this.targetCameraLook.z < maxZLimit) {

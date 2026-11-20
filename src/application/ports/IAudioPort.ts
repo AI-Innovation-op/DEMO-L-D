@@ -7,6 +7,17 @@ export interface IAudioPort {
   playWeaponThrowSound(): void;
   playFinisherSound(isCinematic: boolean): void;
   playBossPhaseChangeSound(): void;
+  playGlassShatter?(): void;
+  playClockRewind?(): void;
+  playHealingEmber?(): void;
+  playCenserSwing?(): void;
+  playWoodBreak?(): void;
+  playBowShot?(): void;
+  playSpikeTrap?(): void;
+  playCryptDoor?(): void;
+  playHolyCurse?(): void;
+  playMaceImpact?(): void;
+  playCauldronBubble?(): void;
 }
 
 export interface DialogueLine {

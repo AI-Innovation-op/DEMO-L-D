@@ -98,14 +98,48 @@ Este documento establece las prioridades de desarrollo, mecánicas planeadas y e
 
 ## 🚀 Próximas Prioridades (Siguiente Sprint)
 
-### 1. Descenso a los Interiores de las Criptas de San Jude (Dungeon Crawler)
-- Transición interactiva en el portal del mausoleo para ingresar al nivel subterráneo.
-- Catacumbas con trampas de estacas, sarcófagos con penitentes durmientes y pasillos con antorchas.
-- Jefe secundario opcional: *Inquisidor de las Catacumbas*.
+### 9. Descenso a los Interiores de las Criptas de San Jude (Dungeon Crawler) [COMPLETADO ✅]
+- [x] **Transición Subterránea Interactiva (`transitionToArea`)**:
+  - Proximidad contextual en portal del Mausoleo (`z: -44.5`) con prompt `🚪 [E] DESCENDER A LAS CRIPTAS DE SAN JUDE`.
+  - Fundido en negro cinemático con tarjeta de título gótica sobreimpresa y sonido de piedra milenaria.
+  - Escaleras ascendentes hacia la superficie con prompt `🚪 [E] SUBIR A LA SUPERFICIE DE OAKHAVEN`.
+- [x] **Arquitectura y Ambientación de Mazmorra 3D**:
+  - Salón de 46m x 13m con suelo de losas antiguas, muros macizos y bóveda gótica a 5.2m de altura.
+  - 7 pares de columnas cilíndricas con arcos fajones transversales y apliques de antorchas cálidas (`0xff7722`).
+  - Gran Altar fúnebre con cruz de piedra y pebeteros de fuego espectral cian (`0x00e5ff`).
+- [x] **Trampas de Espinas Mecánicas Procedurales (`SpikeTrap3D`)**:
+  - Dos losas de bronce con 8 estacas retráctiles de acero cada una en `(-1.2, -80)` y `(1.5, -91)`.
+  - Activación por proximidad (1.2m), chasquido metálico (`playSpikeTrap`), 25 de daño físico y cooldown de rearme.
+- [x] **Sarcófagos Interactivos & Emboscada de Penitente**:
+  - *Sarcófago Profanado* `(-3.8, -85)`: Deslizamiento de losa, +40 EXP, Hojas de Plata y Agua Bendita.
+  - *Sarcófago Sellado* `(3.8, -97)`: Estallido de la losa y despertar del *Penitente de las Catacumbas* esquelético.
+- [x] **Sub-Jefe: El Inquisidor Caído de San Jude**:
+  - Modelo 3D con coraza de hierro negro, sombrero inquisitorial piramidal de ala ancha, tabardo carmesí y ojos candentes.
+  - Maza pesada de púas y Escudo de fuego oscuro con bloqueo frontal activo del 60% (`dot < -0.2`).
+  - Ataque devastador de martillazo en área telegrafiado (*Holy Curse AoE Slam*) con onda de choque de 3.8m.
+  - Barra de salud propia `#p3d-inquisitor-hud`, ventana de vulnerabilidad con remate crítico `[E]` (+65 daño).
+  - Recompensas: +250 EXP, *Sello de la Inquisición Caída*, Agua Bendita x2, Ceniza Purificada x2 y restauración completa de salud.
 
-### 2. Sistema de Audio Procedural / Web Audio API
-- Síntesis de sonido ambiental (viento tenebroso, crujido de fuego de las antorchas).
-- Efectos de impacto metálico de espadas, parry resonante, zumbido de flechas de plasma y rugido de fuego de Morwenna.
+### 10. Sistema de Audio Procedural / Web Audio API [COMPLETADO ✅]
+- [x] **Sintetizadores Procedurales Nativos sin Dependencias Externas**:
+  - `playSpikeTrap()`: Doble oscilador sierra/cuadrada simulando el resorte y choque de púas metálicas.
+  - `playCryptDoor()`: Sub-graves triangulares y modulación de fricción de losas de piedra y goznes.
+  - `playHolyCurse()`: Disonancia coral amenazante para hechizos oscuros y ataques inquisitoriales.
+  - `playMaceImpact()`: Golpe seco contundente de hierro y masa roma.
+  - `playCauldronBubble()`: Tren de burbujas en ebullición para la síntesis alquímica de la botica.
+
+---
+
+## 🚀 Próximas Prioridades (Siguiente Sprint)
+
+### 1. El Bosque del Sauce Negro (Exterior Salvaje)
+- Escenario exterior de raíces retorcidas, niebla densa y ramas que bloquean la visión.
+- Santuario salvaje del Sauce Negro con nuevos enemigos (Acechadores de Raíces y Bestias Abisales).
+- Expansión de flechas arcanas de Khaterine con tipos de munición elemental sintetizables en botica.
+
+### 2. Sistema de Shaders y Post-Procesado en 3D
+- Bloom sagrado en antorchas, velas y pebeteros.
+- Viñeta y aberración cromática en estados de daño o aturdimiento.
 
 ---
 
