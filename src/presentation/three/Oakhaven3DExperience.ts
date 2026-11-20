@@ -12,6 +12,7 @@ import { CANONICAL_MATERIALS } from '../../domain/alchemy/AlchemyRecipe';
 import { DungeonAreaManager, DungeonArea } from '../../domain/encounters/DungeonAreaManager';
 import { SpikeTrap } from '../../domain/encounters/SpikeTrap';
 import { CatacombInquisitor } from '../../domain/encounters/CatacombInquisitor';
+import { ArsenalManager, ArrowType } from '../../domain/combat/ArsenalManager';
 
 export interface CombatStats3D {
   health: number;
@@ -31,6 +32,8 @@ export interface Projectile3D {
   maxLife: number;
   damage: number;
   isHeavy: boolean;
+  arrowType?: ArrowType;
+  isThrownFlask?: boolean;
 }
 
 export interface DestructibleProp3D {
@@ -282,6 +285,18 @@ export class Oakhaven3DExperience {
   private inventoryModalEl?: HTMLDivElement;
   private isDialogueOpen: boolean = false;
   private isPlayerDefeated: boolean = false;
+
+  // Arsenal & Munitions Manager
+  private arsenalManager: ArsenalManager = new ArsenalManager();
+  private activeBurnEffects: Array<{ targetId: string; ticksLeft: number; dmgPerTick: number; timer: number }> = [];
+
+  // Dynamic Screen Effects (Damage Vignette, Holy Flash, Screen Trauma)
+  private damageVignetteEl?: HTMLDivElement;
+  private holyFlashEl?: HTMLDivElement;
+  private damageVignetteOpacity: number = 0;
+  private holyFlashOpacity: number = 0;
+  private screenTrauma: number = 0;
+  private lastHeartbeatTime: number = 0;
 
   // Environment & Lights
   private streetLamps: { light: THREE.PointLight; mesh: THREE.Mesh; baseIntensity: number }[] = [];
@@ -2288,6 +2303,7 @@ export class Oakhaven3DExperience {
 
   public handleInquisitorDefeat(): void {
     this.audio.playFinisherSound(true);
+    this.triggerHolyFlash(1.0);
     this.spawnFloatingText(this.inquisitorGroup.position, '👑 ¡INQUISIDOR PURIFICADO! (+250 EXP)', '#ffd700');
     this.inquisitorGroup.position.y = -0.4;
 
@@ -2356,7 +2372,7 @@ export class Oakhaven3DExperience {
               </div>
             </div>
             <!-- Weapon Status Badge -->
-            <div id="p3d-weapon-badge" style="font-size: 7px; font-family: monospace; color: #e2d4f0; background: rgba(35, 20, 50, 0.7); padding: 1px 4px; border-radius: 3px; border: 1px solid #5a3d78;">
+            <div id="p3d-weapon-badge" style="font-size: 7px; font-family: monospace; color: #e2d4f0; background: rgba(35, 20, 50, 0.7); padding: 1px 4px; border-radius: 3px; border: 1px solid #5a3d78; pointer-events: auto; cursor: pointer;">
               ⚔ ARMA: Espada Corta del Monaguillo
             </div>
           </div>
@@ -2385,6 +2401,15 @@ export class Oakhaven3DExperience {
             <button id="btn-save-sanctuary" style="background: #1c2538; color: #99ddff; border: 1px solid #3b6b99; padding: 3px 7px; border-radius: 4px; font-family: monospace; font-size: 7.5px; cursor: pointer; font-weight: bold;">
               💾 [G] SANTUARIO
             </button>
+          </div>
+          <div style="display: flex; gap: 4px;">
+            <button id="btn-export-save" style="background: #152238; color: #88ccff; border: 1px solid #2f5485; padding: 2.5px 6px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer; font-weight: bold;">
+              💾 EXPORTAR JSON
+            </button>
+            <button id="btn-import-save" style="background: #231633; color: #d4b8ff; border: 1px solid #6b4394; padding: 2.5px 6px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer; font-weight: bold;">
+              📂 IMPORTAR JSON
+            </button>
+            <input type="file" id="p3d-save-file-input" accept=".json" style="display: none;" />
           </div>
           <div style="display: flex; gap: 4px;">
             <button id="btn-toggle-hero" style="background: #2b143d; color: #e6b8ff; border: 1px solid #8e44ad; padding: 3px 7px; border-radius: 4px; font-family: monospace; font-size: 7.5px; cursor: pointer;">
@@ -2556,6 +2581,10 @@ export class Oakhaven3DExperience {
         </div>
       </div>
 
+      <!-- Dynamic Screen Post-FX Overlays -->
+      <div id="p3d-damage-vignette" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; box-shadow: inset 0 0 85px 35px rgba(220, 20, 20, 0.85); opacity: 0; transition: opacity 0.08s ease; z-index: 210;"></div>
+      <div id="p3d-holy-flash" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; background: radial-gradient(circle, rgba(255, 235, 130, 0.75) 0%, rgba(200, 240, 255, 0.4) 60%, transparent 100%); opacity: 0; transition: opacity 0.1s ease; z-index: 220;"></div>
+
       <!-- Subterranean Zone Transition Overlay -->
       <div id="p3d-zone-transition" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #05040a; opacity: 0; pointer-events: none; transition: opacity 0.35s ease; z-index: 250; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
         <div id="p3d-zone-title" style="font-family: 'Cinzel', Georgia, serif; font-size: 18px; font-weight: bold; color: #ffd700; letter-spacing: 2px; margin-bottom: 8px; text-shadow: 0 0 15px rgba(255,215,0,0.6);"></div>
@@ -2711,6 +2740,36 @@ export class Oakhaven3DExperience {
 
     this.morwennaHpBarContainer = this.uiOverlay.querySelector('#p3d-boss-hud') as HTMLDivElement;
     this.morwennaHpBarFill = this.uiOverlay.querySelector('#p3d-boss-hp-fill') as HTMLDivElement;
+
+    this.damageVignetteEl = this.uiOverlay.querySelector('#p3d-damage-vignette') as HTMLDivElement;
+    this.holyFlashEl = this.uiOverlay.querySelector('#p3d-holy-flash') as HTMLDivElement;
+
+    const weaponBadge = this.uiOverlay.querySelector('#p3d-weapon-badge') as HTMLDivElement;
+    if (weaponBadge) {
+      weaponBadge.addEventListener('click', () => {
+        if (this.activeHero === 'khaterine') {
+          this.cycleKhaterineArrow();
+        }
+      });
+    }
+
+    const btnExportSave = this.uiOverlay.querySelector('#btn-export-save') as HTMLButtonElement;
+    if (btnExportSave) {
+      btnExportSave.addEventListener('click', () => this.exportSaveFile());
+    }
+
+    const btnImportSave = this.uiOverlay.querySelector('#btn-import-save') as HTMLButtonElement;
+    const inputSaveFile = this.uiOverlay.querySelector('#p3d-save-file-input') as HTMLInputElement;
+    if (btnImportSave && inputSaveFile) {
+      btnImportSave.addEventListener('click', () => inputSaveFile.click());
+      inputSaveFile.addEventListener('change', (e: Event) => {
+        const target = e.target as HTMLInputElement;
+        if (target.files && target.files.length > 0) {
+          this.importSaveFile(target.files[0]);
+          target.value = '';
+        }
+      });
+    }
   }
 
   // =========================================================================
@@ -2840,14 +2899,22 @@ export class Oakhaven3DExperience {
       return;
     }
 
-    // Crypts Inspection Hotkeys (1, 2, 3, 4, 5)
+    // Khaterine: Arrow Cycling [1, 2, 3] | Thomas: Crypts Inspection Hotkeys (1, 2, 3, 4, 5)
     if (key === '1' && !e.repeat) {
+      if (this.activeHero === 'khaterine') {
+        this.selectKhaterineArrow('abyssal');
+        return;
+      }
       this.openCemeteryGate();
       this.setPlayerPosition(0, 0, -44);
       this.updateProximityInteractions();
       return;
     }
     if (key === '2' && !e.repeat) {
+      if (this.activeHero === 'khaterine') {
+        this.selectKhaterineArrow('fire');
+        return;
+      }
       this.transitionToArea('crypts_interior');
       setTimeout(() => {
         this.setPlayerPosition(-1.2, 0, -79);
@@ -2856,6 +2923,10 @@ export class Oakhaven3DExperience {
       return;
     }
     if (key === '3' && !e.repeat) {
+      if (this.activeHero === 'khaterine') {
+        this.selectKhaterineArrow('silver');
+        return;
+      }
       this.dungeonAreaManager.enterCrypts();
       this.setPlayerPosition(-3.8, 0, -84.2);
       this.interactWithLootSarcophagus();
@@ -3077,15 +3148,18 @@ export class Oakhaven3DExperience {
   // COMBAT CALCULATIONS & EFFECTIVE MODIFIERS (H15 RESOLVED)
   // =========================================================================
   private calculateIncomingDamage(baseDmg: number, baseGuardDmg: number): number {
-    if (!this.playerStats.isGuarding) {
-      return baseDmg;
-    }
-    let dmg = baseGuardDmg;
-    if (this.activeHero === 'khaterine') {
-      const wardMitigation = this.progression.getWardMitigationBonusPct();
-      if (wardMitigation > 0) {
-        dmg = Math.max(1, Math.round(dmg * (1 - wardMitigation / 100)));
+    let dmg = baseDmg;
+    if (this.playerStats.isGuarding) {
+      dmg = baseGuardDmg;
+      if (this.activeHero === 'khaterine') {
+        const wardMitigation = this.progression.getWardMitigationBonusPct();
+        if (wardMitigation > 0) {
+          dmg = Math.max(1, Math.round(dmg * (1 - wardMitigation / 100)));
+        }
       }
+    }
+    if (dmg > 0) {
+      this.triggerDamageVignette(dmg >= 25 ? 0.85 : 0.6);
     }
     return dmg;
   }
@@ -3331,6 +3405,7 @@ export class Oakhaven3DExperience {
   // ABYSSAL RANGED PROJECTILES & PROPS
   // =========================================================================
   private shootAbyssalArrow(isHeavy: boolean): void {
+    const shot = this.arsenalManager.prepareArrowShot(this.inventory, isHeavy);
     this.isPlayerAttacking = true;
     this.attackCooldown = isHeavy ? 0.48 : 0.26;
     this.audio.playBowShot();
@@ -3351,7 +3426,7 @@ export class Oakhaven3DExperience {
     const arrowGroup = new THREE.Group();
     arrowGroup.position.copy(spawnPos);
 
-    const arrowShaftMat = new THREE.MeshBasicMaterial({ color: isHeavy ? 0xff44ee : 0xaa44ff });
+    const arrowShaftMat = new THREE.MeshBasicMaterial({ color: shot.colorHex });
     const arrowHeadMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
 
     const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, isHeavy ? 0.95 : 0.7, 6), arrowShaftMat);
@@ -3363,7 +3438,7 @@ export class Oakhaven3DExperience {
     tip.rotation.x = -Math.PI / 2;
     arrowGroup.add(tip);
 
-    const light = new THREE.PointLight(isHeavy ? 0xff33ee : 0xaa44ff, isHeavy ? 3.5 : 2.0, 5);
+    const light = new THREE.PointLight(shot.colorHex, isHeavy ? 3.8 : 2.2, 5);
     arrowGroup.add(light);
 
     // Look in flying direction
@@ -3372,23 +3447,39 @@ export class Oakhaven3DExperience {
 
     const speed = isHeavy ? 22 : 18;
     const arrowBonus = 1.0 + (this.progression.getArrowDamageBonusPct() / 100);
-    const baseDamage = isHeavy ? 48 : 28;
     this.projectiles.push({
       mesh: arrowGroup,
       light,
       velocity: forward.multiplyScalar(speed),
       life: 1.8,
       maxLife: 1.8,
-      damage: Math.round(baseDamage * this.attackBuffMultiplier * arrowBonus),
-      isHeavy
+      damage: Math.round(shot.baseDamage * this.attackBuffMultiplier * arrowBonus),
+      isHeavy,
+      arrowType: shot.arrowType
     });
+    this.updateHUD();
   }
 
   private updateProjectiles(delta: number): void {
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i];
       p.life -= delta;
+
+      if (p.isThrownFlask) {
+        p.velocity.y -= 14.0 * delta;
+        p.mesh.rotation.x += 8.0 * delta;
+        p.mesh.rotation.z += 6.0 * delta;
+      }
+
       p.mesh.position.addScaledVector(p.velocity, delta);
+
+      // Thrown flask floor impact
+      if (p.isThrownFlask && p.mesh.position.y <= 0.2) {
+        this.explodeHolyFireFlask(p.mesh.position.clone(), p.damage);
+        this.scene.remove(p.mesh);
+        this.projectiles.splice(i, 1);
+        continue;
+      }
 
       let collided = false;
 
@@ -3397,23 +3488,33 @@ export class Oakhaven3DExperience {
         const dEnemy = p.mesh.position.distanceTo(this.enemyGroup.position.clone().add(new THREE.Vector3(0, 0.6, 0)));
         if (dEnemy <= 1.4) {
           collided = true;
-          this.enemyHealth = Math.max(0, this.enemyHealth - p.damage);
-          this.spawnFloatingText(this.enemyGroup.position, `-${p.damage} (FLECHA ABISAL)`, p.isHeavy ? '#ffd700' : '#d999ff');
-          this.audio.playCombatHit(p.isHeavy);
+          if (p.isThrownFlask) {
+            this.explodeHolyFireFlask(p.mesh.position.clone(), p.damage);
+          } else {
+            this.enemyHealth = Math.max(0, this.enemyHealth - p.damage);
+            const label = p.arrowType === 'fire' ? 'FLECHA DE FUEGO' : p.arrowType === 'silver' ? 'FLECHA DE PLATA' : 'FLECHA ABISAL';
+            this.spawnFloatingText(this.enemyGroup.position, `-${p.damage} (${label})`, p.isHeavy ? '#ffd700' : '#d999ff');
+            this.audio.playCombatHit(p.isHeavy);
 
-          if (p.isHeavy) {
-            this.enemyState = 'STUNNED';
-            this.enemyTimer = 1.0;
-          }
+            if (p.arrowType === 'fire') {
+              this.activeBurnEffects.push({ targetId: 'hound', ticksLeft: 6, dmgPerTick: 4, timer: 0.5 });
+              this.spawnFloatingText(this.enemyGroup.position, '🔥 ¡QUEMADURA DE FUEGO FATUO!', '#ff7722');
+            }
 
-          if (this.enemyHealth <= 0) {
-            this.enemyState = 'DEAD';
-            this.spawnFloatingText(this.enemyGroup.position, '¡PURIFICADO! (+40 EXP)', '#ffd700');
-            this.audio.playFinisherSound(true);
-            this.enemyGroup.position.y = -0.3;
-            this.awardEnemyKillRewards('hound', false);
+            if (p.isHeavy || p.arrowType === 'silver') {
+              this.enemyState = 'STUNNED';
+              this.enemyTimer = p.arrowType === 'silver' ? 1.5 : 1.0;
+            }
+
+            if (this.enemyHealth <= 0) {
+              this.enemyState = 'DEAD';
+              this.spawnFloatingText(this.enemyGroup.position, '¡PURIFICADO! (+40 EXP)', '#ffd700');
+              this.audio.playFinisherSound(true);
+              this.enemyGroup.position.y = -0.3;
+              this.awardEnemyKillRewards('hound', false);
+            }
+            this.updateHUD();
           }
-          this.updateHUD();
         }
       }
 
@@ -3422,25 +3523,35 @@ export class Oakhaven3DExperience {
         const dCultist = p.mesh.position.distanceTo(this.cultistGroup.position.clone().add(new THREE.Vector3(0, 0.8, 0)));
         if (dCultist <= 1.5) {
           collided = true;
-          this.cultistHealth = Math.max(0, this.cultistHealth - p.damage);
-          this.spawnFloatingText(this.cultistGroup.position, `-${p.damage} (FLECHA ABISAL)`, p.isHeavy ? '#ffd700' : '#a3ffc7');
-          this.audio.playCombatHit(p.isHeavy);
+          if (p.isThrownFlask) {
+            this.explodeHolyFireFlask(p.mesh.position.clone(), p.damage);
+          } else {
+            this.cultistHealth = Math.max(0, this.cultistHealth - p.damage);
+            const label = p.arrowType === 'fire' ? 'FLECHA DE FUEGO' : p.arrowType === 'silver' ? 'FLECHA DE PLATA' : 'FLECHA ABISAL';
+            this.spawnFloatingText(this.cultistGroup.position, `-${p.damage} (${label})`, p.isHeavy ? '#ffd700' : '#a3ffc7');
+            this.audio.playCombatHit(p.isHeavy);
 
-          if (p.isHeavy) {
-            this.cultistState = 'STUNNED';
-            this.cultistTimer = 1.0;
-            this.spawnFloatingText(this.cultistGroup.position, '¡ATURDIDO! [E] ¡REMATAR!', '#ffaa44');
-          }
+            if (p.arrowType === 'fire') {
+              this.activeBurnEffects.push({ targetId: 'cultist', ticksLeft: 6, dmgPerTick: 4, timer: 0.5 });
+              this.spawnFloatingText(this.cultistGroup.position, '🔥 ¡QUEMADURA DE FUEGO FATUO!', '#ff7722');
+            }
 
-          if (this.cultistHealth <= 0) {
-            this.cultistState = 'DEAD';
-            this.spawnFloatingText(this.cultistGroup.position, '¡PORTADOR DE CENIZA PURIFICADO! (+60 EXP)', '#ffd700');
-            this.audio.playFinisherSound(true);
-            this.cultistGroup.position.y = -0.3;
-            this.cultistCenserLight.intensity = 0;
-            this.awardEnemyKillRewards('cultist', false);
+            if (p.isHeavy || p.arrowType === 'silver') {
+              this.cultistState = 'STUNNED';
+              this.cultistTimer = p.arrowType === 'silver' ? 1.6 : 1.0;
+              this.spawnFloatingText(this.cultistGroup.position, '¡ATURDIDO! [E] ¡REMATAR!', '#ffaa44');
+            }
+
+            if (this.cultistHealth <= 0) {
+              this.cultistState = 'DEAD';
+              this.spawnFloatingText(this.cultistGroup.position, '¡PORTADOR DE CENIZA PURIFICADO! (+60 EXP)', '#ffd700');
+              this.audio.playFinisherSound(true);
+              this.cultistGroup.position.y = -0.3;
+              this.cultistCenserLight.intensity = 0;
+              this.awardEnemyKillRewards('cultist', false);
+            }
+            this.updateHUD();
           }
-          this.updateHUD();
         }
       }
 
@@ -3449,24 +3560,34 @@ export class Oakhaven3DExperience {
         const dZealot = p.mesh.position.distanceTo(this.zealotGroup.position.clone().add(new THREE.Vector3(0, 0.9, 0)));
         if (dZealot <= 1.6) {
           collided = true;
-          this.zealotHealth = Math.max(0, this.zealotHealth - p.damage);
-          this.spawnFloatingText(this.zealotGroup.position, `-${p.damage} (FLECHA ABISAL)`, p.isHeavy ? '#ffd700' : '#ff7788');
-          this.audio.playCombatHit(p.isHeavy);
+          if (p.isThrownFlask) {
+            this.explodeHolyFireFlask(p.mesh.position.clone(), p.damage);
+          } else {
+            this.zealotHealth = Math.max(0, this.zealotHealth - p.damage);
+            const label = p.arrowType === 'fire' ? 'FLECHA DE FUEGO' : p.arrowType === 'silver' ? 'FLECHA DE PLATA' : 'FLECHA ABISAL';
+            this.spawnFloatingText(this.zealotGroup.position, `-${p.damage} (${label})`, p.isHeavy ? '#ffd700' : '#ff7788');
+            this.audio.playCombatHit(p.isHeavy);
 
-          if (p.isHeavy) {
-            this.zealotState = 'STUNNED';
-            this.zealotTimer = 1.1;
-            this.spawnFloatingText(this.zealotGroup.position, '¡ATURDIDO! [E] ¡REMATAR!', '#ffaa44');
-          }
+            if (p.arrowType === 'fire') {
+              this.activeBurnEffects.push({ targetId: 'zealot', ticksLeft: 6, dmgPerTick: 4, timer: 0.5 });
+              this.spawnFloatingText(this.zealotGroup.position, '🔥 ¡QUEMADURA DE FUEGO FATUO!', '#ff7722');
+            }
 
-          if (this.zealotHealth <= 0) {
-            this.zealotState = 'DEAD';
-            this.spawnFloatingText(this.zealotGroup.position, '¡FLAGELANTE PURIFICADO! (+80 EXP)', '#ffd700');
-            this.audio.playFinisherSound(true);
-            this.zealotGroup.position.y = -0.3;
-            this.awardEnemyKillRewards('zealot', false);
+            if (p.isHeavy || p.arrowType === 'silver') {
+              this.zealotState = 'STUNNED';
+              this.zealotTimer = p.arrowType === 'silver' ? 1.8 : 1.1;
+              this.spawnFloatingText(this.zealotGroup.position, '¡ATURDIDO! [E] ¡REMATAR!', '#ffaa44');
+            }
+
+            if (this.zealotHealth <= 0) {
+              this.zealotState = 'DEAD';
+              this.spawnFloatingText(this.zealotGroup.position, '¡FLAGELANTE PURIFICADO! (+80 EXP)', '#ffd700');
+              this.audio.playFinisherSound(true);
+              this.zealotGroup.position.y = -0.3;
+              this.awardEnemyKillRewards('zealot', false);
+            }
+            this.updateHUD();
           }
-          this.updateHUD();
         }
       }
 
@@ -3475,24 +3596,35 @@ export class Oakhaven3DExperience {
         const dSkel = p.mesh.position.distanceTo(this.skeletonGroup.position.clone().add(new THREE.Vector3(0, 1.0, 0)));
         if (dSkel <= 1.5) {
           collided = true;
-          this.skeletonHealth = Math.max(0, this.skeletonHealth - p.damage);
-          this.spawnFloatingText(this.skeletonGroup.position, `-${p.damage} (FLECHA ABISAL)`, p.isHeavy ? '#ffd700' : '#00e5ff');
-          this.audio.playCombatHit(p.isHeavy);
+          if (p.isThrownFlask) {
+            this.explodeHolyFireFlask(p.mesh.position.clone(), p.damage);
+          } else {
+            const finalDmg = p.arrowType === 'silver' ? Math.round(p.damage * 1.5) : p.damage;
+            this.skeletonHealth = Math.max(0, this.skeletonHealth - finalDmg);
+            const label = p.arrowType === 'silver' ? '¡CRÍTICO DE PLATA!' : p.arrowType === 'fire' ? 'FLECHA DE FUEGO' : 'FLECHA ABISAL';
+            this.spawnFloatingText(this.skeletonGroup.position, `-${finalDmg} (${label})`, p.isHeavy || p.arrowType === 'silver' ? '#ffd700' : '#00e5ff');
+            this.audio.playCombatHit(p.isHeavy);
 
-          if (p.isHeavy) {
-            this.skeletonState = 'STUNNED';
-            this.skeletonTimer = 1.3;
-            this.spawnFloatingText(this.skeletonGroup.position, '¡ATURDIDO! [E] ¡REMATAR!', '#ffaa44');
-          }
+            if (p.arrowType === 'fire') {
+              this.activeBurnEffects.push({ targetId: 'skeleton', ticksLeft: 6, dmgPerTick: 4, timer: 0.5 });
+              this.spawnFloatingText(this.skeletonGroup.position, '🔥 ¡QUEMADURA DE FUEGO FATUO!', '#ff7722');
+            }
 
-          if (this.skeletonHealth <= 0) {
-            this.skeletonState = 'DEAD';
-            this.spawnFloatingText(this.skeletonGroup.position, '¡PENITENTE PURIFICADO! (+100 EXP)', '#00e5ff');
-            this.audio.playFinisherSound(true);
-            this.skeletonGroup.position.y = -0.3;
-            this.awardEnemyKillRewards('skeleton', false);
+            if (p.isHeavy || p.arrowType === 'silver') {
+              this.skeletonState = 'STUNNED';
+              this.skeletonTimer = p.arrowType === 'silver' ? 2.0 : 1.3;
+              this.spawnFloatingText(this.skeletonGroup.position, '¡ATURDIDO! [E] ¡REMATAR!', '#ffaa44');
+            }
+
+            if (this.skeletonHealth <= 0) {
+              this.skeletonState = 'DEAD';
+              this.spawnFloatingText(this.skeletonGroup.position, '¡PENITENTE PURIFICADO! (+100 EXP)', '#00e5ff');
+              this.audio.playFinisherSound(true);
+              this.skeletonGroup.position.y = -0.3;
+              this.awardEnemyKillRewards('skeleton', false);
+            }
+            this.updateHUD();
           }
-          this.updateHUD();
         }
       }
 
@@ -3501,23 +3633,33 @@ export class Oakhaven3DExperience {
         const dMorw = p.mesh.position.distanceTo(this.morwennaGroup.position.clone().add(new THREE.Vector3(0, 1.2, 0)));
         if (dMorw <= 1.8) {
           collided = true;
-          const mResult = this.morwennaEncounter.takeDamage(p.damage);
-          this.morwennaHealth = mResult.currentHealth;
-          this.spawnFloatingText(this.morwennaGroup.position, `-${p.damage} (DISPARO ABISAL)`, p.isHeavy ? '#ffd700' : '#ff88ee');
-          this.audio.playCombatHit(p.isHeavy);
+          if (p.isThrownFlask) {
+            this.explodeHolyFireFlask(p.mesh.position.clone(), p.damage);
+          } else {
+            const mResult = this.morwennaEncounter.takeDamage(p.damage);
+            this.morwennaHealth = mResult.currentHealth;
+            const label = p.arrowType === 'fire' ? 'FUEGO FATUO' : p.arrowType === 'silver' ? 'PLATA SAGRADA' : 'DISPARO ABISAL';
+            this.spawnFloatingText(this.morwennaGroup.position, `-${p.damage} (${label})`, p.isHeavy ? '#ffd700' : '#ff88ee');
+            this.audio.playCombatHit(p.isHeavy);
 
-          if (p.isHeavy && this.morwennaState !== 'STUNNED') {
-            this.morwennaState = 'STUNNED';
-            this.morwennaTimer = 1.4 * this.getStaggerMultiplier();
-            this.spawnFloatingText(this.morwennaGroup.position, '¡ATURDIDA! [E] ¡REMATAR!', '#ffaa44');
-          }
+            if (p.arrowType === 'fire') {
+              this.activeBurnEffects.push({ targetId: 'morwenna', ticksLeft: 6, dmgPerTick: 4, timer: 0.5 });
+              this.spawnFloatingText(this.morwennaGroup.position, '🔥 ¡CRISOL EN LLAMAS!', '#ff7722');
+            }
 
-          if (mResult.transitionedToPhase2) {
-            this.triggerMorwennaPhase2();
-          } else if (mResult.defeated) {
-            this.handleMorwennaDefeat();
+            if (p.isHeavy && this.morwennaState !== 'STUNNED') {
+              this.morwennaState = 'STUNNED';
+              this.morwennaTimer = 1.4 * this.getStaggerMultiplier();
+              this.spawnFloatingText(this.morwennaGroup.position, '¡ATURDIDA! [E] ¡REMATAR!', '#ffaa44');
+            }
+
+            if (mResult.transitionedToPhase2) {
+              this.triggerMorwennaPhase2();
+            } else if (mResult.defeated) {
+              this.handleMorwennaDefeat();
+            }
+            this.updateHUD();
           }
-          this.updateHUD();
         }
       }
 
@@ -3526,16 +3668,29 @@ export class Oakhaven3DExperience {
         const dInq = p.mesh.position.distanceTo(this.inquisitorGroup.position.clone().add(new THREE.Vector3(0, 1.3, 0)));
         if (dInq <= 1.8) {
           collided = true;
-          const hitRes = this.inquisitorEncounter.takeDamage(p.damage, false);
-          this.spawnFloatingText(this.inquisitorGroup.position, `-${hitRes.actualDamage} (DISPARO ABISAL)`, p.isHeavy ? '#ffd700' : '#ff4466');
-          this.audio.playCombatHit(p.isHeavy);
-          if (this.inquisitorHpBarFill) {
-            this.inquisitorHpBarFill.style.width = `${Math.max(0, (this.inquisitorEncounter.health / this.inquisitorEncounter.maxHealth) * 100)}%`;
+          if (p.isThrownFlask) {
+            this.explodeHolyFireFlask(p.mesh.position.clone(), p.damage);
+          } else {
+            // Silver arrows ignore frontal shield block
+            const bypassShield = p.arrowType === 'silver';
+            const hitRes = this.inquisitorEncounter.takeDamage(p.damage, bypassShield ? false : true);
+            const label = bypassShield ? '¡PERFORA-ESCUDO (PLATA)!' : p.arrowType === 'fire' ? 'FUEGO FATUO' : 'DISPARO ABISAL';
+            this.spawnFloatingText(this.inquisitorGroup.position, `-${hitRes.actualDamage} (${label})`, p.isHeavy || bypassShield ? '#ffd700' : '#ff4466');
+            this.audio.playCombatHit(p.isHeavy);
+
+            if (p.arrowType === 'fire') {
+              this.activeBurnEffects.push({ targetId: 'inquisitor', ticksLeft: 6, dmgPerTick: 4, timer: 0.5 });
+              this.spawnFloatingText(this.inquisitorGroup.position, '🔥 ¡INQUISIDOR EN LLAMAS!', '#ff7722');
+            }
+
+            if (this.inquisitorHpBarFill) {
+              this.inquisitorHpBarFill.style.width = `${Math.max(0, (this.inquisitorEncounter.health / this.inquisitorEncounter.maxHealth) * 100)}%`;
+            }
+            if (hitRes.defeated) {
+              this.handleInquisitorDefeat();
+            }
+            this.updateHUD();
           }
-          if (hitRes.defeated) {
-            this.handleInquisitorDefeat();
-          }
-          this.updateHUD();
         }
       }
 
@@ -3544,16 +3699,27 @@ export class Oakhaven3DExperience {
         const dAmbush = p.mesh.position.distanceTo(this.cryptAmbushSkeletonGroup.position.clone().add(new THREE.Vector3(0, 1.0, 0)));
         if (dAmbush <= 1.5) {
           collided = true;
-          this.cryptAmbushHp = Math.max(0, this.cryptAmbushHp - p.damage);
-          this.spawnFloatingText(this.cryptAmbushSkeletonGroup.position, `-${p.damage} (FLECHA ABISAL)`, p.isHeavy ? '#ffd700' : '#00e5ff');
-          this.audio.playCombatHit(p.isHeavy);
-          if (this.cryptAmbushHp <= 0) {
-            this.cryptAmbushDead = true;
-            this.cryptAmbushSkeletonGroup.position.y = -0.3;
-            this.spawnFloatingText(this.cryptAmbushSkeletonGroup.position, '¡PENITENTE PURIFICADO! (+80 EXP)', '#00e5ff');
-            this.awardEnemyKillRewards('crypt_ambush', false);
+          if (p.isThrownFlask) {
+            this.explodeHolyFireFlask(p.mesh.position.clone(), p.damage);
+          } else {
+            const finalDmg = p.arrowType === 'silver' ? Math.round(p.damage * 1.5) : p.damage;
+            this.cryptAmbushHp = Math.max(0, this.cryptAmbushHp - finalDmg);
+            const label = p.arrowType === 'silver' ? '¡CRÍTICO DE PLATA!' : 'FLECHA ABISAL';
+            this.spawnFloatingText(this.cryptAmbushSkeletonGroup.position, `-${finalDmg} (${label})`, p.isHeavy || p.arrowType === 'silver' ? '#ffd700' : '#00e5ff');
+            this.audio.playCombatHit(p.isHeavy);
+
+            if (p.arrowType === 'fire') {
+              this.activeBurnEffects.push({ targetId: 'crypt_ambush', ticksLeft: 6, dmgPerTick: 4, timer: 0.5 });
+            }
+
+            if (this.cryptAmbushHp <= 0) {
+              this.cryptAmbushDead = true;
+              this.cryptAmbushSkeletonGroup.position.y = -0.3;
+              this.spawnFloatingText(this.cryptAmbushSkeletonGroup.position, '¡PENITENTE PURIFICADO! (+80 EXP)', '#00e5ff');
+              this.awardEnemyKillRewards('crypt_ambush', false);
+            }
+            this.updateHUD();
           }
-          this.updateHUD();
         }
       }
 
@@ -3564,7 +3730,11 @@ export class Oakhaven3DExperience {
             const dProp = p.mesh.position.distanceTo(prop.position);
             if (dProp <= prop.radius + 0.3) {
               collided = true;
-              this.destroyProp(prop);
+              if (p.isThrownFlask) {
+                this.explodeHolyFireFlask(p.mesh.position.clone(), p.damage);
+              } else {
+                this.destroyProp(prop);
+              }
               break;
             }
           }
@@ -3700,6 +3870,15 @@ export class Oakhaven3DExperience {
   }
 
   private executeThrowWeapon(): void {
+    if (this.activeHero === 'thomas') {
+      const flaskRes = this.arsenalManager.throwHolyFireFlask(this.inventory);
+      if (flaskRes.success) {
+        this.throwHolyFireFlaskProjectile(flaskRes.damage);
+        this.updateHUD();
+        return;
+      }
+    }
+
     if (!this.playerStats.isArmed) return;
 
     this.playerStats.isArmed = false;
@@ -3758,6 +3937,235 @@ export class Oakhaven3DExperience {
       this.spawnFloatingText(this.playerGroup.position, '¡ESPADA RECUPERADA!', '#ffd700');
       this.updateHUD();
     }
+  }
+
+  public cycleKhaterineArrow(): void {
+    if (this.activeHero !== 'khaterine') return;
+    const newType = this.arsenalManager.cycleNextArrow();
+    this.audio.playArrowSwitch?.();
+    const nameMap: Record<ArrowType, string> = {
+      abyssal: 'Flechas Abisales (Estándar)',
+      fire: 'Flechas de Fuego Fatuo (Quemadura DoT)',
+      silver: 'Flechas de Plata Consagrada (Aturdimiento & Anti-Escudo)'
+    };
+    this.spawnFloatingText(this.playerGroup.position, `🏹 ${nameMap[newType]}`, '#ffd700');
+    this.updateHUD();
+  }
+
+  public selectKhaterineArrow(type: ArrowType): void {
+    if (this.activeHero !== 'khaterine') return;
+    this.arsenalManager.setSelectedArrowType(type);
+    this.audio.playArrowSwitch?.();
+    const nameMap: Record<ArrowType, string> = {
+      abyssal: 'Flechas Abisales (Estándar)',
+      fire: 'Flechas de Fuego Fatuo (Quemadura DoT)',
+      silver: 'Flechas de Plata Consagrada (Aturdimiento & Anti-Escudo)'
+    };
+    this.spawnFloatingText(this.playerGroup.position, `🏹 ${nameMap[type]}`, '#ffd700');
+    this.updateHUD();
+  }
+
+  private throwHolyFireFlaskProjectile(damage: number): void {
+    this.audio.playSfx('dodge');
+    this.spawnFloatingText(this.playerGroup.position, '🏺 ¡FRASCO DE FUEGO FATUO!', '#ff7722');
+
+    const forward = new THREE.Vector3(0, 0, -1).applyEuler(this.playerGroup.rotation).normalize();
+    const spawnPos = this.playerGroup.position.clone().add(new THREE.Vector3(0, 1.3, 0)).add(forward.clone().multiplyScalar(0.5));
+
+    const flaskGroup = new THREE.Group();
+    flaskGroup.position.copy(spawnPos);
+
+    // Flask bottle geometry
+    const bottleGeo = new THREE.CylinderGeometry(0.12, 0.16, 0.35, 8);
+    const bottleMat = new THREE.MeshStandardMaterial({
+      color: 0xff6600,
+      emissive: 0xff3300,
+      emissiveIntensity: 0.8,
+      roughness: 0.2
+    });
+    const bottleMesh = new THREE.Mesh(bottleGeo, bottleMat);
+    flaskGroup.add(bottleMesh);
+
+    // Flask neck
+    const neckGeo = new THREE.CylinderGeometry(0.06, 0.08, 0.14, 8);
+    const neckMat = new THREE.MeshStandardMaterial({ color: 0x8b4513 });
+    const neckMesh = new THREE.Mesh(neckGeo, neckMat);
+    neckMesh.position.y = 0.22;
+    flaskGroup.add(neckMesh);
+
+    const flaskLight = new THREE.PointLight(0xff6600, 3.0, 6);
+    flaskGroup.add(flaskLight);
+
+    this.scene.add(flaskGroup);
+
+    this.projectiles.push({
+      mesh: flaskGroup,
+      light: flaskLight,
+      velocity: forward.clone().multiplyScalar(12.5).add(new THREE.Vector3(0, 5.0, 0)),
+      life: 2.5,
+      maxLife: 2.5,
+      damage,
+      isHeavy: true,
+      isThrownFlask: true
+    });
+  }
+
+  private explodeHolyFireFlask(pos: THREE.Vector3, dmg: number): void {
+    // 1. Audio and Camera Post-FX
+    this.audio.playFlaskExplosion?.();
+    this.triggerScreenShake(0.65);
+    this.triggerHolyFlash(0.45);
+
+    // 2. Visual explosion mesh
+    const explosionGeo = new THREE.SphereGeometry(1.4, 12, 12);
+    const explosionMat = new THREE.MeshBasicMaterial({
+      color: 0xff5500,
+      transparent: true,
+      opacity: 0.85
+    });
+    const explosionMesh = new THREE.Mesh(explosionGeo, explosionMat);
+    explosionMesh.position.copy(pos);
+    this.scene.add(explosionMesh);
+
+    const shockLight = new THREE.PointLight(0xff7700, 6.0, 10);
+    shockLight.position.copy(pos);
+    this.scene.add(shockLight);
+
+    // Expanding explosion animation
+    let expTimer = 0;
+    const animateExp = () => {
+      expTimer += 0.04;
+      const s = 1.0 + expTimer * 4.5;
+      explosionMesh.scale.set(s, s, s);
+      explosionMat.opacity = Math.max(0, 0.85 - expTimer * 2.2);
+      shockLight.intensity = Math.max(0, 6.0 - expTimer * 14);
+
+      if (expTimer < 0.4) {
+        requestAnimationFrame(animateExp);
+      } else {
+        this.scene.remove(explosionMesh);
+        this.scene.remove(shockLight);
+      }
+    };
+    requestAnimationFrame(animateExp);
+
+    this.spawnFloatingText(pos, '💥 ¡ESTALLIDO SAGRADO!', '#ffcc00');
+
+    // 3. Radial Blast AoE (3.8m radius)
+    const radius = 3.8;
+
+    // Check hound
+    if (this.enemyState !== 'DEAD' && pos.distanceTo(this.enemyGroup.position) <= radius) {
+      this.enemyHealth = Math.max(0, this.enemyHealth - dmg);
+      this.spawnFloatingText(this.enemyGroup.position, `-${dmg} (FRASCO FATUO)`, '#ff5500');
+      this.activeBurnEffects.push({ targetId: 'hound', ticksLeft: 6, dmgPerTick: 4, timer: 0.5 });
+      this.enemyState = 'STUNNED';
+      this.enemyTimer = 1.2;
+      if (this.enemyHealth <= 0) {
+        this.enemyState = 'DEAD';
+        this.spawnFloatingText(this.enemyGroup.position, '¡PURIFICADO POR FUEGO! (+40 EXP)', '#ffd700');
+        this.audio.playFinisherSound(true);
+        this.enemyGroup.position.y = -0.3;
+        this.awardEnemyKillRewards('hound', false);
+      }
+    }
+
+    // Check cultist
+    if (this.cultistState !== 'DEAD' && pos.distanceTo(this.cultistGroup.position) <= radius) {
+      this.cultistHealth = Math.max(0, this.cultistHealth - dmg);
+      this.spawnFloatingText(this.cultistGroup.position, `-${dmg} (FRASCO FATUO)`, '#ff5500');
+      this.activeBurnEffects.push({ targetId: 'cultist', ticksLeft: 6, dmgPerTick: 4, timer: 0.5 });
+      this.cultistState = 'STUNNED';
+      this.cultistTimer = 1.2;
+      if (this.cultistHealth <= 0) {
+        this.cultistState = 'DEAD';
+        this.spawnFloatingText(this.cultistGroup.position, '¡CULTISTA PURIFICADO! (+60 EXP)', '#ffd700');
+        this.audio.playFinisherSound(true);
+        this.cultistGroup.position.y = -0.3;
+        this.cultistCenserLight.intensity = 0;
+        this.awardEnemyKillRewards('cultist', false);
+      }
+    }
+
+    // Check zealot
+    if (this.zealotState !== 'DEAD' && pos.distanceTo(this.zealotGroup.position) <= radius) {
+      this.zealotHealth = Math.max(0, this.zealotHealth - dmg);
+      this.spawnFloatingText(this.zealotGroup.position, `-${dmg} (FRASCO FATUO)`, '#ff5500');
+      this.activeBurnEffects.push({ targetId: 'zealot', ticksLeft: 6, dmgPerTick: 4, timer: 0.5 });
+      this.zealotState = 'STUNNED';
+      this.zealotTimer = 1.2;
+      if (this.zealotHealth <= 0) {
+        this.zealotState = 'DEAD';
+        this.spawnFloatingText(this.zealotGroup.position, '¡FLAGELANTE PURIFICADO! (+80 EXP)', '#ffd700');
+        this.audio.playFinisherSound(true);
+        this.zealotGroup.position.y = -0.3;
+        this.awardEnemyKillRewards('zealot', false);
+      }
+    }
+
+    // Check skeleton
+    if (this.skeletonState !== 'DEAD' && pos.distanceTo(this.skeletonGroup.position) <= radius) {
+      this.skeletonHealth = Math.max(0, this.skeletonHealth - dmg);
+      this.spawnFloatingText(this.skeletonGroup.position, `-${dmg} (FRASCO FATUO)`, '#ff5500');
+      this.activeBurnEffects.push({ targetId: 'skeleton', ticksLeft: 6, dmgPerTick: 4, timer: 0.5 });
+      this.skeletonState = 'STUNNED';
+      this.skeletonTimer = 1.4;
+      if (this.skeletonHealth <= 0) {
+        this.skeletonState = 'DEAD';
+        this.spawnFloatingText(this.skeletonGroup.position, '¡PENITENTE CALCINADO! (+100 EXP)', '#00e5ff');
+        this.audio.playFinisherSound(true);
+        this.skeletonGroup.position.y = -0.3;
+        this.awardEnemyKillRewards('skeleton', false);
+      }
+    }
+
+    // Check Morwenna
+    if (this.morwennaState !== 'DORMANT' && this.morwennaState !== 'DEAD' && pos.distanceTo(this.morwennaGroup.position) <= radius) {
+      const mResult = this.morwennaEncounter.takeDamage(dmg);
+      this.morwennaHealth = mResult.currentHealth;
+      this.spawnFloatingText(this.morwennaGroup.position, `-${dmg} (FRASCO FATUO)`, '#ff5500');
+      this.activeBurnEffects.push({ targetId: 'morwenna', ticksLeft: 6, dmgPerTick: 4, timer: 0.5 });
+      if (mResult.transitionedToPhase2) {
+        this.triggerMorwennaPhase2();
+      } else if (mResult.defeated) {
+        this.handleMorwennaDefeat();
+      }
+    }
+
+    // Check Inquisitor
+    if (this.dungeonAreaManager.currentArea === 'crypts_interior' && !this.inquisitorEncounter.isDefeated && pos.distanceTo(this.inquisitorGroup.position) <= radius) {
+      const hitRes = this.inquisitorEncounter.takeDamage(dmg, false);
+      this.spawnFloatingText(this.inquisitorGroup.position, `-${hitRes.actualDamage} (FRASCO FATUO)`, '#ff5500');
+      this.activeBurnEffects.push({ targetId: 'inquisitor', ticksLeft: 6, dmgPerTick: 4, timer: 0.5 });
+      if (this.inquisitorHpBarFill) {
+        this.inquisitorHpBarFill.style.width = `${Math.max(0, (this.inquisitorEncounter.health / this.inquisitorEncounter.maxHealth) * 100)}%`;
+      }
+      if (hitRes.defeated) {
+        this.handleInquisitorDefeat();
+      }
+    }
+
+    // Check Crypt Ambush Skeleton
+    if (this.dungeonAreaManager.currentArea === 'crypts_interior' && this.cryptAmbushAwakened && !this.cryptAmbushDead && pos.distanceTo(this.cryptAmbushSkeletonGroup.position) <= radius) {
+      this.cryptAmbushHp = Math.max(0, this.cryptAmbushHp - dmg);
+      this.spawnFloatingText(this.cryptAmbushSkeletonGroup.position, `-${dmg} (FRASCO FATUO)`, '#ff5500');
+      this.activeBurnEffects.push({ targetId: 'crypt_ambush', ticksLeft: 6, dmgPerTick: 4, timer: 0.5 });
+      if (this.cryptAmbushHp <= 0) {
+        this.cryptAmbushDead = true;
+        this.cryptAmbushSkeletonGroup.position.y = -0.3;
+        this.spawnFloatingText(this.cryptAmbushSkeletonGroup.position, '¡PENITENTE PURIFICADO! (+80 EXP)', '#00e5ff');
+        this.awardEnemyKillRewards('crypt_ambush', false);
+      }
+    }
+
+    // Check Destructibles
+    for (const prop of this.destructibles) {
+      if (!prop.isDestroyed && pos.distanceTo(prop.position) <= radius + 0.5) {
+        this.destroyProp(prop);
+      }
+    }
+
+    this.updateHUD();
   }
 
   // =========================================================================
@@ -4423,6 +4831,7 @@ export class Oakhaven3DExperience {
   private handleMorwennaDefeat(): void {
     if (this.morwennaState === 'DEAD') return;
     this.morwennaState = 'DEAD';
+    this.triggerHolyFlash(1.0);
     this.spawnFloatingText(this.morwennaGroup.position, '👑 ¡MADRE MORWENNA PURIFICADA! (+350 EXP) 👑', '#ffd700');
     this.spawnFloatingText(this.playerGroup.position, '🗝️ ¡LLAVE DE LAS CRIPTAS OBTENIDA!', '#00e5ff');
     this.audio.playFinisherSound(true);
@@ -4504,6 +4913,7 @@ export class Oakhaven3DExperience {
         const isParry = this.playerStats.isGuarding && (performance.now() - this.lastGuardTime) <= parryWindow;
         if (isParry) {
           this.audio.playSfx('parry');
+          this.triggerHolyFlash(0.85);
           this.morwennaState = 'STUNNED';
           this.morwennaTimer = 2.6 * this.getStaggerMultiplier();
           this.spawnFloatingText(this.playerGroup.position, '¡PARRY DE EMBESTIDA!', '#66ccff');
@@ -4534,6 +4944,7 @@ export class Oakhaven3DExperience {
       const isParry = this.playerStats.isGuarding && (performance.now() - this.lastGuardTime) <= parryWindow;
       if (isParry) {
         this.audio.playSfx('parry');
+        this.triggerHolyFlash(0.85);
         this.morwennaState = 'STUNNED';
         this.morwennaTimer = 2.4 * this.getStaggerMultiplier(); // Stunned window for Finisher
         const msg = this.inventory.getParryBonusMs() > 0 ? '¡PARRY DE CRISOL SAGRADO (+70ms)!' : '¡PARRY DE CRISOL!';
@@ -4745,6 +5156,7 @@ export class Oakhaven3DExperience {
       const isParry = this.playerStats.isGuarding && (performance.now() - this.lastGuardTime) <= parryWindow;
       if (isParry) {
         this.audio.playSfx('parry');
+        this.triggerHolyFlash(0.85);
         this.skeletonState = 'STUNNED';
         this.skeletonTimer = 2.4 * this.getStaggerMultiplier();
         this.spawnFloatingText(this.playerGroup.position, '¡PARRY DE ESPADÓN (+70ms)!', '#66ccff');
@@ -4936,6 +5348,7 @@ export class Oakhaven3DExperience {
             const isParry = this.playerStats.isGuarding && (performance.now() - this.lastGuardTime) <= parryWindow;
             if (isParry) {
               this.audio.playSfx('parry');
+              this.triggerHolyFlash(0.85);
               this.inquisitorEncounter.setState('RECOVERY');
               this.inquisitorTimer = 2.0;
               this.inquisitorEncounter.isBlocking = false;
@@ -5043,6 +5456,8 @@ export class Oakhaven3DExperience {
     this.updateEmbers(delta);
     this.updateFloatingTexts(delta);
     this.checkShalemProximity();
+    this.updateBurnEffects(delta);
+    this.updateScreenPostFx(delta);
 
     // Swing open cemetery gates smoothly if unlocked
     if (this.cemeteryGateOpen && this.cemeteryGateLeft && this.cemeteryGateRight) {
@@ -5058,6 +5473,151 @@ export class Oakhaven3DExperience {
     this.renderer.render(this.scene, this.camera);
     this.animationFrameId = requestAnimationFrame(this.animate);
   };
+
+  private updateBurnEffects(delta: number): void {
+    if (this.activeBurnEffects.length === 0) return;
+
+    for (let i = this.activeBurnEffects.length - 1; i >= 0; i--) {
+      const burn = this.activeBurnEffects[i];
+      burn.timer -= delta;
+      if (burn.timer <= 0) {
+        burn.timer = 0.5;
+        burn.ticksLeft--;
+
+        this.applyBurnTick(burn.targetId, burn.dmgPerTick);
+
+        if (burn.ticksLeft <= 0) {
+          this.activeBurnEffects.splice(i, 1);
+        }
+      }
+    }
+  }
+
+  private applyBurnTick(targetId: string, dmg: number): void {
+    if (targetId === 'hound' && this.enemyState !== 'DEAD') {
+      this.enemyHealth = Math.max(0, this.enemyHealth - dmg);
+      this.spawnFloatingText(this.enemyGroup.position, `🔥 -${dmg}`, '#ff7722');
+      if (this.enemyHealth <= 0) {
+        this.enemyState = 'DEAD';
+        this.spawnFloatingText(this.enemyGroup.position, '¡PURIFICADO POR FUEGO! (+40 EXP)', '#ffd700');
+        this.audio.playFinisherSound(true);
+        this.enemyGroup.position.y = -0.3;
+        this.awardEnemyKillRewards('hound', false);
+      }
+      this.updateHUD();
+    } else if (targetId === 'cultist' && this.cultistState !== 'DEAD') {
+      this.cultistHealth = Math.max(0, this.cultistHealth - dmg);
+      this.spawnFloatingText(this.cultistGroup.position, `🔥 -${dmg}`, '#ff7722');
+      if (this.cultistHealth <= 0) {
+        this.cultistState = 'DEAD';
+        this.spawnFloatingText(this.cultistGroup.position, '¡CULTISTA CONSUMIDO! (+60 EXP)', '#ffd700');
+        this.audio.playFinisherSound(true);
+        this.cultistGroup.position.y = -0.3;
+        this.cultistCenserLight.intensity = 0;
+        this.awardEnemyKillRewards('cultist', false);
+      }
+      this.updateHUD();
+    } else if (targetId === 'zealot' && this.zealotState !== 'DEAD') {
+      this.zealotHealth = Math.max(0, this.zealotHealth - dmg);
+      this.spawnFloatingText(this.zealotGroup.position, `🔥 -${dmg}`, '#ff7722');
+      if (this.zealotHealth <= 0) {
+        this.zealotState = 'DEAD';
+        this.spawnFloatingText(this.zealotGroup.position, '¡FLAGELANTE CONSUMIDO! (+80 EXP)', '#ffd700');
+        this.audio.playFinisherSound(true);
+        this.zealotGroup.position.y = -0.3;
+        this.awardEnemyKillRewards('zealot', false);
+      }
+      this.updateHUD();
+    } else if (targetId === 'skeleton' && this.skeletonState !== 'DEAD') {
+      this.skeletonHealth = Math.max(0, this.skeletonHealth - dmg);
+      this.spawnFloatingText(this.skeletonGroup.position, `🔥 -${dmg}`, '#ff7722');
+      if (this.skeletonHealth <= 0) {
+        this.skeletonState = 'DEAD';
+        this.spawnFloatingText(this.skeletonGroup.position, '¡PENITENTE CALCINADO! (+100 EXP)', '#00e5ff');
+        this.audio.playFinisherSound(true);
+        this.skeletonGroup.position.y = -0.3;
+        this.awardEnemyKillRewards('skeleton', false);
+      }
+      this.updateHUD();
+    } else if (targetId === 'morwenna' && this.morwennaState !== 'DEAD' && this.morwennaState !== 'DORMANT') {
+      const res = this.morwennaEncounter.takeDamage(dmg);
+      this.morwennaHealth = res.currentHealth;
+      this.spawnFloatingText(this.morwennaGroup.position, `🔥 -${dmg}`, '#ff7722');
+      if (res.transitionedToPhase2) {
+        this.triggerMorwennaPhase2();
+      } else if (res.defeated) {
+        this.handleMorwennaDefeat();
+      }
+      this.updateHUD();
+    } else if (targetId === 'inquisitor' && !this.inquisitorEncounter.isDefeated) {
+      const hitRes = this.inquisitorEncounter.takeDamage(dmg, false);
+      this.spawnFloatingText(this.inquisitorGroup.position, `🔥 -${hitRes.actualDamage}`, '#ff7722');
+      if (this.inquisitorHpBarFill) {
+        this.inquisitorHpBarFill.style.width = `${Math.max(0, (this.inquisitorEncounter.health / this.inquisitorEncounter.maxHealth) * 100)}%`;
+      }
+      if (hitRes.defeated) {
+        this.handleInquisitorDefeat();
+      }
+      this.updateHUD();
+    } else if (targetId === 'crypt_ambush' && this.cryptAmbushAwakened && !this.cryptAmbushDead) {
+      this.cryptAmbushHp = Math.max(0, this.cryptAmbushHp - dmg);
+      this.spawnFloatingText(this.cryptAmbushSkeletonGroup.position, `🔥 -${dmg}`, '#ff7722');
+      if (this.cryptAmbushHp <= 0) {
+        this.cryptAmbushDead = true;
+        this.cryptAmbushSkeletonGroup.position.y = -0.3;
+        this.spawnFloatingText(this.cryptAmbushSkeletonGroup.position, '¡PENITENTE PURIFICADO! (+80 EXP)', '#00e5ff');
+        this.awardEnemyKillRewards('crypt_ambush', false);
+      }
+      this.updateHUD();
+    }
+  }
+
+  private updateScreenPostFx(delta: number): void {
+    // 1. Damage vignette decay
+    if (this.damageVignetteEl) {
+      this.damageVignetteOpacity = Math.max(0, this.damageVignetteOpacity - delta * 1.8);
+      this.damageVignetteEl.style.opacity = this.damageVignetteOpacity.toFixed(2);
+    }
+
+    // 2. Holy flash decay
+    if (this.holyFlashEl) {
+      this.holyFlashOpacity = Math.max(0, this.holyFlashOpacity - delta * 2.2);
+      this.holyFlashEl.style.opacity = this.holyFlashOpacity.toFixed(2);
+    }
+
+    // 3. Low HP Agony Heartbeat (HP < 30%)
+    if (this.playerStats.health > 0 && this.playerStats.health < this.playerStats.maxHealth * 0.3) {
+      const now = performance.now() / 1000;
+      if (now - this.lastHeartbeatTime > 1.1) {
+        this.lastHeartbeatTime = now;
+        this.audio.playHeartbeat?.();
+        this.damageVignetteOpacity = Math.max(this.damageVignetteOpacity, 0.42);
+      }
+    }
+
+    // 4. Camera Screen Trauma / Shake
+    if (this.screenTrauma > 0) {
+      this.screenTrauma = Math.max(0, this.screenTrauma - delta * 2.0);
+      const shakeAmount = this.screenTrauma * this.screenTrauma * 0.16;
+      this.camera.position.x += (Math.random() - 0.5) * shakeAmount;
+      this.camera.position.y += (Math.random() - 0.5) * shakeAmount;
+      this.camera.position.z += (Math.random() - 0.5) * shakeAmount;
+    }
+  }
+
+  public triggerDamageVignette(severity = 0.8): void {
+    this.damageVignetteOpacity = Math.max(this.damageVignetteOpacity, severity);
+    this.triggerScreenShake(0.4);
+  }
+
+  public triggerHolyFlash(intensity = 0.9): void {
+    this.holyFlashOpacity = Math.max(this.holyFlashOpacity, intensity);
+    this.audio.playHolyFlash?.();
+  }
+
+  public triggerScreenShake(trauma = 0.5): void {
+    this.screenTrauma = Math.min(1.0, this.screenTrauma + trauma);
+  }
 
   private updatePlayer(delta: number): void {
     if (!this.isGameplayActive()) {
@@ -5274,6 +5834,7 @@ export class Oakhaven3DExperience {
       const isParry = this.playerStats.isGuarding && (performance.now() - this.lastGuardTime) <= parryWindow;
       if (isParry) {
         this.audio.playSfx('parry');
+        this.triggerHolyFlash(0.85);
         this.enemyState = 'STUNNED';
         this.enemyTimer = 1.6;
         const msg = this.inventory.getParryBonusMs() > 0 ? '¡PARRY SAGRADO (+70ms)!' : '¡PARRY PERFECTO!';
@@ -5450,6 +6011,7 @@ export class Oakhaven3DExperience {
       const isParry = this.playerStats.isGuarding && (performance.now() - this.lastGuardTime) <= parryWindow;
       if (isParry) {
         this.audio.playSfx('parry');
+        this.triggerHolyFlash(0.85);
         this.cultistState = 'STUNNED';
         this.cultistTimer = 1.8 * this.getStaggerMultiplier();
         const msg = this.inventory.getParryBonusMs() > 0 ? '¡PARRY SAGRADO (+70ms)!' : '¡PARRY PERFECTO!';
@@ -5631,6 +6193,7 @@ export class Oakhaven3DExperience {
       const isParry = this.playerStats.isGuarding && (performance.now() - this.lastGuardTime) <= parryWindow;
       if (isParry) {
         this.audio.playSfx('parry');
+        this.triggerHolyFlash(0.85);
         this.zealotState = 'STUNNED';
         this.zealotTimer = 2.0 * this.getStaggerMultiplier(); // Stunned window for Finisher
         const msg = this.inventory.getParryBonusMs() > 0 ? '¡PARRY DE CADENA SAGRADO (+70ms)!' : '¡PARRY DE CADENA!';
@@ -6368,6 +6931,44 @@ export class Oakhaven3DExperience {
     }
   }
 
+  public exportSaveFile(): void {
+    this.executeSanctuarySave();
+    const jsonStr = GameSaveManager.exportSaveToJson();
+    if (!jsonStr) {
+      this.spawnFloatingText(this.playerGroup.position, 'No hay datos guardados para exportar', '#ff6666');
+      return;
+    }
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `the_light_in_the_darkness_save_${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    this.audio.playSfx('menu_select');
+    this.spawnFloatingText(this.playerGroup.position, '💾 Archivo JSON de Guardado Exportado', '#ffd700');
+  }
+
+  public async importSaveFile(file: File): Promise<void> {
+    try {
+      const text = await file.text();
+      const success = GameSaveManager.importSaveFromJson(text);
+      if (success) {
+        this.loadSavedSanctuaryState();
+        this.audio.playHolyFlash?.();
+        this.triggerHolyFlash(0.85);
+        this.spawnFloatingText(this.playerGroup.position, '📂 Partida Restaurada Exitosamente desde JSON', '#a3ffc7');
+        this.updateHUD();
+      } else {
+        this.spawnFloatingText(this.playerGroup.position, 'Error: Formato de guardado inválido', '#ff4444');
+      }
+    } catch (_err) {
+      this.spawnFloatingText(this.playerGroup.position, 'Error al leer el archivo JSON', '#ff4444');
+    }
+  }
+
   private updateCamera(delta: number): void {
     const safeDelta = Math.min(delta, 0.1);
 
@@ -6571,12 +7172,20 @@ export class Oakhaven3DExperience {
     }
     if (weaponBadge) {
       if (this.activeHero === 'khaterine') {
-        weaponBadge.innerText = '🏹 ARMA: Arco Abisal del Sauce Negro [J: Rápida | K: Pesada]';
+        const fireStock = this.arsenalManager.getArrowStock(this.inventory, 'fire');
+        const silverStock = this.arsenalManager.getArrowStock(this.inventory, 'silver');
+        const selected = this.arsenalManager.getSelectedArrowType();
+        const typeLabel = selected === 'abyssal' ? 'Abisal (∞)' : selected === 'fire' ? `Fuego Fatuo (${fireStock})` : `Plata (${silverStock})`;
+        weaponBadge.innerHTML = `🏹 MUNICIÓN: <span style="color:#ffd700;font-weight:bold;">${typeLabel}</span> <span style="font-size:6.5px;color:#a3f7ff;">[1/2/3 o Clic]</span>`;
+        weaponBadge.style.cursor = 'pointer';
         weaponBadge.style.color = '#e6b8ff';
       } else {
-        weaponBadge.innerText = this.playerStats.isArmed
-          ? '⚔ ARMA: Espada Corta del Monaguillo'
-          : '👊 DESARMADO: Pelea a puños [Pulsa E cerca de la espada]';
+        const flaskStock = this.arsenalManager.getFlaskStock(this.inventory);
+        const flaskLabel = flaskStock > 0 ? ` | 🏺 Frasco Sagrado (${flaskStock}) [T]` : ' | [T] Lanzar Arma';
+        weaponBadge.innerText = (this.playerStats.isArmed
+          ? '⚔ ARMA: Espada Corta'
+          : '👊 DESARMADO: Pelea a puños') + flaskLabel;
+        weaponBadge.style.cursor = 'default';
         weaponBadge.style.color = this.playerStats.isArmed ? '#e2d4f0' : '#ffaa55';
       }
     }

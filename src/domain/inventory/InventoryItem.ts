@@ -1,4 +1,4 @@
-export type ItemCategory = 'consumable' | 'relic' | 'key_item' | 'material';
+export type ItemCategory = 'consumable' | 'relic' | 'key_item' | 'material' | 'ammunition';
 
 export type ItemEffectType =
   | 'heal_health'
@@ -8,6 +8,8 @@ export type ItemEffectType =
   | 'relic_parry_window'
   | 'relic_dodge_cost'
   | 'relic_danger_sense'
+  | 'special_ammo'
+  | 'throwable_flask'
   | 'unlock_gate'
   | 'none';
 

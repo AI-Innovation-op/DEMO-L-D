@@ -119,6 +119,23 @@ export class GameSaveManager {
     storage.removeItem(this.LEGACY_V1_KEY);
   }
 
+  public static exportSaveToJson(): string | null {
+    const save = this.loadGame();
+    if (!save) return null;
+    return JSON.stringify(save, null, 2);
+  }
+
+  public static importSaveFromJson(jsonStr: string): boolean {
+    try {
+      const parsed = JSON.parse(jsonStr);
+      const normalized = this.validateAndNormalizeSave(parsed);
+      if (!normalized) return false;
+      return this.saveGame(normalized);
+    } catch {
+      return false;
+    }
+  }
+
   public static migrateV1ToV2(v1: any): SaveInput | null {
     if (!v1 || typeof v1 !== 'object') return null;
 

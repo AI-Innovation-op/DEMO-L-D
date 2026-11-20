@@ -127,6 +127,53 @@ Este documento establece las prioridades de desarrollo, mecánicas planeadas y e
   - `playHolyCurse()`: Disonancia coral amenazante para hechizos oscuros y ataques inquisitoriales.
   - `playMaceImpact()`: Golpe seco contundente de hierro y masa roma.
   - `playCauldronBubble()`: Tren de burbujas en ebullición para la síntesis alquímica de la botica.
+  - `playHeartbeat()`: Doble pulso sinusoidal grave (lub-dub 70->30 Hz) activado automáticamente al tener <30% de salud.
+  - `playHolyFlash()`: Acordes de campana resonante brillante con caída exponencial para parries exitosos y remates de jefes.
+  - `playFlaskExplosion()`: Estallido de cristal, ruido blanco filtrado de deflagración y rugido de fuego fatuo.
+  - `playArrowSwitch()`: Clic de tensión de cuerda y muesca metálica al cambiar de proyectil en combate.
+
+### 11. Arsenal de Municiones Elementales para Khaterine [COMPLETADO ✅]
+- [x] **Sistema de Tipos de Flecha en Tiempo Real (`src/domain/combat/ArsenalManager.ts`)**:
+  - *Flechas Abisales (`abyssal`)*: Munición infinita base con daño sombrío equilibrado (28/48 daño).
+  - *Flechas de Fuego Fatuo (`fire`)*: Proyectil con fuego naranja (`0xff5500`), ignición de 6 ticks de 4 de daño DoT a lo largo de 3s.
+  - *Flechas de Plata Consagrada (`silver`)*: Proyectil resplandeciente cian-plata (`0x00e5ff`), daño masivo de postura (2.5x), aturdimiento extendido a 2.0s y perforación total del escudo frontal del Inquisidor y Penitentes.
+- [x] **Selector Interactivo en HUD y Atajos de Combate**:
+  - Distintivo `#p3d-weapon-badge` reactivo que muestra el tipo activo y stock restante en tiempo real.
+  - Ciclo con un solo clic sobre la insignia o teclas dedicadas `[1]`, `[2]`, `[3]`.
+  - Fallback automático a flecha abisal infinita si se agotan las municiones especiales.
+
+### 12. Frascos Arrojadizos de Fuego Fatuo para Thomas [COMPLETADO ✅]
+- [x] **Arma Arrojadiza Especial con Balística Física (`[T]`)**:
+  - Botella de vidrio consagrado con líquido ígneo resplandeciente y luz puntual naranja.
+  - Trayectoria parabólica física con gravedad (`14 m/s²`) y rotación tridimensional sobre ejes X y Z.
+  - Impacto por colisión directa o choque contra el suelo a `y <= 0.2m`.
+- [x] **Onda de Choque Radial y Daño en Área (AoE)**:
+  - Estallido de 3.8m de radio con esfera de fuego expansiva de disipación suave.
+  - 55 de daño de área + quemadura DoT a todos los enemigos cercanos (Sabueso, Cultista, Flagelante, Penitente, Inquisidor, Morwenna) y destrucción inmediata de elementos del entorno.
+  - Fallback a desarmado táctico de espada corta cuando el stock de frascos es 0.
+
+### 13. Nuevas Fórmulas de Alquimia en el Caldero de Elowen [COMPLETADO ✅]
+- [x] **Expansión de Recetas Canónicas en `AlchemyRecipe.ts`**:
+  - `craft_fire_arrows`: 1 Esencia de Fuego Fatuo (`blood_hound`) + 2 Cenizas Purificadas (`ash_purified`) -> 5 Flechas de Fuego Fatuo.
+  - `craft_silver_arrows`: 2 Hojas de Plata (`herb_silverleaf`) + 1 Agua Bendita (`water_blessed`) -> 5 Flechas de Plata Consagrada.
+  - `craft_holy_fire_flask`: 2 Esencias de Fuego Fatuo + 1 Ungüento Base (`salve_base`) + 1 Agua Bendita -> 2 Frascos de Fuego Fatuo.
+- [x] Rejilla de la Botica interactiva con comprobación de stock y actualización instantánea de la bolsa.
+
+### 14. Efectos Cinemáticos de Pantalla y Post-FX en Tiempo Real [COMPLETADO ✅]
+- [x] **Viñeta de Daño Periférico (`#p3d-damage-vignette`)**:
+  - Resplandor carmesí pulsante en los bordes de la pantalla con intensidad proporcional al impacto (0.6 a 0.85).
+  - Activado en trampas de pinchos, estocadas de jefes, embestidas y ataques de cultistas.
+- [x] **Trauma y Sacudida de Cámara (`Screen Shake / Trauma Decay`)**:
+  - Desplazamiento pseudoaleatorio exponencial de la cámara (`trauma² * 0.16`) que decae suavemente con el delta time.
+- [x] **Latido de Agonía por Baja Salud**:
+  - Detección reactiva cuando HP < 30% del máximo: pulso rítmico de viñeta roja acompañado del sintetizador de latido cardíaco.
+- [x] **Destello Sagrado (`#p3d-holy-flash`)**:
+  - Flare radiante dorado/cian en pantalla entera al ejecutar un Parry perfecto o al derrotar a jefes mayores (Madre Morwenna, Inquisidor Caído).
+
+### 15. Exportación e Importación de Partidas en Archivo JSON [COMPLETADO ✅]
+- [x] **Respaldo Portátil de Guardado (`GameSaveManager`)**:
+  - Botón `[💾 EXPORTAR JSON]`: Descarga instantánea del archivo `the_light_in_the_darkness_save_<timestamp>.json` con toda la progresión, bolsa de acólito, reliquias, héroes y mundo.
+  - Botón `[📂 IMPORTAR JSON]`: Selector de archivo con validación estricta de esquema y tipos numéricos, restaurando el estado completo del juego sin necesidad de recargar la página.
 
 ---
 

@@ -91,4 +91,33 @@ describe('Alchemy & Elowen Herbalism (DDD Domain)', () => {
     expect(inventory.getItem('ash_purified')?.quantity).toBe(1);
     expect(inventory.getItem('blood_hound')?.quantity).toBe(1);
   });
+
+  it('can craft elemental arrows and thrown fire flasks', () => {
+    inventory.addItem(CANONICAL_MATERIALS.blood_hound, 3);
+    inventory.addItem(CANONICAL_MATERIALS.ash_purified, 3);
+    inventory.addItem(CANONICAL_MATERIALS.herb_silverleaf, 4);
+    inventory.addItem(CANONICAL_MATERIALS.water_blessed, 2);
+    inventory.addItem(CANONICAL_MATERIALS.salve_base, 2);
+
+    // 1. Craft Fire Arrows (1 blood, 1 ash -> 5 fire arrows)
+    const fireArrowRes = pot.craft('craft_fire_arrows', inventory);
+    expect(fireArrowRes.success).toBe(true);
+    expect(fireArrowRes.craftedItem?.id).toBe('arrow_fire');
+    expect(fireArrowRes.quantityCrafted).toBe(5);
+    expect(inventory.getItem('arrow_fire')?.quantity).toBe(5);
+
+    // 2. Craft Silver Arrows (2 silverleaf, 1 water -> 5 silver arrows)
+    const silverArrowRes = pot.craft('craft_silver_arrows', inventory);
+    expect(silverArrowRes.success).toBe(true);
+    expect(silverArrowRes.craftedItem?.id).toBe('arrow_silver');
+    expect(silverArrowRes.quantityCrafted).toBe(5);
+    expect(inventory.getItem('arrow_silver')?.quantity).toBe(5);
+
+    // 3. Craft Holy Fire Flask (1 blood, 1 salve -> 2 flasks)
+    const flaskRes = pot.craft('craft_holy_fire_flask', inventory);
+    expect(flaskRes.success).toBe(true);
+    expect(flaskRes.craftedItem?.id).toBe('holy_fire_flask');
+    expect(flaskRes.quantityCrafted).toBe(2);
+    expect(inventory.getItem('holy_fire_flask')?.quantity).toBe(2);
+  });
 });

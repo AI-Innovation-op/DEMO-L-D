@@ -90,6 +90,43 @@ export class Inventory {
     inv.addItem({ ...CANONICAL_MATERIALS.salve_base, quantity: 1 });
     inv.addItem({ ...CANONICAL_MATERIALS.ash_purified, quantity: 1 });
 
+    // Starter Ammunition & Thrown Weapons
+    inv.addItem({
+      id: 'arrow_fire',
+      name: 'Flechas de Fuego Fatuo',
+      description: 'Flechas con punta imbuida en llamas de Oakhaven. Provocan quemadura continua en enemigos alcanzados.',
+      category: 'ammunition',
+      icon: '🔥',
+      quantity: 10,
+      maxQuantity: 30,
+      effectType: 'special_ammo',
+      effectValue: 24
+    });
+
+    inv.addItem({
+      id: 'arrow_silver',
+      name: 'Flechas de Plata Consagrada',
+      description: 'Flechas de plata pura bendecida. Ignoran bloqueos frontales y causan daño crítico masivo a la postura.',
+      category: 'ammunition',
+      icon: '🏹',
+      quantity: 5,
+      maxQuantity: 30,
+      effectType: 'special_ammo',
+      effectValue: 45
+    });
+
+    inv.addItem({
+      id: 'holy_fire_flask',
+      name: 'Frasco de Fuego Fatuo',
+      description: 'Frasco arrojadizo que estalla en un pilar de fuego sagrado ardiente al impactar contra el suelo o enemigos.',
+      category: 'consumable',
+      icon: '🧪',
+      quantity: 2,
+      maxQuantity: 10,
+      effectType: 'throwable_flask',
+      effectValue: 55
+    });
+
     return inv;
   }
 

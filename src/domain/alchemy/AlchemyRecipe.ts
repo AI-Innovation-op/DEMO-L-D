@@ -164,5 +164,71 @@ export const CANONICAL_RECIPES: AlchemyRecipe[] = [
       { itemId: 'herb_silverleaf', name: 'Hoja de Plata', icon: '🍃', quantity: 3 },
       { itemId: 'water_blessed', name: 'Agua Bendita de San Jude', icon: '💧', quantity: 1 }
     ]
+  },
+  {
+    id: 'craft_fire_arrows',
+    name: 'Flechas de Fuego Fatuo (x5)',
+    description: 'Flechas de caza imbuidas en fuego sombrío de sabueso. Aplican daño ardiente residual continuo.',
+    outputQuantity: 5,
+    expReward: 25,
+    outputItem: {
+      id: 'arrow_fire',
+      name: 'Flechas de Fuego Fatuo',
+      description: 'Flechas con punta imbuida en llamas de Oakhaven. Provocan quemadura continua en enemigos alcanzados.',
+      category: 'ammunition',
+      icon: '🔥',
+      quantity: 5,
+      maxQuantity: 30,
+      effectType: 'special_ammo',
+      effectValue: 24
+    },
+    ingredients: [
+      { itemId: 'blood_hound', name: 'Esencia de Fuego Fatuo', icon: '🔥', quantity: 1 },
+      { itemId: 'ash_purified', name: 'Ceniza Consagrada', icon: '✨', quantity: 1 }
+    ]
+  },
+  {
+    id: 'craft_silver_arrows',
+    name: 'Flechas de Plata Consagrada (x5)',
+    description: 'Flechas bendecidas en la pila bautismal. Destrozan la guardia y postura de los no-muertos e inquisidores.',
+    outputQuantity: 5,
+    expReward: 25,
+    outputItem: {
+      id: 'arrow_silver',
+      name: 'Flechas de Plata Consagrada',
+      description: 'Flechas de plata pura bendecida. Ignoran bloqueos frontales y causan daño crítico masivo a la postura.',
+      category: 'ammunition',
+      icon: '🏹',
+      quantity: 5,
+      maxQuantity: 30,
+      effectType: 'special_ammo',
+      effectValue: 45
+    },
+    ingredients: [
+      { itemId: 'herb_silverleaf', name: 'Hoja de Plata', icon: '🍃', quantity: 2 },
+      { itemId: 'water_blessed', name: 'Agua Bendita de San Jude', icon: '💧', quantity: 1 }
+    ]
+  },
+  {
+    id: 'craft_holy_fire_flask',
+    name: 'Frascos de Fuego Fatuo (x2)',
+    description: 'Frascos arrojadizos de vidrio sellados con cera y fuego concentrado. Estallan en un pilar ardiente.',
+    outputQuantity: 2,
+    expReward: 30,
+    outputItem: {
+      id: 'holy_fire_flask',
+      name: 'Frasco de Fuego Fatuo',
+      description: 'Frasco arrojadizo que estalla en un pilar de fuego sagrado ardiente al impactar contra el suelo o enemigos.',
+      category: 'consumable',
+      icon: '🧪',
+      quantity: 2,
+      maxQuantity: 10,
+      effectType: 'throwable_flask',
+      effectValue: 55
+    },
+    ingredients: [
+      { itemId: 'blood_hound', name: 'Esencia de Fuego Fatuo', icon: '🔥', quantity: 1 },
+      { itemId: 'salve_base', name: 'Ungüento Base de Cera', icon: '🍯', quantity: 1 }
+    ]
   }
 ];

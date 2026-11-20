@@ -18,6 +18,10 @@ export interface IAudioPort {
   playHolyCurse?(): void;
   playMaceImpact?(): void;
   playCauldronBubble?(): void;
+  playHeartbeat?(): void;
+  playHolyFlash?(): void;
+  playFlaskExplosion?(): void;
+  playArrowSwitch?(): void;
 }
 
 export interface DialogueLine {

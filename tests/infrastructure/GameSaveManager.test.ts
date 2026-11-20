@@ -106,4 +106,52 @@ describe('GameSaveManager V2 Storage (H02 & H03 Solution)', () => {
     expect(migrated?.heroes.thomas.health).toBe(100);
     expect(migrated?.world.cemeteryGateOpen).toBe(false);
   });
+
+  it('exports save state to formatted JSON and imports it accurately', () => {
+    const saveInput: SaveInput = {
+      activeHero: 'khaterine',
+      heroes: {
+        thomas: { health: 80, posture: 10, isArmed: true, available: true },
+        khaterine: { health: 90, posture: 0, isArmed: true, available: true }
+      },
+      health: 90,
+      maxHealth: 90,
+      posture: 0,
+      maxPosture: 70,
+      inventory: { items: [{ id: 'arrow_fire', quantity: 15 }] },
+      progression: { currentExp: 550 },
+      sanctuaryVisited: true,
+      world: {
+        morwennaDefeated: true,
+        morwennaPhase2: true,
+        cemeteryGateOpen: true,
+        checkpoint: { x: 0, y: 0, z: -85 },
+        destroyedPropIds: ['crypt_sarc_1']
+      }
+    };
+
+    GameSaveManager.saveGame(saveInput);
+    const jsonStr = GameSaveManager.exportSaveToJson();
+    expect(jsonStr).not.toBeNull();
+    expect(typeof jsonStr).toBe('string');
+    expect(jsonStr).toContain('"schemaVersion": 2');
+    expect(jsonStr).toContain('"arrow_fire"');
+
+    // Clear and restore from JSON
+    GameSaveManager.clearSave();
+    expect(GameSaveManager.hasSave()).toBe(false);
+
+    const importSuccess = GameSaveManager.importSaveFromJson(jsonStr!);
+    expect(importSuccess).toBe(true);
+    expect(GameSaveManager.hasSave()).toBe(true);
+
+    const restored = GameSaveManager.loadGame();
+    expect(restored).not.toBeNull();
+    expect(restored?.activeHero).toBe('khaterine');
+    expect(restored?.heroes.thomas.health).toBe(80);
+    expect(restored?.world.checkpoint.z).toBe(-85);
+
+    // Invalid JSON handling
+    expect(GameSaveManager.importSaveFromJson('invalid_json')).toBe(false);
+  });
 });
