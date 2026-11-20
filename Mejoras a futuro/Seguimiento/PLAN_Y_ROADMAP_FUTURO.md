@@ -79,18 +79,31 @@ Este documento establece las prioridades de desarrollo, mecánicas planeadas y e
 
 ---
 
+### 8. Sistema de Alquimia y Botica en el Caldero de Elowen [COMPLETADO ✅]
+- [x] **Dominio DDD de Alquimia (`src/domain/alchemy/`)**:
+  - `AlchemyRecipe.ts`: Materiales canónicos (`herb_silverleaf`, `ash_purified`, `blood_hound`, `water_blessed`, `salve_base`) y recetas canónicas (`craft_maiden_balm`, `craft_saint_jude_rosary`, `craft_consecrated_oil`, `craft_elixir_sunset`).
+  - `AlchemyPot.ts`: Aggregate root con transacciones atómicas, validación estricta de ingredientes y recompensas de EXP.
+- [x] **Caldero 3D de Elowen en Three.js**:
+  - Hogar de carbones incandescentes, trípode de hierro forjado, caldero de bronce martillado y líquido esmeralda en ebullición.
+  - Luz puntual verde pulsante con animación de vapores ascendentes y mesa con redomas de boticaria.
+  - Detección de proximidad contextual a < 2.6m con insignia `⚗️ [E] CALDERO DE ELOWEN: BOTICA & ALQUIMIA`.
+- [x] **Modal de Botica y Jerarquía de Entrada (`InputContext: 'alchemy'`)**:
+  - Atajo global `[B]` y botón permanente en el HUD superior `⚗️ [B] BOTICA`.
+  - Rejilla reactiva de recetas con comprobación de ingredientes en vivo, indicador de bolsa y botón de síntesis con destello lumínico en el caldero.
+- [x] **Sistema Unificado de Drops de Enemigos y Objetos**:
+  - Botín de materiales en Sabueso de Ceniza, Cultista del Incensario, Flagelante y Penitente de la Cripta (tanto en golpes normales como en remates `[E]`).
+  - 45% de probabilidad de soltar hierbas o ungüentos al destruir barriles o cajas.
+
+---
+
 ## 🚀 Próximas Prioridades (Siguiente Sprint)
 
-### 1. Sistema de Alquimia y Fabricación en el Caldero de Elowen
-- Puesto interactivo junto a la boticaria Elowen (`[E]` para abrir mesa de mezclas).
-- Recetas canónicas para sintetizar bálsamos mejorados, agua bendita bendecida y elixires de postura combinando restos botados por cultistas y cenizas consagradas.
-
-### 2. Descenso a los Interiores de las Criptas de San Jude (Dungeon Crawler)
+### 1. Descenso a los Interiores de las Criptas de San Jude (Dungeon Crawler)
 - Transición interactiva en el portal del mausoleo para ingresar al nivel subterráneo.
 - Catacumbas con trampas de estacas, sarcófagos con penitentes durmientes y pasillos con antorchas.
 - Jefe secundario opcional: *Inquisidor de las Catacumbas*.
 
-### 3. Sistema de Audio Procedural / Web Audio API
+### 2. Sistema de Audio Procedural / Web Audio API
 - Síntesis de sonido ambiental (viento tenebroso, crujido de fuego de las antorchas).
 - Efectos de impacto metálico de espadas, parry resonante, zumbido de flechas de plasma y rugido de fuego de Morwenna.
 

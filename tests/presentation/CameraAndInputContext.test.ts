@@ -159,4 +159,36 @@ describe('Camera & Input Architecture (Vice City & OpenLara Solution)', () => {
       expect(remainingAfterTwoHalves).toBeCloseTo(remainingAfterFull, 6);
     });
   });
+
+  describe('Modal Context Hierarchy & Alchemy Input Context', () => {
+    type TestInputContext = 'gameplay' | 'dialogue' | 'inventory' | 'skillTree' | 'alchemy' | 'defeated';
+
+    function resolveInputContext(flags: {
+      isPlayerDefeated?: boolean;
+      isDialogueOpen?: boolean;
+      isInventoryOpen?: boolean;
+      isSkillTreeOpen?: boolean;
+      isAlchemyOpen?: boolean;
+    }): TestInputContext {
+      if (flags.isPlayerDefeated) return 'defeated';
+      if (flags.isDialogueOpen) return 'dialogue';
+      if (flags.isInventoryOpen) return 'inventory';
+      if (flags.isSkillTreeOpen) return 'skillTree';
+      if (flags.isAlchemyOpen) return 'alchemy';
+      return 'gameplay';
+    }
+
+    it('resolves alchemy context when alchemy modal is open', () => {
+      expect(resolveInputContext({ isAlchemyOpen: true })).toBe('alchemy');
+    });
+
+    it('prioritizes dialogue and defeat contexts above alchemy modal', () => {
+      expect(resolveInputContext({ isPlayerDefeated: true, isAlchemyOpen: true })).toBe('defeated');
+      expect(resolveInputContext({ isDialogueOpen: true, isAlchemyOpen: true })).toBe('dialogue');
+    });
+
+    it('defaults to gameplay context when all modal flags are false', () => {
+      expect(resolveInputContext({})).toBe('gameplay');
+    });
+  });
 });

@@ -7,6 +7,8 @@ import { GameSaveManager } from '../../infrastructure/storage/GameSaveManager';
 import { Party } from '../../domain/party/Party';
 import { HeroId, HERO_DEFINITIONS } from '../../domain/party/HeroCombatState';
 import { MorwennaEncounter } from '../../domain/encounters/MorwennaEncounter';
+import { AlchemyPot } from '../../domain/alchemy/AlchemyPot';
+import { CANONICAL_MATERIALS } from '../../domain/alchemy/AlchemyRecipe';
 
 export interface CombatStats3D {
   health: number;
@@ -45,7 +47,7 @@ export interface DebrisParticle3D {
   maxLife: number;
 }
 
-export type InputContext = 'gameplay' | 'dialogue' | 'inventory' | 'skillTree' | 'defeated';
+export type InputContext = 'gameplay' | 'dialogue' | 'inventory' | 'skillTree' | 'alchemy' | 'defeated';
 
 export class Oakhaven3DExperience {
   private container: HTMLElement;
@@ -60,6 +62,14 @@ export class Oakhaven3DExperience {
   private isInventoryOpen: boolean = false;
   private attackBuffMultiplier: number = 1.0;
   private attackBuffTimer: number = 0;
+
+  // Alchemy & Apothecary System (Elowen's Cauldron)
+  private alchemyPot: AlchemyPot = new AlchemyPot();
+  private isAlchemyOpen: boolean = false;
+  private alchemyModalEl?: HTMLDivElement;
+  private cauldronGroup!: THREE.Group;
+  private cauldronLight!: THREE.PointLight;
+  private cauldronVapors: { mesh: THREE.Mesh; basePos: THREE.Vector3; speed: number; phase: number }[] = [];
 
   // Camera & View Settings (OpenLara & Vice City Architecture)
   private cameraMode: 'isometric' | 'third_person' = 'isometric';
@@ -239,7 +249,7 @@ export class Oakhaven3DExperience {
   private skeletonSwordMesh!: THREE.Mesh;
 
   // 3D Proximity Interactions & Modals
-  private activeInteractTarget?: 'elowen' | 'cedric' | 'shalem' | 'khaterine' | 'thomas' | 'sword' | 'finisher' | 'cemetery_gate';
+  private activeInteractTarget?: 'elowen' | 'cauldron' | 'cedric' | 'shalem' | 'khaterine' | 'thomas' | 'sword' | 'finisher' | 'cemetery_gate';
   private proximityBadgeEl?: HTMLDivElement;
   private dialogueModalEl?: HTMLDivElement;
   private inventoryModalEl?: HTMLDivElement;
@@ -304,6 +314,7 @@ export class Oakhaven3DExperience {
     this.createZealotEnemy();
     this.createShalem();
     this.createElowen();
+    this.createAlchemyCauldron();
     this.createCedric();
     this.createKhaterine();
     this.createThomasNPC();
@@ -1198,6 +1209,167 @@ export class Oakhaven3DExperience {
   }
 
   // =========================================================================
+  // ELOWEN'S ALCHEMY CAULDRON 3D (BOTICA & TRANSMUTACIÓN)
+  // =========================================================================
+  private createAlchemyCauldron(): void {
+    this.cauldronGroup = new THREE.Group();
+    this.cauldronGroup.position.set(-2.4, 0, -0.7);
+
+    // Stone hearth base
+    const stoneHearthMat = new THREE.MeshStandardMaterial({ color: 0x2a2a2e, roughness: 0.95 });
+    const stoneHearth = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.6, 0.12, 12), stoneHearthMat);
+    stoneHearth.position.y = 0.06;
+    stoneHearth.receiveShadow = true;
+    this.cauldronGroup.add(stoneHearth);
+
+    // Glowing ember coals
+    const coalMat = new THREE.MeshStandardMaterial({
+      color: 0xff3300,
+      emissive: 0xff4400,
+      emissiveIntensity: 0.7,
+      roughness: 0.8
+    });
+    const coals = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.4, 0.08, 8), coalMat);
+    coals.position.y = 0.12;
+    this.cauldronGroup.add(coals);
+
+    // Iron Tripod Legs
+    const ironMat = new THREE.MeshStandardMaterial({ color: 0x1f1f22, metalness: 0.85, roughness: 0.4 });
+    for (let i = 0; i < 3; i++) {
+      const angle = (i * 2 * Math.PI) / 3;
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.58, 6), ironMat);
+      leg.position.set(Math.cos(angle) * 0.28, 0.28, Math.sin(angle) * 0.28);
+      leg.rotation.z = Math.cos(angle) * 0.22;
+      leg.rotation.x = -Math.sin(angle) * 0.22;
+      leg.castShadow = true;
+      this.cauldronGroup.add(leg);
+    }
+
+    // Bronze Cauldron Pot Body
+    const bronzeMat = new THREE.MeshStandardMaterial({
+      color: 0x5a4832,
+      metalness: 0.65,
+      roughness: 0.55
+    });
+    const potBody = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.26, 0.45, 12), bronzeMat);
+    potBody.position.y = 0.42;
+    potBody.castShadow = true;
+    this.cauldronGroup.add(potBody);
+
+    // Cauldron Rim
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.045, 8, 16), bronzeMat);
+    rim.rotation.x = Math.PI / 2;
+    rim.position.y = 0.64;
+    this.cauldronGroup.add(rim);
+
+    // Cauldron Handles
+    const handleMat = new THREE.MeshStandardMaterial({ color: 0x3d3224, metalness: 0.7, roughness: 0.5 });
+    const handle1 = new THREE.Mesh(new THREE.TorusGeometry(0.08, 0.02, 6, 10), handleMat);
+    handle1.position.set(0.44, 0.55, 0);
+    this.cauldronGroup.add(handle1);
+    const handle2 = new THREE.Mesh(new THREE.TorusGeometry(0.08, 0.02, 6, 10), handleMat);
+    handle2.position.set(-0.44, 0.55, 0);
+    this.cauldronGroup.add(handle2);
+
+    // Simmering Emerald Liquid
+    const liquidMat = new THREE.MeshStandardMaterial({
+      color: 0x2ecc71,
+      emissive: 0x145a32,
+      emissiveIntensity: 0.85,
+      roughness: 0.25,
+      metalness: 0.3
+    });
+    const liquid = new THREE.Mesh(new THREE.CylinderGeometry(0.39, 0.39, 0.02, 16), liquidMat);
+    liquid.position.y = 0.58;
+    this.cauldronGroup.add(liquid);
+
+    // Pulsating Emerald Light
+    this.cauldronLight = new THREE.PointLight(0x2ecc71, 1.8, 4.5);
+    this.cauldronLight.position.set(0, 0.7, 0);
+    this.cauldronGroup.add(this.cauldronLight);
+
+    // Rising Vapor / Steam Meshes
+    this.cauldronVapors = [];
+    const vaporMat = new THREE.MeshBasicMaterial({
+      color: 0x88ffcc,
+      transparent: true,
+      opacity: 0.35
+    });
+    for (let i = 0; i < 6; i++) {
+      const vGeo = new THREE.SphereGeometry(0.06 + Math.random() * 0.04, 6, 6);
+      const vMesh = new THREE.Mesh(vGeo, vaporMat.clone());
+      const basePos = new THREE.Vector3(
+        (Math.random() - 0.5) * 0.35,
+        0.65 + Math.random() * 0.4,
+        (Math.random() - 0.5) * 0.35
+      );
+      vMesh.position.copy(basePos);
+      this.cauldronGroup.add(vMesh);
+      this.cauldronVapors.push({
+        mesh: vMesh,
+        basePos,
+        speed: 0.4 + Math.random() * 0.35,
+        phase: Math.random() * Math.PI * 2
+      });
+    }
+
+    // Apothecary Side Table with Phials
+    const tableMat = new THREE.MeshStandardMaterial({ color: 0x4a3219, roughness: 0.85 });
+    const table = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.6, 0.4), tableMat);
+    table.position.set(-0.65, 0.3, 0.1);
+    table.castShadow = true;
+    this.cauldronGroup.add(table);
+
+    // Phials on table
+    const glassColors = [0x2ecc71, 0x3498db, 0xe74c3c];
+    for (let i = 0; i < 3; i++) {
+      const phialMat = new THREE.MeshStandardMaterial({
+        color: glassColors[i],
+        emissive: glassColors[i],
+        emissiveIntensity: 0.4,
+        roughness: 0.2,
+        transparent: true,
+        opacity: 0.8
+      });
+      const phial = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.14, 6), phialMat);
+      phial.position.set(-0.75 + i * 0.1, 0.67, 0.1);
+      this.cauldronGroup.add(phial);
+    }
+
+    this.scene.add(this.cauldronGroup);
+  }
+
+  private updateCauldron(delta: number): void {
+    if (!this.cauldronGroup) return;
+
+    // Pulsate cauldron light
+    const elapsed = this.clock.getElapsedTime();
+    if (this.cauldronLight) {
+      this.cauldronLight.intensity = 1.6 + Math.sin(elapsed * 5) * 0.4;
+    }
+
+    // Animate vapor puffs rising and resetting
+    for (const v of this.cauldronVapors) {
+      v.mesh.position.y += delta * v.speed;
+      v.mesh.position.x = v.basePos.x + Math.sin(elapsed * 3 + v.phase) * 0.08;
+      v.mesh.position.z = v.basePos.z + Math.cos(elapsed * 3 + v.phase) * 0.08;
+
+      const scale = 1.0 + (v.mesh.position.y - v.basePos.y) * 1.5;
+      v.mesh.scale.set(scale, scale, scale);
+
+      const mat = v.mesh.material as THREE.MeshBasicMaterial;
+      if (mat) {
+        mat.opacity = Math.max(0, 0.4 - (v.mesh.position.y - v.basePos.y) * 0.5);
+      }
+
+      if (v.mesh.position.y > 1.4) {
+        v.mesh.position.y = v.basePos.y;
+        if (mat) mat.opacity = 0.35;
+      }
+    }
+  }
+
+  // =========================================================================
   // FATHER CEDRIC 3D (OLD DEVOUT PRIEST)
   // =========================================================================
   private createCedric(): void {
@@ -1702,6 +1874,9 @@ export class Oakhaven3DExperience {
             </button>
           </div>
           <div style="display: flex; gap: 4px;">
+            <button id="btn-toggle-alchemy" style="background: #0f2c1f; color: #7dffb3; border: 1px solid #2ecc71; padding: 3px 7px; border-radius: 4px; font-family: monospace; font-size: 7.5px; cursor: pointer; font-weight: bold;">
+              ⚗️ [B] BOTICA
+            </button>
             <button id="btn-toggle-skills" style="background: #28183c; color: #ffd700; border: 1px solid #b8860b; padding: 3px 7px; border-radius: 4px; font-family: monospace; font-size: 7.5px; cursor: pointer; font-weight: bold;">
               🌟 [H] HABILIDADES
             </button>
@@ -1829,6 +2004,30 @@ export class Oakhaven3DExperience {
         </div>
       </div>
 
+      <!-- Gothic 3D Alchemy & Apothecary Modal -->
+      <div id="p3d-alchemy-modal" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(10, 20, 15, 0.98); border: 2px solid #2ecc71; border-radius: 6px; padding: 12px 16px; max-width: 580px; width: 92%; box-shadow: 0 12px 50px rgba(0,40,20,0.95); display: none; z-index: 120; pointer-events: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1e4d30; padding-bottom: 6px; margin-bottom: 8px;">
+          <div style="font-size: 9.5px; font-weight: bold; color: #7dffb3; letter-spacing: 0.8px;">
+            ⚗️ BOTICA DE ELOWEN: CALDERO DE ALQUIMIA & ELIXIRES ⚗️
+          </div>
+          <button id="p3d-alchemy-close" style="background: #14331e; color: #a3ffc7; border: 1px solid #2ecc71; border-radius: 3px; padding: 2px 7px; font-size: 8px; cursor: pointer; font-weight: bold;">[X] CERRAR</button>
+        </div>
+        <div id="p3d-alchemy-status" style="font-family: monospace; font-size: 7.5px; color: #d0e6d6; margin-bottom: 8px; background: rgba(16, 36, 25, 0.6); padding: 4px 8px; border-radius: 3px; border: 1px solid #2e6642;">
+          ✦ EXP Disponible: 0 EXP | ⚗️ Fuego del Caldero: VIVO
+        </div>
+        <div id="p3d-alchemy-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; max-height: 200px; overflow-y: auto; margin-bottom: 8px;">
+          <!-- Dynamically filled by renderAlchemyModal() -->
+        </div>
+        <div style="border-top: 1px solid #1e4d30; padding-top: 6px;">
+          <div style="font-size: 7.5px; font-weight: bold; color: #a3ffc7; margin-bottom: 4px;">
+            🎒 MATERIALES EN TU BOLSA:
+          </div>
+          <div id="p3d-alchemy-materials" style="display: flex; flex-wrap: wrap; gap: 6px; max-height: 55px; overflow-y: auto;">
+            <!-- Dynamically filled with current materials -->
+          </div>
+        </div>
+      </div>
+
       <!-- Dialogue Toast (Bottom Center) -->
       <div id="p3d-dialogue-toast-container" style="position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 9px; background: rgba(14, 9, 23, 0.96); border: 1.2px solid #d4af37; border-radius: 4px; padding: 4px 12px; max-width: 560px; width: 85%; box-shadow: 0 6px 25px rgba(0,0,0,0.9);">
         <img id="p3d-dialogue-portrait" src="/assets/concepts/concept_shalem.png" alt="Retrato Hablante" style="width: 32px; height: 32px; border: 1.2px solid #d4af37; border-radius: 4px; object-fit: cover; object-position: top center; flex-shrink: 0;" />
@@ -1839,7 +2038,7 @@ export class Oakhaven3DExperience {
 
       <!-- Bottom Controls Bar -->
       <div style="position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); background: rgba(8, 4, 14, 0.95); border: 1px solid #3d2852; border-radius: 3px; padding: 2px 10px; font-family: monospace; font-size: 7px; color: #c5b4db; white-space: nowrap;">
-        WASD: Moverse 3D | TAB: Héroe | I: Inventario | H: Habilidades | Q: Curar | G: Guardar Santuario | J/K: Ataque | L: Guardia | Espacio: Esquivar | T: Lanzar | E: Hablar/Recoger | M: Audio | C: Cámara
+        WASD: Moverse 3D | TAB: Héroe | I: Inventario | B: Botica/Alquimia | H: Habilidades | Q: Curar | G: Guardar Santuario | J/K: Ataque | L: Guardia | Espacio: Esquivar | T: Lanzar | E: Hablar/Recoger | M: Audio | C: Cámara
       </div>
     `;
 
@@ -1867,6 +2066,11 @@ export class Oakhaven3DExperience {
     const btnQuickBalm = this.uiOverlay.querySelector('#btn-quick-balm') as HTMLButtonElement;
     if (btnQuickBalm) {
       btnQuickBalm.addEventListener('click', () => this.useQuickConsumable());
+    }
+
+    const btnAlchemy = this.uiOverlay.querySelector('#btn-toggle-alchemy') as HTMLButtonElement;
+    if (btnAlchemy) {
+      btnAlchemy.addEventListener('click', () => this.toggleAlchemyModal());
     }
 
     const btnSkills = this.uiOverlay.querySelector('#btn-toggle-skills') as HTMLButtonElement;
@@ -1920,6 +2124,12 @@ export class Oakhaven3DExperience {
       btnSkillsClose.addEventListener('click', () => this.toggleSkillTreeModal());
     }
 
+    this.alchemyModalEl = this.uiOverlay.querySelector('#p3d-alchemy-modal') as HTMLDivElement;
+    const btnAlchemyClose = this.uiOverlay.querySelector('#p3d-alchemy-close') as HTMLButtonElement;
+    if (btnAlchemyClose) {
+      btnAlchemyClose.addEventListener('click', () => this.toggleAlchemyModal());
+    }
+
     this.morwennaHpBarContainer = this.uiOverlay.querySelector('#p3d-boss-hud') as HTMLDivElement;
     this.morwennaHpBarFill = this.uiOverlay.querySelector('#p3d-boss-hp-fill') as HTMLDivElement;
   }
@@ -1932,6 +2142,7 @@ export class Oakhaven3DExperience {
     if (this.isDialogueOpen) return 'dialogue';
     if (this.isInventoryOpen) return 'inventory';
     if (this.isSkillTreeOpen) return 'skillTree';
+    if (this.isAlchemyOpen) return 'alchemy';
     return 'gameplay';
   }
 
@@ -2029,6 +2240,14 @@ export class Oakhaven3DExperience {
       return;
     }
 
+    // --- CONTEXT: ALCHEMY MODAL ---
+    if (context === 'alchemy') {
+      if (!e.repeat && (e.key === 'Escape' || key === 'b')) {
+        this.toggleAlchemyModal();
+      }
+      return;
+    }
+
     // --- CONTEXT: DEFEATED ---
     if (context === 'defeated') {
       return;
@@ -2063,6 +2282,12 @@ export class Oakhaven3DExperience {
     // Toggle Skill Tree Modal with [H] (single-pulse)
     if (key === 'h') {
       if (!e.repeat) this.toggleSkillTreeModal();
+      return;
+    }
+
+    // Toggle Alchemy / Apothecary Modal with [B] (single-pulse)
+    if (key === 'b') {
+      if (!e.repeat) this.toggleAlchemyModal();
       return;
     }
 
@@ -2323,9 +2548,9 @@ export class Oakhaven3DExperience {
       if (this.enemyHealth <= 0) {
         this.enemyState = 'DEAD';
         this.spawnFloatingText(this.enemyGroup.position, '¡PURIFICADO! (+40 EXP)', '#ffd700');
-        this.progression.addExp(40);
         this.audio.playFinisherSound(true);
         this.enemyGroup.position.y = -0.3;
+        this.awardEnemyKillRewards('hound', false);
       }
     }
 
@@ -2350,22 +2575,10 @@ export class Oakhaven3DExperience {
       if (this.cultistHealth <= 0) {
         this.cultistState = 'DEAD';
         this.spawnFloatingText(this.cultistGroup.position, '¡PORTADOR DE CENIZA PURIFICADO! (+60 EXP)', '#ffd700');
-        this.progression.addExp(60);
         this.audio.playFinisherSound(true);
         this.cultistGroup.position.y = -0.3;
         this.cultistCenserLight.intensity = 0;
-        this.inventory.addItem({
-          id: 'balm_health',
-          name: 'Bálsamo del Ocaso',
-          description: 'Extracto aromático destilado por las Hermanas de Oakhaven.',
-          category: 'consumable',
-          quantity: 1,
-          maxQuantity: 5,
-          effectType: 'heal_health',
-          effectValue: 40,
-          icon: '🌿'
-        });
-        this.spawnFloatingText(this.playerGroup.position, '🎒 ¡Bálsamo del Ocaso obtenido!', '#a3ffc7');
+        this.awardEnemyKillRewards('cultist', false);
         this.updateHUD();
       }
     }
@@ -2391,21 +2604,9 @@ export class Oakhaven3DExperience {
       if (this.zealotHealth <= 0) {
         this.zealotState = 'DEAD';
         this.spawnFloatingText(this.zealotGroup.position, '¡FLAGELANTE PURIFICADO! (+80 EXP)', '#ffd700');
-        this.progression.addExp(80);
         this.audio.playFinisherSound(true);
         this.zealotGroup.position.y = -0.3;
-        this.inventory.addItem({
-          id: 'consecrated_ash',
-          name: 'Ceniza Consagrada',
-          description: 'Cenizas de santos de Londinium. Imbuye las armas con +25% de daño sagrado.',
-          category: 'consumable',
-          quantity: 1,
-          maxQuantity: 5,
-          effectType: 'buff_attack',
-          effectValue: 25,
-          icon: '✨'
-        });
-        this.spawnFloatingText(this.playerGroup.position, '🎒 ¡Ceniza Consagrada obtenida!', '#ffd7aa');
+        this.awardEnemyKillRewards('zealot', false);
         this.updateHUD();
       }
     }
@@ -2430,21 +2631,9 @@ export class Oakhaven3DExperience {
       if (this.skeletonHealth <= 0) {
         this.skeletonState = 'DEAD';
         this.spawnFloatingText(this.skeletonGroup.position, '¡PENITENTE PURIFICADO! (+100 EXP)', '#00e5ff');
-        this.progression.addExp(100);
         this.audio.playFinisherSound(true);
         this.skeletonGroup.position.y = -0.3;
-        this.inventory.addItem({
-          id: 'balm_health',
-          name: 'Bálsamo del Ocaso',
-          description: 'Extracto aromático destilado por las Hermanas de Oakhaven.',
-          category: 'consumable',
-          quantity: 1,
-          maxQuantity: 5,
-          effectType: 'heal_health',
-          effectValue: 40,
-          icon: '🌿'
-        });
-        this.spawnFloatingText(this.playerGroup.position, '🎒 ¡Bálsamo del Ocaso obtenido!', '#a3ffc7');
+        this.awardEnemyKillRewards('skeleton', false);
         this.updateHUD();
       }
     }
@@ -2557,9 +2746,9 @@ export class Oakhaven3DExperience {
           if (this.enemyHealth <= 0) {
             this.enemyState = 'DEAD';
             this.spawnFloatingText(this.enemyGroup.position, '¡PURIFICADO! (+40 EXP)', '#ffd700');
-            this.progression.addExp(40);
             this.audio.playFinisherSound(true);
             this.enemyGroup.position.y = -0.3;
+            this.awardEnemyKillRewards('hound', false);
           }
           this.updateHUD();
         }
@@ -2583,22 +2772,10 @@ export class Oakhaven3DExperience {
           if (this.cultistHealth <= 0) {
             this.cultistState = 'DEAD';
             this.spawnFloatingText(this.cultistGroup.position, '¡PORTADOR DE CENIZA PURIFICADO! (+60 EXP)', '#ffd700');
-            this.progression.addExp(60);
             this.audio.playFinisherSound(true);
             this.cultistGroup.position.y = -0.3;
             this.cultistCenserLight.intensity = 0;
-            this.inventory.addItem({
-              id: 'balm_health',
-              name: 'Bálsamo del Ocaso',
-              description: 'Extracto aromático destilado por las Hermanas de Oakhaven.',
-              category: 'consumable',
-              quantity: 1,
-              maxQuantity: 5,
-              effectType: 'heal_health',
-              effectValue: 40,
-              icon: '🌿'
-            });
-            this.spawnFloatingText(this.playerGroup.position, '🎒 ¡Bálsamo del Ocaso obtenido!', '#a3ffc7');
+            this.awardEnemyKillRewards('cultist', false);
           }
           this.updateHUD();
         }
@@ -2622,21 +2799,9 @@ export class Oakhaven3DExperience {
           if (this.zealotHealth <= 0) {
             this.zealotState = 'DEAD';
             this.spawnFloatingText(this.zealotGroup.position, '¡FLAGELANTE PURIFICADO! (+80 EXP)', '#ffd700');
-            this.progression.addExp(80);
             this.audio.playFinisherSound(true);
             this.zealotGroup.position.y = -0.3;
-            this.inventory.addItem({
-              id: 'consecrated_ash',
-              name: 'Ceniza Consagrada',
-              description: 'Cenizas de santos de Londinium.',
-              category: 'consumable',
-              quantity: 1,
-              maxQuantity: 5,
-              effectType: 'buff_attack',
-              effectValue: 25,
-              icon: '✨'
-            });
-            this.spawnFloatingText(this.playerGroup.position, '🎒 ¡Ceniza Consagrada obtenida!', '#ffd7aa');
+            this.awardEnemyKillRewards('zealot', false);
           }
           this.updateHUD();
         }
@@ -2660,21 +2825,9 @@ export class Oakhaven3DExperience {
           if (this.skeletonHealth <= 0) {
             this.skeletonState = 'DEAD';
             this.spawnFloatingText(this.skeletonGroup.position, '¡PENITENTE PURIFICADO! (+100 EXP)', '#00e5ff');
-            this.progression.addExp(100);
             this.audio.playFinisherSound(true);
             this.skeletonGroup.position.y = -0.3;
-            this.inventory.addItem({
-              id: 'balm_health',
-              name: 'Bálsamo del Ocaso',
-              description: 'Extracto aromático destilado por las Hermanas de Oakhaven.',
-              category: 'consumable',
-              quantity: 1,
-              maxQuantity: 5,
-              effectType: 'heal_health',
-              effectValue: 40,
-              icon: '🌿'
-            });
-            this.spawnFloatingText(this.playerGroup.position, '🎒 ¡Bálsamo del Ocaso obtenido!', '#a3ffc7');
+            this.awardEnemyKillRewards('skeleton', false);
           }
           this.updateHUD();
         }
@@ -2727,6 +2880,33 @@ export class Oakhaven3DExperience {
     }
   }
 
+  private awardEnemyKillRewards(enemyType: 'hound' | 'cultist' | 'zealot' | 'skeleton', isFinisher: boolean = false): void {
+    if (enemyType === 'hound') {
+      const exp = isFinisher ? 75 : 40;
+      this.progression.addExp(exp);
+      this.inventory.addItem(CANONICAL_MATERIALS.blood_hound, 1);
+      this.spawnFloatingText(this.playerGroup.position, '🔥 +1 Esencia de Fuego Fatuo obtenida', '#ffaa44');
+    } else if (enemyType === 'cultist') {
+      const exp = isFinisher ? 100 : 60;
+      this.progression.addExp(exp);
+      this.inventory.addItem(CANONICAL_MATERIALS.herb_silverleaf, 2);
+      this.inventory.addItem(CANONICAL_MATERIALS.ash_purified, 1);
+      this.spawnFloatingText(this.playerGroup.position, '🍃 +2 Hoja de Plata | ✨ +1 Ceniza Purificada', '#2ecc71');
+    } else if (enemyType === 'zealot') {
+      const exp = isFinisher ? 150 : 80;
+      this.progression.addExp(exp);
+      this.inventory.addItem(CANONICAL_MATERIALS.salve_base, 1);
+      this.inventory.addItem(CANONICAL_MATERIALS.ash_purified, 2);
+      this.spawnFloatingText(this.playerGroup.position, '🍯 +1 Ungüento Base | ✨ +2 Ceniza Purificada', '#ffd7aa');
+    } else if (enemyType === 'skeleton') {
+      const exp = isFinisher ? 180 : 100;
+      this.progression.addExp(exp);
+      this.inventory.addItem(CANONICAL_MATERIALS.water_blessed, 1);
+      this.inventory.addItem(CANONICAL_MATERIALS.ash_purified, 1);
+      this.spawnFloatingText(this.playerGroup.position, '💧 +1 Agua Bendita | ✨ +1 Ceniza Purificada', '#66ccff');
+    }
+  }
+
   private destroyProp(prop: DestructibleProp3D): void {
     prop.isDestroyed = true;
     this.scene.remove(prop.mesh);
@@ -2734,6 +2914,15 @@ export class Oakhaven3DExperience {
     this.createDebrisExplosion(prop.position);
     this.progression.addExp(15);
     this.spawnFloatingText(prop.position, `+15 EXP (${prop.name})`, '#ffd700');
+
+    // 45% chance to drop crafting herb or salve base
+    const roll = Math.random();
+    if (roll < 0.45) {
+      const mat = roll < 0.25 ? CANONICAL_MATERIALS.herb_silverleaf : CANONICAL_MATERIALS.salve_base;
+      this.inventory.addItem(mat, 1);
+      this.spawnFloatingText(prop.position.clone().add(new THREE.Vector3(0, 0.5, 0)), `🎒 +1 ${mat.name}`, '#2ecc71');
+    }
+
     this.updateHUD();
   }
 
@@ -2883,6 +3072,9 @@ export class Oakhaven3DExperience {
       case 'sword':
         this.executeWeaponPickup();
         break;
+      case 'cauldron':
+        this.toggleAlchemyModal();
+        break;
       case 'elowen':
         this.interactWithElowen();
         break;
@@ -2955,9 +3147,9 @@ export class Oakhaven3DExperience {
     this.updateHUD();
 
     this.showDialogueModal(
-      '✦ ELOWEN DE OAKHAVEN — DONCELLA DE LA LUZ ARGÉNTEA ✦',
-      '«Thomas... El frío de la niebla no podrá apagar el fuego en tu pecho mientras sostengas la fe. Oakhaven resiste entre sombras, y aunque Londinium haya clausurado sus murallas de piedra, aquí aún arde la esperanza de los humildes. Toma este bálsamo bendito de hierbas sagradas; no dejes que el frío del Abismo marchite tu alma.»',
-      '✦ RECOMPENSA: +35 SALUD RESTAURADA & POSTURA RECUPERADA AL 100% ✦'
+      '✦ ELOWEN DE OAKHAVEN — DONCELLA DE LA LUZ ARGÉNTEA & BOTICARIA ✦',
+      '«Thomas... Las hojas de plata aún brotan en los jardines de Oakhaven a pesar de la ceniza abisal. He bendecido mi caldero de botica junto a mí: acércate a él [E] o presiona [B] para transmutar elixires, bálsamos de cura y rosarios consagrados con los materiales que recolectes de las sombras. Que la luz del Alba guíe tu espada.»',
+      '✦ RECOMPENSA: +35 SALUD RESTAURADA & ACCESO AL CALDERO DE BOTICA [B] ✦'
     );
   }
 
@@ -3008,8 +3200,8 @@ export class Oakhaven3DExperience {
       this.enemyState = 'DEAD';
       this.audio.playFinisherSound(true);
       this.spawnFloatingText(this.enemyGroup.position, '⚡ ¡REMATADO! (+120 DAÑO & 75 EXP)', '#ffd700');
-      this.progression.addExp(75);
       this.enemyGroup.position.y = -0.3;
+      this.awardEnemyKillRewards('hound', true);
       this.playerLight.intensity = 4.0;
       setTimeout(() => { if (this.playerLight) this.playerLight.intensity = 1.4; }, 300);
       this.updateHUD();
@@ -3025,19 +3217,7 @@ export class Oakhaven3DExperience {
       this.cultistGroup.position.y = -0.3;
       this.audio.playFinisherSound(true);
       this.spawnFloatingText(this.cultistGroup.position, '⚡ ¡CULTISTA REMATADO! (+110 DAÑO & 100 EXP)', '#ffd700');
-      this.progression.addExp(100);
-      this.inventory.addItem({
-        id: 'holy_water_posture',
-        name: 'Agua Bendita de Jude',
-        description: 'Vial consagrado en el santuario de San Jude.',
-        category: 'consumable',
-        quantity: 1,
-        maxQuantity: 5,
-        effectType: 'restore_posture',
-        effectValue: 50,
-        icon: '💧'
-      });
-      this.spawnFloatingText(this.playerGroup.position, '🎒 ¡Agua Bendita de Jude obtenida!', '#66ccff');
+      this.awardEnemyKillRewards('cultist', true);
       this.playerLight.intensity = 4.0;
       setTimeout(() => { if (this.playerLight) this.playerLight.intensity = 1.4; }, 300);
       this.updateHUD();
@@ -3052,19 +3232,7 @@ export class Oakhaven3DExperience {
       this.zealotGroup.position.y = -0.3;
       this.audio.playFinisherSound(true);
       this.spawnFloatingText(this.zealotGroup.position, '⚡ ¡FLAGELANTE REMATADO! (+140 DAÑO & 150 EXP)', '#ffd700');
-      this.progression.addExp(150);
-      this.inventory.addItem({
-        id: 'consecrated_ash',
-        name: 'Ceniza Consagrada',
-        description: 'Cenizas de santos de Londinium. Imbuye las armas con daño sagrado.',
-        category: 'consumable',
-        quantity: 1,
-        maxQuantity: 5,
-        effectType: 'buff_attack',
-        effectValue: 25,
-        icon: '✨'
-      });
-      this.spawnFloatingText(this.playerGroup.position, '🎒 ¡Ceniza Consagrada obtenida!', '#ffd7aa');
+      this.awardEnemyKillRewards('zealot', true);
       this.playerLight.intensity = 4.0;
       setTimeout(() => { if (this.playerLight) this.playerLight.intensity = 1.4; }, 300);
       this.updateHUD();
@@ -3078,20 +3246,10 @@ export class Oakhaven3DExperience {
       this.skeletonState = 'DEAD';
       this.audio.playFinisherSound(true);
       this.spawnFloatingText(this.skeletonGroup.position, '⚡ ¡PENITENTE REMATADO! (+180 EXP)', '#00e5ff');
-      this.progression.addExp(180);
       this.skeletonGroup.position.y = -0.3;
-      this.inventory.addItem({
-        id: 'balm_health',
-        name: 'Bálsamo del Ocaso',
-        description: 'Extracto aromático destilado por las Hermanas de Oakhaven.',
-        category: 'consumable',
-        quantity: 1,
-        maxQuantity: 5,
-        effectType: 'heal_health',
-        effectValue: 40,
-        icon: '🌿'
-      });
-      this.spawnFloatingText(this.playerGroup.position, '🎒 ¡Bálsamo del Ocaso obtenido!', '#a3ffc7');
+      this.awardEnemyKillRewards('skeleton', true);
+      this.playerLight.intensity = 4.0;
+      setTimeout(() => { if (this.playerLight) this.playerLight.intensity = 1.4; }, 300);
       this.updateHUD();
       return;
     }
@@ -3160,7 +3318,7 @@ export class Oakhaven3DExperience {
     if (!this.isGameplayActive()) return;
 
     const pPos = this.playerGroup.position;
-    let targetFound: 'elowen' | 'cedric' | 'shalem' | 'khaterine' | 'thomas' | 'sword' | 'finisher' | 'cemetery_gate' | undefined;
+    let targetFound: 'elowen' | 'cauldron' | 'cedric' | 'shalem' | 'khaterine' | 'thomas' | 'sword' | 'finisher' | 'cemetery_gate' | undefined;
     let badgeText = '';
     let badgeColor = '#ffd700';
 
@@ -3203,7 +3361,17 @@ export class Oakhaven3DExperience {
       }
     }
 
-    // 3. Elowen
+    // 3. Elowen's Cauldron (Alchemy & Apothecary)
+    if (!targetFound) {
+      const distCauldron = pPos.distanceTo(new THREE.Vector3(-2.4, 0, -0.7));
+      if (distCauldron <= 2.6) {
+        targetFound = 'cauldron';
+        badgeText = '⚗️ [E] CALDERO DE ELOWEN: BOTICA & ALQUIMIA';
+        badgeColor = '#2ecc71';
+      }
+    }
+
+    // 4. Elowen
     if (!targetFound) {
       const dist = pPos.distanceTo(this.elowenGroup.position);
       if (dist <= 3.8) {
@@ -3857,6 +4025,7 @@ export class Oakhaven3DExperience {
     this.updateFlameGeysers(delta);
     this.updateProjectiles(delta);
     this.updateDebris(delta);
+    this.updateCauldron(delta);
     this.updateProximityInteractions();
     this.updateCamera(delta);
     this.updateFlickeringLights(delta);
@@ -4658,6 +4827,16 @@ export class Oakhaven3DExperience {
             ev.stopPropagation();
             this.toggleRelic(item.id);
           });
+        } else if (item.category === 'material') {
+          actionBtn.innerText = '⚗️ IR AL CALDERO [B]';
+          actionBtn.style.background = '#152b1e';
+          actionBtn.style.color = '#7dffb3';
+          actionBtn.style.border = '1px solid #2ecc71';
+          actionBtn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            this.toggleInventoryModal();
+            this.toggleAlchemyModal();
+          });
         } else {
           actionBtn.innerText = item.quantity > 0 ? 'USAR CONSUMIBLE' : 'AGOTADO';
           actionBtn.style.background = item.quantity > 0 ? '#1b3b28' : '#2b1a1a';
@@ -4848,6 +5027,158 @@ export class Oakhaven3DExperience {
   }
 
   // =========================================================================
+  // ALCHEMY & APOTHECARY MODAL & CRAFTING
+  // =========================================================================
+  public toggleAlchemyModal(): void {
+    this.isAlchemyOpen = !this.isAlchemyOpen;
+    if (!this.alchemyModalEl) return;
+
+    if (this.isAlchemyOpen) {
+      this.releaseAllInputs();
+      this.alchemyModalEl.style.display = 'block';
+      this.renderAlchemyModal();
+      this.audio.playSfx('menu_select');
+    } else {
+      this.alchemyModalEl.style.display = 'none';
+      this.audio.playSfx('menu_select');
+    }
+  }
+
+  public renderAlchemyModal(): void {
+    if (!this.alchemyModalEl) return;
+
+    const statusEl = this.alchemyModalEl.querySelector('#p3d-alchemy-status') as HTMLDivElement;
+    const gridEl = this.alchemyModalEl.querySelector('#p3d-alchemy-grid') as HTMLDivElement;
+    const materialsEl = this.alchemyModalEl.querySelector('#p3d-alchemy-materials') as HTMLDivElement;
+
+    if (statusEl) {
+      const exp = this.progression.getExp();
+      statusEl.innerHTML = `✦ EXP Disponible: <span style="color:#ffd700; font-weight:bold;">${exp} EXP</span> | ⚗️ Fuego del Caldero: <span style="color:#2ecc71; font-weight:bold;">VIVO</span> | Héroe: <span style="color:#e6b8ff; font-weight:bold;">${this.activeHero.toUpperCase()}</span>`;
+    }
+
+    // Render Recipes
+    if (gridEl) {
+      gridEl.innerHTML = '';
+      const recipes = this.alchemyPot.getRecipes();
+
+      recipes.forEach((recipe) => {
+        const canCraftInfo = this.alchemyPot.canCraft(recipe.id, this.inventory);
+        const card = document.createElement('div');
+        card.style.cssText = `
+          background: rgba(20, 32, 25, 0.85);
+          border: 1px solid ${canCraftInfo.canCraft ? '#2ecc71' : '#3d4d42'};
+          border-radius: 5px;
+          padding: 8px 10px;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          gap: 6px;
+        `;
+
+        // Ingredients summary HTML
+        const ingredientsHtml = recipe.ingredients.map(ing => {
+          const item = this.inventory.getItem(ing.itemId);
+          const currentQty = item ? item.quantity : 0;
+          const hasEnough = currentQty >= ing.quantity;
+          const color = hasEnough ? '#2ecc71' : '#ff7777';
+          const icon = hasEnough ? '✓' : '✗';
+          return `<span style="color: ${color}; margin-right: 6px;">${ing.icon} ${ing.name}: ${currentQty}/${ing.quantity} ${icon}</span>`;
+        }).join('');
+
+        card.innerHTML = `
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+              <span style="font-size: 8.5px; font-weight: bold; color: #a3ffc7;">${recipe.outputItem.icon || '⚗️'} ${recipe.name}</span>
+              <span style="font-family: monospace; font-size: 7px; color: #ffd700; font-weight: bold;">+${recipe.expReward} EXP</span>
+            </div>
+            <div style="font-size: 7.5px; color: #b8c9be; line-height: 1.35; margin-bottom: 4px;">
+              ${recipe.description}
+            </div>
+            <div style="font-family: monospace; font-size: 7px; line-height: 1.3;">
+              ${ingredientsHtml}
+            </div>
+          </div>
+          <div style="display: flex; justify-content: flex-end; margin-top: 4px;">
+            <button class="btn-synthesize" data-recipe-id="${recipe.id}" ${canCraftInfo.canCraft ? '' : 'disabled'} style="
+              background: ${canCraftInfo.canCraft ? '#1b4d2e' : '#1a241d'};
+              color: ${canCraftInfo.canCraft ? '#7dffb3' : '#66776c'};
+              border: 1px solid ${canCraftInfo.canCraft ? '#2ecc71' : '#334438'};
+              border-radius: 3px;
+              padding: 3px 9px;
+              font-family: monospace;
+              font-size: 7.5px;
+              font-weight: bold;
+              cursor: ${canCraftInfo.canCraft ? 'pointer' : 'not-allowed'};
+              transition: all 0.15s ease;
+            ">
+              ⚗️ SINTETIZAR
+            </button>
+          </div>
+        `;
+
+        gridEl.appendChild(card);
+      });
+
+      // Bind synthesize buttons
+      const buttons = gridEl.querySelectorAll('.btn-synthesize');
+      buttons.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const recipeId = (e.currentTarget as HTMLElement).getAttribute('data-recipe-id');
+          if (recipeId) {
+            this.synthesizeAlchemyRecipe(recipeId);
+          }
+        });
+      });
+    }
+
+    // Render Materials Drawer
+    if (materialsEl) {
+      const materials = this.inventory.getMaterials();
+      if (materials.length === 0) {
+        materialsEl.innerHTML = '<span style="color: #889988; font-style: italic;">No tienes materiales en la bolsa. Derrota enemigos o destruye barriles para recolectar ingredientes.</span>';
+      } else {
+        materialsEl.innerHTML = materials.map(m => `
+          <div style="background: rgba(14, 24, 18, 0.7); border: 1px solid #2a4734; border-radius: 3px; padding: 2px 6px; display: inline-flex; align-items: center; gap: 4px;">
+            <span style="font-size: 8px;">${m.icon}</span>
+            <span style="font-size: 7px; color: #d0e6d6;">${m.name}</span>
+            <span style="font-size: 7px; font-weight: bold; color: #ffd700;">x${m.quantity}</span>
+          </div>
+        `).join('');
+      }
+    }
+  }
+
+  public synthesizeAlchemyRecipe(recipeId: string): void {
+    const result = this.alchemyPot.craft(recipeId, this.inventory);
+    if (result.success && result.craftedItem) {
+      this.audio.playSfx('menu_select');
+      const exp = result.expGained || 15;
+      this.progression.addExp(exp);
+
+      this.spawnFloatingText(
+        this.playerGroup.position,
+        `⚗️ ¡${result.craftedItem.name.toUpperCase()} SINTETIZADO! (+${exp} EXP)`,
+        '#2ecc71'
+      );
+
+      // Light flash on cauldron
+      if (this.cauldronLight) {
+        this.cauldronLight.intensity = 4.5;
+        setTimeout(() => { if (this.cauldronLight) this.cauldronLight.intensity = 1.8; }, 350);
+      }
+
+      this.updateHUD();
+      this.renderAlchemyModal();
+      if (this.isInventoryOpen) {
+        this.renderInventoryItems();
+      }
+    } else {
+      this.audio.playSfx('warning');
+      this.spawnFloatingText(this.playerGroup.position, result.message, '#ff6666');
+    }
+  }
+
+  // =========================================================================
   // PLAYER DEFEAT & RESPAWN (H16 CENTRALIZED POLICY)
   // =========================================================================
   private handlePlayerDefeatAndRespawn(): void {
@@ -4961,6 +5292,12 @@ export class Oakhaven3DExperience {
       }
       if (save.inventory) {
         this.inventory = Inventory.fromJSON(save.inventory);
+        // Ensure starter alchemy materials are present if legacy save had none
+        if (this.inventory.getMaterials().length === 0) {
+          this.inventory.addItem({ ...CANONICAL_MATERIALS.herb_silverleaf, quantity: 2 });
+          this.inventory.addItem({ ...CANONICAL_MATERIALS.salve_base, quantity: 1 });
+          this.inventory.addItem({ ...CANONICAL_MATERIALS.ash_purified, quantity: 1 });
+        }
       }
 
       // Restore party state

@@ -1,4 +1,5 @@
 import { InventoryItem } from './InventoryItem';
+import { CANONICAL_MATERIALS } from '../alchemy/AlchemyRecipe';
 
 export interface UseItemResult {
   success: boolean;
@@ -84,6 +85,11 @@ export class Inventory {
       isEquipped: false
     });
 
+    // Starter Alchemy Materials (Botica de Elowen)
+    inv.addItem({ ...CANONICAL_MATERIALS.herb_silverleaf, quantity: 2 });
+    inv.addItem({ ...CANONICAL_MATERIALS.salve_base, quantity: 1 });
+    inv.addItem({ ...CANONICAL_MATERIALS.ash_purified, quantity: 1 });
+
     return inv;
   }
 
@@ -128,6 +134,10 @@ export class Inventory {
 
   public getRelics(): InventoryItem[] {
     return Array.from(this.items.values()).filter(i => i.category === 'relic');
+  }
+
+  public getMaterials(): InventoryItem[] {
+    return Array.from(this.items.values()).filter(i => i.category === 'material');
   }
 
   public getEquippedRelics(): InventoryItem[] {
