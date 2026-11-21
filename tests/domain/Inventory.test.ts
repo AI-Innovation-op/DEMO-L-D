@@ -51,4 +51,26 @@ describe('Inventory Domain Tests', () => {
     const bonus = inventory.getParryBonusMs();
     expect(bonus).toBe(70); // relic_oakhaven_cross gives +70ms
   });
+
+  it('should not overflow maxRelicSlots when adding auto-equipped relics', () => {
+    inventory.toggleEquipRelic('relic_willow_feather'); // now 2/2 equipped
+    expect(inventory.getEquippedRelicsCount()).toBe(2);
+
+    inventory.addItem({
+      id: 'relic_extra_boss',
+      name: 'Reliquia Extra',
+      description: 'Prueba de límite de ranuras',
+      category: 'relic',
+      icon: '✨',
+      quantity: 1,
+      maxQuantity: 1,
+      effectType: 'relic_parry_window',
+      effectValue: 50,
+      isEquipped: true
+    });
+
+    expect(inventory.hasItem('relic_extra_boss')).toBe(true);
+    expect(inventory.getItem('relic_extra_boss')?.isEquipped).toBe(false);
+    expect(inventory.getEquippedRelicsCount()).toBe(2);
+  });
 });

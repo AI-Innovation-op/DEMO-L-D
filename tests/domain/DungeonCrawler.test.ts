@@ -184,6 +184,24 @@ describe('Dungeon Crawler Domain - San Jude Crypts', () => {
       expect(areaManager.currentArea).toBe('crypts_interior');
     });
 
+    it('transitions across Acts II to V zones and returns correct bounds', () => {
+      areaManager.enterBelltower();
+      expect(areaManager.currentArea).toBe('belltower_summit');
+      expect(areaManager.getBounds().minZ).toBe(-220.0);
+
+      areaManager.enterGreatStoneBridge();
+      expect(areaManager.currentArea).toBe('great_stone_bridge');
+      expect(areaManager.getBounds().minZ).toBe(-280.0);
+
+      areaManager.enterLondiniumCitadel();
+      expect(areaManager.currentArea).toBe('londinium_citadel');
+      expect(areaManager.getBounds().minZ).toBe(-345.0);
+
+      areaManager.enterInvertedCathedral();
+      expect(areaManager.currentArea).toBe('inverted_cathedral');
+      expect(areaManager.getBounds().minZ).toBe(-415.0);
+    });
+
     it('manages sarcophagi loot and ambush states', () => {
       const lootSarc = areaManager.getSarcophagus('sarcophagus_loot');
       expect(lootSarc?.isOpened).toBe(false);

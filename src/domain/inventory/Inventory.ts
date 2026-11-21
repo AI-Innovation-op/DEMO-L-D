@@ -150,11 +150,15 @@ export class Inventory {
       existing.quantity = Math.min(existing.maxQuantity ?? maxQty, existing.quantity + qty);
       return true;
     } else {
+      const canAutoEquip =
+        item.category !== 'relic' ||
+        !item.isEquipped ||
+        this.getEquippedRelics().length < this.maxRelicSlots;
       this.items.set(item.id, {
         ...item,
         maxQuantity: maxQty,
         quantity: Math.min(maxQty, qty),
-        isEquipped: item.isEquipped ?? false
+        isEquipped: canAutoEquip ? (item.isEquipped ?? false) : false
       });
       return true;
     }

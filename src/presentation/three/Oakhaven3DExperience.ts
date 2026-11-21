@@ -13,6 +13,8 @@ import { DungeonAreaManager, DungeonArea } from '../../domain/encounters/Dungeon
 import { SpikeTrap } from '../../domain/encounters/SpikeTrap';
 import { CatacombInquisitor } from '../../domain/encounters/CatacombInquisitor';
 import { RootProwler } from '../../domain/encounters/RootProwler';
+import { CrucibleGuardian, CaptainVane, RexMalphas, AstarothTitan } from '../../domain/encounters/ActBosses';
+import { CanonChapterManager } from '../../domain/story/CanonChapterCompendium';
 import { ArsenalManager, ArrowType } from '../../domain/combat/ArsenalManager';
 
 export interface CombatStats3D {
@@ -54,7 +56,7 @@ export interface DebrisParticle3D {
   maxLife: number;
 }
 
-export type InputContext = 'gameplay' | 'dialogue' | 'inventory' | 'skillTree' | 'alchemy' | 'defeated';
+export type InputContext = 'gameplay' | 'dialogue' | 'inventory' | 'skillTree' | 'alchemy' | 'compendium' | 'defeated';
 
 export class Oakhaven3DExperience {
   private container: HTMLElement;
@@ -297,8 +299,62 @@ export class Oakhaven3DExperience {
   private daggerVortexTimer: number = 0;
   private daggerVortexCooldown: number = 0;
 
+  // Canonical 20-Chapter Compendium System
+  private canonChapterManager: CanonChapterManager = new CanonChapterManager();
+  private compendiumModalEl?: HTMLDivElement;
+  private isCompendiumOpen: boolean = false;
+  private currentCanonChapterId: number = 1;
+
+  // Act II: Campanario del Sur & Guardián del Crisol
+  private belltowerGroup!: THREE.Group;
+  private crucibleGuardianEncounter: CrucibleGuardian = new CrucibleGuardian();
+  private crucibleGuardianGroup!: THREE.Group;
+  private crucibleHpBarContainer?: HTMLDivElement;
+  private crucibleHpBarFill?: HTMLDivElement;
+  private crucibleTimer: number = 0;
+  private crucibleWarningMesh?: THREE.Mesh;
+  private willowBirdMesh?: THREE.Group;
+  private crucibleSlagLight?: THREE.PointLight;
+
+  // Act III: Gran Puente de Piedra & Capitán Áureo Vane
+  private greatStoneBridgeGroup!: THREE.Group;
+  private captainVaneEncounter: CaptainVane = new CaptainVane();
+  private captainVaneGroup!: THREE.Group;
+  private vaneHpBarContainer?: HTMLDivElement;
+  private vaneHpBarFill?: HTMLDivElement;
+  private vaneTimer: number = 0;
+  private vaneWarningMesh?: THREE.Mesh;
+  private vaneShieldMesh?: THREE.Mesh;
+
+  // Act IV: Londinium & Rex Malphas (Alaric)
+  private londiniumCitadelGroup!: THREE.Group;
+  private rexMalphasEncounter: RexMalphas = new RexMalphas();
+  private rexMalphasGroup!: THREE.Group;
+  private malphasHpBarContainer?: HTMLDivElement;
+  private malphasHpBarFill?: HTMLDivElement;
+  private malphasTimer: number = 0;
+  private malphasWarningMesh?: THREE.Mesh;
+  private malphasWarpRingMesh?: THREE.Mesh;
+
+  // Act V: La Catedral Invertida & Astaroth (Sol del Abismo)
+  private invertedCathedralGroup!: THREE.Group;
+  private astarothEncounter: AstarothTitan = new AstarothTitan();
+  private astarothGroup!: THREE.Group;
+  private astarothHpBarContainer?: HTMLDivElement;
+  private astarothHpBarFill?: HTMLDivElement;
+  private astarothTimer: number = 0;
+  private astarothWarningMesh?: THREE.Mesh;
+  private astarothCoreLight?: THREE.PointLight;
+  private astarothCoronaMesh?: THREE.Mesh;
+  private dawnGreyTearMesh?: THREE.Mesh;
+  private albaGrisBladeMesh?: THREE.Group;
+  private hasForgedAlbaGris: boolean = false;
+  private hasCollectedWillowBird: boolean = false;
+  private hasFreedRefugees: boolean = false;
+  private hasClearedMirrorGallery: boolean = false;
+
   // 3D Proximity Interactions & Modals
-  private activeInteractTarget?: 'elowen' | 'cauldron' | 'cedric' | 'shalem' | 'khaterine' | 'thomas' | 'sword' | 'finisher' | 'cemetery_gate' | 'crypt_entrance' | 'crypt_exit' | 'crypt_sarcophagus_loot' | 'crypt_sarcophagus_ambush' | 'crypt_to_forest' | 'forest_to_crypt' | 'sister_altar';
+  private activeInteractTarget?: 'elowen' | 'cauldron' | 'cedric' | 'shalem' | 'khaterine' | 'thomas' | 'sword' | 'finisher' | 'cemetery_gate' | 'crypt_entrance' | 'crypt_exit' | 'crypt_sarcophagus_loot' | 'crypt_sarcophagus_ambush' | 'crypt_to_forest' | 'forest_to_crypt' | 'sister_altar' | 'forest_to_belltower' | 'belltower_to_forest' | 'elowen_cell' | 'crucible_furnace' | 'belltower_to_bridge' | 'refugees_cart' | 'vane_gate' | 'mirror_gallery' | 'astral_throne' | 'dawn_grey_altar' | 'black_sun_core';
   private proximityBadgeEl?: HTMLDivElement;
   private dialogueModalEl?: HTMLDivElement;
   private inventoryModalEl?: HTMLDivElement;
@@ -388,6 +444,16 @@ export class Oakhaven3DExperience {
     this.createBlackWillowForest();
     this.createRootProwlerBeast();
     this.createDaggerVortexMesh();
+
+    // Acts II - V Canonical Expansions
+    this.createBelltowerAct2();
+    this.createCrucibleGuardianBoss();
+    this.createGreatStoneBridgeAct3();
+    this.createCaptainVaneBoss();
+    this.createLondiniumCitadelAct4();
+    this.createRexMalphasBoss();
+    this.createInvertedCathedralAct5();
+    this.createAstarothBoss();
 
     // 6. Build 3D UI Overlay
     this.createUIOverlay();
@@ -2587,6 +2653,682 @@ export class Oakhaven3DExperience {
   }
 
   // =========================================================================
+  // ACT II: CAMPANARIO DEL SUR, CELDA DE SAL & GRAN CRISOL (CAPS VII - IX)
+  // =========================================================================
+  private createBelltowerAct2(): void {
+    this.belltowerGroup = new THREE.Group();
+    this.belltowerGroup.position.set(0, 0, -202);
+
+    const stoneFloorMat = new THREE.MeshStandardMaterial({ color: 0x221e28, roughness: 0.9 });
+    const woodBeamMat = new THREE.MeshStandardMaterial({ color: 0x3d2719, roughness: 0.85 });
+    const bronzeMat = new THREE.MeshStandardMaterial({ color: 0x8b6508, metalness: 0.85, roughness: 0.35 });
+    const ironBarMat = new THREE.MeshStandardMaterial({ color: 0x1a1a20, metalness: 0.9, roughness: 0.3 });
+    const saltMat = new THREE.MeshStandardMaterial({ color: 0xf5f5fa, roughness: 0.4, emissive: 0x222233 });
+
+    // 1. Circular Stone Platform
+    const platform = new THREE.Mesh(new THREE.CylinderGeometry(14, 15, 0.8, 24), stoneFloorMat);
+    platform.position.y = -0.4;
+    platform.receiveShadow = true;
+    this.belltowerGroup.add(platform);
+
+    // 2. Timber Scaffolding (4 upright posts & crossbeams)
+    const postPositions = [
+      { x: -3.5, z: -3.5 },
+      { x: 3.5, z: -3.5 },
+      { x: -3.5, z: 3.5 },
+      { x: 3.5, z: 3.5 }
+    ];
+    postPositions.forEach(p => {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.45, 9.0, 0.45), woodBeamMat);
+      post.position.set(p.x, 4.5, p.z);
+      post.castShadow = true;
+      this.belltowerGroup.add(post);
+    });
+
+    // Crossbeams connecting posts at top
+    const beam1 = new THREE.Mesh(new THREE.BoxGeometry(7.5, 0.4, 0.4), woodBeamMat);
+    beam1.position.set(0, 8.8, -3.5);
+    const beam2 = new THREE.Mesh(new THREE.BoxGeometry(7.5, 0.4, 0.4), woodBeamMat);
+    beam2.position.set(0, 8.8, 3.5);
+    const beam3 = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 7.5), woodBeamMat);
+    beam3.position.set(-3.5, 8.8, 0);
+    const beam4 = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 7.5), woodBeamMat);
+    beam4.position.set(3.5, 8.8, 0);
+    this.belltowerGroup.add(beam1, beam2, beam3, beam4);
+
+    // 3. Giant Bronze Bell of the Inquisitorial Holy Office
+    const bellGroup = new THREE.Group();
+    bellGroup.position.set(0, 6.2, 0);
+    const bell = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 2.0, 2.5, 16), bronzeMat);
+    bell.castShadow = true;
+    const clapper = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.22, 1.8, 8), ironBarMat);
+    clapper.position.y = -0.6;
+    bellGroup.add(bell, clapper);
+    this.belltowerGroup.add(bellGroup);
+
+    // 4. Celda de Sal de Elowen (Octagonal Iron Cage at x: -5.5, z: 0)
+    const cellGroup = new THREE.Group();
+    cellGroup.position.set(-5.5, 0, 0);
+
+    // Cage base & Salt Floor
+    const cellBase = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 2.0, 0.25, 8), stoneFloorMat);
+    cellBase.position.y = 0.12;
+    cellGroup.add(cellBase);
+
+    const saltBed = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.7, 0.1, 8), saltMat);
+    saltBed.position.y = 0.26;
+    cellGroup.add(saltBed);
+
+    // Cage Bars (8 vertical iron bars)
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2;
+      const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.4, 6), ironBarMat);
+      bar.position.set(Math.cos(angle) * 1.6, 1.3, Math.sin(angle) * 1.6);
+      cellGroup.add(bar);
+    }
+
+    // Carved Willow Bird (Pájaro de Madera de Sauce) on a small wooden pedestal
+    this.willowBirdMesh = new THREE.Group();
+    this.willowBirdMesh.position.set(0, 0.65, 0);
+    const birdMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.8, roughness: 0.3 });
+    const birdBody = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.35, 6), birdMat);
+    birdBody.rotation.x = Math.PI / 2;
+    const birdWings = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.03, 0.16), birdMat);
+    birdWings.position.y = 0.05;
+    this.willowBirdMesh.add(birdBody, birdWings);
+
+    const birdLight = new THREE.PointLight(0xffd700, 1.8, 4);
+    birdLight.position.y = 0.3;
+    this.willowBirdMesh.add(birdLight);
+    cellGroup.add(this.willowBirdMesh);
+
+    this.belltowerGroup.add(cellGroup);
+
+    // 5. The Great Bronze Crucible Furnace (Gran Horno del Crisol at x: 0, z: -12)
+    const crucibleFurnaceGroup = new THREE.Group();
+    crucibleFurnaceGroup.position.set(0, 0, -12);
+
+    const crucibleCauldron = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 1.8, 2.6, 16), ironBarMat);
+    crucibleCauldron.position.y = 1.3;
+    crucibleCauldron.castShadow = true;
+    crucibleFurnaceGroup.add(crucibleCauldron);
+
+    // Glowing Molten Slag Pool
+    const slagMat = new THREE.MeshBasicMaterial({ color: 0xff4400 });
+    const slagPool = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 2.1, 0.15, 16), slagMat);
+    slagPool.position.y = 2.45;
+    crucibleFurnaceGroup.add(slagPool);
+
+    this.crucibleSlagLight = new THREE.PointLight(0xff5511, 4.0, 18);
+    this.crucibleSlagLight.position.set(0, 3.2, 0);
+    crucibleFurnaceGroup.add(this.crucibleSlagLight);
+
+    this.belltowerGroup.add(crucibleFurnaceGroup);
+
+    // Ambient Warm Light for Belltower
+    const belltowerLight = new THREE.PointLight(0xff7722, 2.2, 25);
+    belltowerLight.position.set(0, 5.0, 0);
+    this.belltowerGroup.add(belltowerLight);
+
+    this.scene.add(this.belltowerGroup);
+  }
+
+  // =========================================================================
+  // ACT II BOSS: EL GUARDIÁN DEL CRISOL (CRUCIBLE GUARDIAN)
+  // =========================================================================
+  private createCrucibleGuardianBoss(): void {
+    this.crucibleGuardianGroup = new THREE.Group();
+    this.crucibleGuardianGroup.position.set(0, 0, -204);
+
+    const ironArmorMat = new THREE.MeshStandardMaterial({ color: 0x221a18, metalness: 0.8, roughness: 0.4 });
+    const slagCoreMat = new THREE.MeshBasicMaterial({ color: 0xff3300 });
+
+    // 1. Heavy Torso & Iron Apron
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.3, 0.75), ironArmorMat);
+    torso.position.y = 1.3;
+    torso.castShadow = true;
+    this.crucibleGuardianGroup.add(torso);
+
+    // 2. Welder Helmet with Glowing Red Visor
+    const helmet = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.52, 0.52), ironArmorMat);
+    helmet.position.set(0, 2.2, 0);
+    helmet.castShadow = true;
+    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.07, 0.03), slagCoreMat);
+    visor.position.set(0, 0.05, 0.27);
+    helmet.add(visor);
+    this.crucibleGuardianGroup.add(helmet);
+
+    // 3. Massive Foundry Sledgehammer
+    const hammerGroup = new THREE.Group();
+    hammerGroup.position.set(0.7, 1.1, 0.2);
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.3, 8), ironArmorMat);
+    handle.rotation.x = Math.PI / 4;
+    const hammerHead = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.55, 0.55), ironArmorMat);
+    hammerHead.position.set(0, 1.0, 0.7);
+    const slagCore = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.35, 0.57), slagCoreMat);
+    slagCore.position.set(0, 1.0, 0.7);
+    hammerGroup.add(handle, hammerHead, slagCore);
+    this.crucibleGuardianGroup.add(hammerGroup);
+
+    // 4. Glowing Red Slag Core Light
+    const coreLight = new THREE.PointLight(0xff4400, 2.2, 7);
+    coreLight.position.set(0, 1.4, 0.4);
+    this.crucibleGuardianGroup.add(coreLight);
+
+    // 5. Warning Telegraph Ring
+    const warnMat = new THREE.MeshBasicMaterial({ color: 0xff3300, transparent: true, opacity: 0.65, side: THREE.DoubleSide });
+    this.crucibleWarningMesh = new THREE.Mesh(new THREE.RingGeometry(1.0, 2.8, 24), warnMat);
+    this.crucibleWarningMesh.rotation.x = -Math.PI / 2;
+    this.crucibleWarningMesh.position.set(0, 0.04, 0);
+    this.crucibleWarningMesh.visible = false;
+    this.crucibleGuardianGroup.add(this.crucibleWarningMesh);
+
+    this.scene.add(this.crucibleGuardianGroup);
+  }
+
+  // =========================================================================
+  // ACT III: EL GRAN PUENTE DE PIEDRA — EL CAMINO DE LOS HEREJES (CAPS X - XIII)
+  // =========================================================================
+  private createGreatStoneBridgeAct3(): void {
+    this.greatStoneBridgeGroup = new THREE.Group();
+    this.greatStoneBridgeGroup.position.set(0, 0, -255);
+
+    const graniteMat = new THREE.MeshStandardMaterial({ color: 0x38353d, roughness: 0.9 });
+    const woodCrossMat = new THREE.MeshStandardMaterial({ color: 0x2b1c11, roughness: 0.95 });
+    const ironMat = new THREE.MeshStandardMaterial({ color: 0x1f1f24, metalness: 0.8, roughness: 0.35 });
+
+    // 1. Massive Stone Bridge Roadway (48m long, 10.6m wide to match DungeonAreaManager bounds)
+    const roadway = new THREE.Mesh(new THREE.BoxGeometry(10.6, 1.2, 48), graniteMat);
+    roadway.position.y = -0.6;
+    roadway.receiveShadow = true;
+    this.greatStoneBridgeGroup.add(roadway);
+
+    // 2. Heavy Stone Balustrades along left and right
+    const leftBalustrade = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.1, 48), graniteMat);
+    leftBalustrade.position.set(-5.05, 0.55, 0);
+    leftBalustrade.castShadow = true;
+    const rightBalustrade = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.1, 48), graniteMat);
+    rightBalustrade.position.set(5.05, 0.55, 0);
+    rightBalustrade.castShadow = true;
+    this.greatStoneBridgeGroup.add(leftBalustrade, rightBalustrade);
+
+    // 3. Heretic Crosses along the balustrades (6 crosses with braziers)
+    [-15, 0, 15].forEach(zPos => {
+      [-5.0, 5.0].forEach(xPos => {
+        const crossVert = new THREE.Mesh(new THREE.BoxGeometry(0.18, 2.5, 0.18), woodCrossMat);
+        crossVert.position.set(xPos, 1.8, zPos);
+        crossVert.castShadow = true;
+        const crossHoriz = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.18, 0.18), woodCrossMat);
+        crossHoriz.position.set(xPos, 2.4, zPos);
+        this.greatStoneBridgeGroup.add(crossVert, crossHoriz);
+
+        // Small iron brazier with flame
+        const brazier = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.1, 0.25, 6), ironMat);
+        brazier.position.set(xPos, 1.1, zPos);
+        const bLight = new THREE.PointLight(0xff6622, 1.2, 5);
+        bLight.position.set(xPos, 1.3, zPos);
+        this.greatStoneBridgeGroup.add(brazier, bLight);
+      });
+    });
+
+    // 4. Prisoner Transport Wagon of Martín and Tobías (at x: -2.6, z: 6)
+    const cartGroup = new THREE.Group();
+    cartGroup.position.set(-2.6, 0, 6);
+
+    const wagonWood = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.4, 3.4), woodCrossMat);
+    wagonWood.position.y = 0.5;
+    wagonWood.castShadow = true;
+    cartGroup.add(wagonWood);
+
+    // Iron Barred Cage on Wagon
+    for (let i = 0; i < 6; i++) {
+      const zb = -1.4 + i * 0.55;
+      const bL = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.6, 4), ironMat);
+      bL.position.set(-0.95, 1.4, zb);
+      const bR = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.6, 4), ironMat);
+      bR.position.set(0.95, 1.4, zb);
+      cartGroup.add(bL, bR);
+    }
+    const cageRoof = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.1, 3.5), woodCrossMat);
+    cageRoof.position.y = 2.2;
+    cartGroup.add(cageRoof);
+
+    // Wagon Lantern
+    const cartLantern = new THREE.PointLight(0xffaa44, 1.8, 6);
+    cartLantern.position.set(0, 1.8, 1.6);
+    cartGroup.add(cartLantern);
+
+    this.greatStoneBridgeGroup.add(cartGroup);
+
+    // River Mist Ambient Light beneath the bridge
+    const riverLight = new THREE.PointLight(0x446688, 2.5, 30);
+    riverLight.position.set(0, -3.0, 0);
+    this.greatStoneBridgeGroup.add(riverLight);
+
+    this.scene.add(this.greatStoneBridgeGroup);
+  }
+
+  // =========================================================================
+  // ACT III BOSS: CAPITÁN ÁUREO VANE — EL ESCUDO DE TORRE (CAPTAIN VANE)
+  // =========================================================================
+  private createCaptainVaneBoss(): void {
+    this.captainVaneGroup = new THREE.Group();
+    this.captainVaneGroup.position.set(0, 0, -260);
+
+    const goldPlateMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.95, roughness: 0.2 });
+    const whiteTabardMat = new THREE.MeshStandardMaterial({ color: 0xf5f5ff, roughness: 0.6 });
+    const steelBladeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.9, roughness: 0.15, emissive: 0xffaa00, emissiveIntensity: 0.3 });
+
+    // 1. Armored Torso & White Sun Tabard
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.2, 0.6), goldPlateMat);
+    torso.position.y = 1.25;
+    torso.castShadow = true;
+    const tabard = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.22, 0.64), whiteTabardMat);
+    tabard.position.y = 1.25;
+    this.captainVaneGroup.add(torso, tabard);
+
+    // 2. Gilded Greathelm with Sun Crest
+    const helm = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.28, 0.5, 8), goldPlateMat);
+    helm.position.y = 2.1;
+    helm.castShadow = true;
+    const crest = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.35, 0.35), goldPlateMat);
+    crest.position.set(0, 2.45, 0);
+    this.captainVaneGroup.add(helm, crest);
+
+    // 3. Massive Tower Shield (Left hand, blocks frontal damage)
+    const shieldGroup = new THREE.Group();
+    shieldGroup.position.set(-0.65, 1.15, 0.45);
+    this.vaneShieldMesh = new THREE.Mesh(new THREE.BoxGeometry(1.25, 2.0, 0.16), goldPlateMat);
+    this.vaneShieldMesh.castShadow = true;
+    const sunMedallion = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.05, 12), new THREE.MeshBasicMaterial({ color: 0xffea77 }));
+    sunMedallion.rotation.x = Math.PI / 2;
+    sunMedallion.position.z = 0.09;
+    this.vaneShieldMesh.add(sunMedallion);
+    shieldGroup.add(this.vaneShieldMesh);
+    this.captainVaneGroup.add(shieldGroup);
+
+    // 4. Solar Greatsword (Right hand)
+    const swordGroup = new THREE.Group();
+    swordGroup.position.set(0.65, 1.15, 0.2);
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.6, 0.04), steelBladeMat);
+    blade.position.y = 0.65;
+    blade.castShadow = true;
+    const crossguard = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.08, 0.08), goldPlateMat);
+    crossguard.position.y = -0.1;
+    swordGroup.add(blade, crossguard);
+    this.captainVaneGroup.add(swordGroup);
+
+    // 5. Radiant Solar Aura Light
+    const solarLight = new THREE.PointLight(0xffdd55, 2.2, 7);
+    solarLight.position.set(0, 1.8, 0.3);
+    this.captainVaneGroup.add(solarLight);
+
+    // 6. Warning Ring
+    const warnMat = new THREE.MeshBasicMaterial({ color: 0xffd700, transparent: true, opacity: 0.65, side: THREE.DoubleSide });
+    this.vaneWarningMesh = new THREE.Mesh(new THREE.RingGeometry(0.9, 2.6, 24), warnMat);
+    this.vaneWarningMesh.rotation.x = -Math.PI / 2;
+    this.vaneWarningMesh.position.set(0, 0.04, 0);
+    this.vaneWarningMesh.visible = false;
+    this.captainVaneGroup.add(this.vaneWarningMesh);
+
+    this.scene.add(this.captainVaneGroup);
+  }
+
+  // =========================================================================
+  // ACT IV: LONDINIUM — LA CIUDADELA DORADA (CAPS XIV - XVII)
+  // =========================================================================
+  private createLondiniumCitadelAct4(): void {
+    this.londiniumCitadelGroup = new THREE.Group();
+    this.londiniumCitadelGroup.position.set(0, 0, -320);
+
+    const marbleMat = new THREE.MeshStandardMaterial({ color: 0xf5f5ff, roughness: 0.15, metalness: 0.1 });
+    const goldMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.95, roughness: 0.2 });
+    const velvetMat = new THREE.MeshStandardMaterial({ color: 0x6b091e, roughness: 0.7 });
+    const mirrorMat = new THREE.MeshStandardMaterial({ color: 0xd8e8f8, metalness: 0.95, roughness: 0.05 });
+
+    // 1. Polished White Marble Floor
+    const floor = new THREE.Mesh(new THREE.BoxGeometry(16, 0.8, 48), marbleMat);
+    floor.position.y = -0.4;
+    floor.receiveShadow = true;
+    this.londiniumCitadelGroup.add(floor);
+
+    // 2. Colonnade of 10 Classical Columns
+    [-6.8, 6.8].forEach(xPos => {
+      [-18, -9, 0, 9, 18].forEach(zPos => {
+        const col = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.55, 6.5, 16), marbleMat);
+        col.position.set(xPos, 2.85, zPos);
+        col.castShadow = true;
+        const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.45, 0.4, 16), goldMat);
+        cap.position.set(xPos, 6.2, zPos);
+        this.londiniumCitadelGroup.add(col, cap);
+      });
+    });
+
+    // 3. Hall of Mirrors (Salón de los Espejos on left wall)
+    [-10, 0, 10].forEach(zPos => {
+      const mirrorFrame = new THREE.Mesh(new THREE.BoxGeometry(0.12, 3.8, 2.2), goldMat);
+      mirrorFrame.position.set(-7.5, 2.4, zPos);
+      const mirrorGlass = new THREE.Mesh(new THREE.BoxGeometry(0.04, 3.4, 1.8), mirrorMat);
+      mirrorGlass.position.set(-7.45, 2.4, zPos);
+      this.londiniumCitadelGroup.add(mirrorFrame, mirrorGlass);
+    });
+
+    // 4. Astral Throne of Rex Malphas (Salón del Trono Astral at z: -16)
+    const throneGroup = new THREE.Group();
+    throneGroup.position.set(0, 0, -16);
+
+    // Three-tiered Marble Dais
+    [
+      { r: 3.2, h: 0.3, y: 0.15 },
+      { r: 2.4, h: 0.3, y: 0.45 },
+      { r: 1.6, h: 0.3, y: 0.75 }
+    ].forEach(t => {
+      const step = new THREE.Mesh(new THREE.CylinderGeometry(t.r, t.r + 0.2, t.h, 16), marbleMat);
+      step.position.y = t.y;
+      throneGroup.add(step);
+    });
+
+    // Golden Throne with Crimson Velvet
+    const throneBase = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.8, 1.0), goldMat);
+    throneBase.position.y = 1.3;
+    const seatVelvet = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.1, 0.8), velvetMat);
+    seatVelvet.position.set(0, 1.75, 0);
+    const throneBack = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.0, 0.15), goldMat);
+    throneBack.position.set(0, 2.3, -0.45);
+    throneGroup.add(throneBase, seatVelvet, throneBack);
+
+    this.londiniumCitadelGroup.add(throneGroup);
+
+    // Cosmic Astral Nebula Illumination
+    const astralLight = new THREE.PointLight(0x9944ff, 3.5, 30);
+    astralLight.position.set(0, 5.5, -6);
+    this.londiniumCitadelGroup.add(astralLight);
+
+    this.scene.add(this.londiniumCitadelGroup);
+  }
+
+  // =========================================================================
+  // ACT IV BOSS: REX MALPHAS / ALARIC — LA LEY DEL DESEO (ASTRAL DESPOT)
+  // =========================================================================
+  private createRexMalphasBoss(): void {
+    this.rexMalphasGroup = new THREE.Group();
+    this.rexMalphasGroup.position.set(0, 0, -325);
+
+    const goldMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.95, roughness: 0.2 });
+    const velvetMat = new THREE.MeshStandardMaterial({ color: 0x800010, roughness: 0.6 });
+    const swordBladeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.9, roughness: 0.1, emissive: 0xcc66ff, emissiveIntensity: 0.4 });
+
+    // 1. Royal Gilded Armor & Flowing Velvet Cape
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.88, 1.2, 0.55), goldMat);
+    torso.position.y = 1.25;
+    torso.castShadow = true;
+    const cape = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.6, 0.08), velvetMat);
+    cape.position.set(0, 1.2, -0.32);
+    this.rexMalphasGroup.add(torso, cape);
+
+    // 2. Crown of Gold (Jagged 5 points)
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 8, 8), new THREE.MeshStandardMaterial({ color: 0xd9b38c }));
+    head.position.y = 2.05;
+    const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.25, 0.25, 5), goldMat);
+    crown.position.y = 2.25;
+    this.rexMalphasGroup.add(head, crown);
+
+    // 3. Mandoble Áureo (Colossal two-handed golden greatsword)
+    const swordGroup = new THREE.Group();
+    swordGroup.position.set(0.65, 1.2, 0.2);
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.8, 0.05), swordBladeMat);
+    blade.position.y = 0.75;
+    blade.castShadow = true;
+    const crossguard = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.08, 0.08), goldMat);
+    crossguard.position.y = -0.15;
+    swordGroup.add(blade, crossguard);
+    this.rexMalphasGroup.add(swordGroup);
+
+    // 4. Phase 2 Astral Warp Ring (Ley del Deseo halo)
+    const warpRingMat = new THREE.MeshBasicMaterial({ color: 0xaa22ff, transparent: true, opacity: 0.85, side: THREE.DoubleSide });
+    this.malphasWarpRingMesh = new THREE.Mesh(new THREE.TorusGeometry(1.3, 0.08, 12, 32), warpRingMat);
+    this.malphasWarpRingMesh.position.set(0, 1.6, -0.4);
+    this.malphasWarpRingMesh.visible = false;
+    this.rexMalphasGroup.add(this.malphasWarpRingMesh);
+
+    // 5. Astral Light
+    const astralLight = new THREE.PointLight(0xaa22ff, 2.5, 9);
+    astralLight.position.set(0, 1.8, 0.2);
+    this.rexMalphasGroup.add(astralLight);
+
+    // 6. Warning Ring
+    const warnMat = new THREE.MeshBasicMaterial({ color: 0xcc44ff, transparent: true, opacity: 0.65, side: THREE.DoubleSide });
+    this.malphasWarningMesh = new THREE.Mesh(new THREE.RingGeometry(1.1, 3.0, 24), warnMat);
+    this.malphasWarningMesh.rotation.x = -Math.PI / 2;
+    this.malphasWarningMesh.position.set(0, 0.04, 0);
+    this.malphasWarningMesh.visible = false;
+    this.rexMalphasGroup.add(this.malphasWarningMesh);
+
+    this.scene.add(this.rexMalphasGroup);
+  }
+
+  // =========================================================================
+  // ACT V: LA CATEDRAL INVERTIDA — EL SOL DEL ABISMO (CAPS XVIII - XX)
+  // =========================================================================
+  private createInvertedCathedralAct5(): void {
+    this.invertedCathedralGroup = new THREE.Group();
+    this.invertedCathedralGroup.position.set(0, 0, -385);
+
+    const obsidianMat = new THREE.MeshStandardMaterial({ color: 0x120c18, roughness: 0.85, metalness: 0.2 });
+    const whiteAlabasterMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2, emissive: 0x334455, emissiveIntensity: 0.3 });
+
+    // 1. Floating Obsidian Platform
+    const platform = new THREE.Mesh(new THREE.BoxGeometry(18, 1.0, 50), obsidianMat);
+    platform.position.y = -0.5;
+    platform.receiveShadow = true;
+    this.invertedCathedralGroup.add(platform);
+
+    // 2. Inverted Ribbed Gothic Arches pointing into the abyss
+    [-8.0, 8.0].forEach(xPos => {
+      [-16, -8, 0, 8, 16].forEach(zPos => {
+        const rib = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.45, 7.0, 8), obsidianMat);
+        rib.position.set(xPos, -3.5, zPos);
+        rib.rotation.z = xPos < 0 ? 0.2 : -0.2;
+        this.invertedCathedralGroup.add(rib);
+      });
+    });
+
+    // 3. Stained Glass Windows of the Nine Witches (Hovering around perimeter)
+    const glassColors = [0x00e5ff, 0xff007f, 0xffaa00, 0x00ff88, 0x9933ff, 0xff3344, 0x33ccff, 0xffdd44, 0xe056fd];
+    glassColors.forEach((colorHex, idx) => {
+      const angle = (idx / 9) * Math.PI * 2;
+      const glassMat = new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.75, side: THREE.DoubleSide });
+      const glass = new THREE.Mesh(new THREE.BoxGeometry(1.6, 3.2, 0.08), glassMat);
+      glass.position.set(Math.cos(angle) * 8.5, 2.5, Math.sin(angle) * 16.0);
+      glass.rotation.y = angle;
+      this.invertedCathedralGroup.add(glass);
+    });
+
+    // 4. White Communion Altar (Altar de la Comunión Inmaculada at z: 7.0)
+    const altarGroup = new THREE.Group();
+    altarGroup.position.set(0, 0, 7.0);
+
+    const altarDais = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 2.2, 0.5, 16), whiteAlabasterMat);
+    altarDais.position.y = 0.25;
+    altarGroup.add(altarDais);
+
+    // Floating Tear of Divine Light (Gota de Luz Divina)
+    this.dawnGreyTearMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(0.24, 16, 16),
+      new THREE.MeshBasicMaterial({ color: 0xffffff })
+    );
+    this.dawnGreyTearMesh.position.set(0, 1.4, 0);
+    altarGroup.add(this.dawnGreyTearMesh);
+
+    const tearLight = new THREE.PointLight(0x88eeff, 3.5, 10);
+    tearLight.position.set(0, 1.4, 0);
+    altarGroup.add(tearLight);
+
+    this.invertedCathedralGroup.add(altarGroup);
+
+    // Ambient Cosmic Abyss Illumination
+    const abyssLight = new THREE.PointLight(0x7700cc, 4.0, 35);
+    abyssLight.position.set(0, 6.0, 0);
+    this.invertedCathedralGroup.add(abyssLight);
+
+    this.scene.add(this.invertedCathedralGroup);
+  }
+
+  // =========================================================================
+  // ACT V FINAL TITAN: ASTAROTH — EL SOL DEL ABISMO (SOLAR TITAN)
+  // =========================================================================
+  private createAstarothBoss(): void {
+    this.astarothGroup = new THREE.Group();
+    this.astarothGroup.position.set(0, 0, -395);
+
+    // 1. Black Sun Primordial Core
+    const coreMat = new THREE.MeshStandardMaterial({
+      color: 0x080210,
+      roughness: 0.9,
+      emissive: 0x330055,
+      emissiveIntensity: 1.8
+    });
+    const sunCore = new THREE.Mesh(new THREE.SphereGeometry(2.4, 24, 24), coreMat);
+    sunCore.position.y = 3.5;
+    this.astarothGroup.add(sunCore);
+
+    // 2. Coronal Flare Ring
+    const coronaMat = new THREE.MeshBasicMaterial({
+      color: 0x8811cc,
+      transparent: true,
+      opacity: 0.68,
+      side: THREE.DoubleSide
+    });
+    this.astarothCoronaMesh = new THREE.Mesh(new THREE.RingGeometry(2.6, 4.2, 36), coronaMat);
+    this.astarothCoronaMesh.position.y = 3.5;
+    this.astarothGroup.add(this.astarothCoronaMesh);
+
+    // 3. Primordial Titan Horns
+    const hornMat = new THREE.MeshStandardMaterial({ color: 0x331144, roughness: 0.8 });
+    const hornL = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.45, 2.4, 8), hornMat);
+    hornL.position.set(-1.8, 5.2, 0);
+    hornL.rotation.z = -0.55;
+    const hornR = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.45, 2.4, 8), hornMat);
+    hornR.position.set(1.8, 5.2, 0);
+    hornR.rotation.z = 0.55;
+    this.astarothGroup.add(hornL, hornR);
+
+    // 4. Central Eye of the Void
+    const eyeMesh = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 12), new THREE.MeshBasicMaterial({ color: 0xff33bb }));
+    eyeMesh.position.set(0, 3.5, 2.3);
+    this.astarothGroup.add(eyeMesh);
+
+    // 5. Abyssal Radiant Light
+    this.astarothCoreLight = new THREE.PointLight(0x8800cc, 4.5, 22);
+    this.astarothCoreLight.position.set(0, 3.5, 0);
+    this.astarothGroup.add(this.astarothCoreLight);
+
+    // 6. Warning Ring
+    const warnMat = new THREE.MeshBasicMaterial({ color: 0xff2288, transparent: true, opacity: 0.65, side: THREE.DoubleSide });
+    this.astarothWarningMesh = new THREE.Mesh(new THREE.RingGeometry(1.6, 4.6, 32), warnMat);
+    this.astarothWarningMesh.rotation.x = -Math.PI / 2;
+    this.astarothWarningMesh.position.set(0, 0.04, 0);
+    this.astarothWarningMesh.visible = false;
+    this.astarothGroup.add(this.astarothWarningMesh);
+
+    this.scene.add(this.astarothGroup);
+  }
+
+  // =========================================================================
+  // CANONICAL FORGE: ALBA GRIS (ESPADA DE LA ELECCIÓN DEFINITIVA)
+  // =========================================================================
+  private applyAlbaGrisSwordVisual(): void {
+    // Visually transform player sword into Alba Gris (dual-tone bisection blade)
+    if (this.playerSwordMesh && !this.albaGrisBladeMesh) {
+      while (this.playerSwordMesh.children.length > 0) {
+        this.playerSwordMesh.remove(this.playerSwordMesh.children[0]);
+      }
+
+      this.albaGrisBladeMesh = new THREE.Group();
+
+      const celestialWhiteMat = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        metalness: 0.9,
+        roughness: 0.1,
+        emissive: 0x88eeff,
+        emissiveIntensity: 1.4
+      });
+      const abyssalBlackMat = new THREE.MeshStandardMaterial({
+        color: 0x110022,
+        metalness: 0.9,
+        roughness: 0.1,
+        emissive: 0x550077,
+        emissiveIntensity: 1.4
+      });
+      const hiltGoldMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.95, roughness: 0.2 });
+
+      // Left half: Celestial Light
+      const whiteHalf = new THREE.Mesh(new THREE.BoxGeometry(0.04, 1.25, 0.025), celestialWhiteMat);
+      whiteHalf.position.set(-0.02, 0.65, 0);
+      whiteHalf.castShadow = true;
+
+      // Right half: Abyssal Fire
+      const blackHalf = new THREE.Mesh(new THREE.BoxGeometry(0.04, 1.25, 0.025), abyssalBlackMat);
+      blackHalf.position.set(0.02, 0.65, 0);
+      blackHalf.castShadow = true;
+
+      // Golden Crossguard & Star Gem
+      const guard = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.06, 0.07), hiltGoldMat);
+      guard.position.y = 0.05;
+
+      const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.22, 6), hiltGoldMat);
+      grip.position.y = -0.08;
+
+      const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.05), new THREE.MeshBasicMaterial({ color: 0x88ffff }));
+      gem.position.set(0, 0.05, 0.04);
+
+      const auraLight = new THREE.PointLight(0x88ffff, 2.2, 5);
+      auraLight.position.set(0, 0.7, 0);
+
+      this.albaGrisBladeMesh.add(whiteHalf, blackHalf, guard, grip, gem, auraLight);
+      this.playerSwordMesh.add(this.albaGrisBladeMesh);
+    }
+
+    if (this.dawnGreyTearMesh) {
+      this.dawnGreyTearMesh.visible = false;
+    }
+  }
+
+  public forgeAlbaGrisSword(): void {
+    if (this.hasForgedAlbaGris) return;
+
+    this.hasForgedAlbaGris = true;
+    this.audio.playCosmicChime?.();
+    this.triggerHolyFlash(1.2);
+    this.applyAlbaGrisSwordVisual();
+
+    // Award Relic in Inventory & Unlock Canon Chapter 19
+    this.inventory.addItem({
+      id: 'weapon_dawn_grey',
+      name: 'Alba Gris (Espada Biseccionada)',
+      description: 'Espada sagrada biseccionada forjada por Elowen y Thomas. Funde la Gota de Luz y el Fuego Negro en perfecta armonía. Inflige +100% daño crítico contra Astaroth.',
+      category: 'relic',
+      icon: '✨',
+      quantity: 1,
+      maxQuantity: 1,
+      effectType: 'buff_attack',
+      effectValue: 70,
+      isEquipped: true
+    });
+
+    this.canonChapterManager.unlockChapter(19);
+    this.spawnFloatingText(this.playerGroup.position, '✨ ¡ALBA GRIS FORJADA! (+100% DAÑO CRÍTICO CONTRA EL TITÁN)', '#88eeff');
+
+    this.showDialogueModal(
+      '✦ FORJA DE ALBA GRIS — LA ESPADA DE LA ELECCIÓN DEFINITIVA ✦',
+      '«Elowen deposita en tus manos la Gota de Luz Divina, su pureza cristalizada en lágrima celestial. Thomas canaliza a través del pomo el Fuego Negro primordial de su linaje. Ambas energías convergen sin destruirse, fundiéndose en una hoja biseccionada: un filo de blanco estelar puro y un contrafilo de obsidiana abisal. ¡Alba Gris ha nacido para quebrar el Sol de las Tinieblas!»',
+      '✦ RECOMPENSA: ESPADA SAGRADA ALBA GRIS FORJADA & EQUIPADA ✦'
+    );
+
+    this.updateHUD();
+  }
+
+  // =========================================================================
   // SUBTERRANEAN ZONE TRANSITION & SARCOPHAGI INTERACTION
   // =========================================================================
   public transitionToArea(targetArea: DungeonArea): void {
@@ -2595,7 +3337,19 @@ export class Oakhaven3DExperience {
     this.audio.playCryptDoor?.();
 
     if (this.zoneTitleEl && this.zoneSubtitleEl && this.zoneTransitionOverlay) {
-      if (targetArea === 'black_willow_forest') {
+      if (targetArea === 'inverted_cathedral') {
+        this.zoneTitleEl.innerText = '🌌 LA CATEDRAL INVERTIDA — EL SOL DEL ABISMO 🌌';
+        this.zoneSubtitleEl.innerText = '«Bajo un cielo de estrellas muertas, la comunión de luz y sombra desafía al Padre de las Cenizas»';
+      } else if (targetArea === 'londinium_citadel') {
+        this.zoneTitleEl.innerText = '🏛 LONDINIUM — LA CIUDADELA DORADA 🏛';
+        this.zoneSubtitleEl.innerText = '«Mármol blanco, falsos ídolos solares y la Ley del Deseo del Rey Malphas»';
+      } else if (targetArea === 'great_stone_bridge') {
+        this.zoneTitleEl.innerText = '🌉 EL GRAN PUENTE DE PIEDRA — EL CAMINO DE LOS HEREJES 🌉';
+        this.zoneSubtitleEl.innerText = '«Sobre las aguas heladas del abismo fluvial, la égida del Capitán Vane bloquea el paso»';
+      } else if (targetArea === 'belltower_summit') {
+        this.zoneTitleEl.innerText = '🔔 EL CAMPANARIO DEL SUR & EL GRAN CRISOL 🔔';
+        this.zoneSubtitleEl.innerText = '«El tañido de hierro ensordecedor y el calor del horno donde Elowen permanece encadenada»';
+      } else if (targetArea === 'black_willow_forest') {
         this.zoneTitleEl.innerText = '🌿 EL BOSQUE DEL SAUCE NEGRO 🌿';
         this.zoneSubtitleEl.innerText = '«Entre raíces retorcidas y esporas luminiscentes, el eco del aquelarre ancestral aún palpita»';
       } else if (targetArea === 'crypts_interior') {
@@ -2609,14 +3363,71 @@ export class Oakhaven3DExperience {
     }
 
     setTimeout(() => {
-      if (targetArea === 'black_willow_forest') {
+      // Hide all boss HUDs upon area transition
+      [
+        this.inquisitorHpBarContainer,
+        this.rootProwlerHpBarContainer,
+        this.crucibleHpBarContainer,
+        this.vaneHpBarContainer,
+        this.malphasHpBarContainer,
+        this.astarothHpBarContainer
+      ].forEach(hud => {
+        if (hud) hud.style.display = 'none';
+      });
+
+      if (targetArea === 'inverted_cathedral') {
+        this.dungeonAreaManager.enterInvertedCathedral();
+        this.setPlayerPosition(0, 0, -370);
+        this.cameraYaw = 0;
+        this.targetCameraYaw = 0;
+        this.audio.playCosmicChime?.();
+        this.setDialogueToast(
+          'La Catedral Invertida',
+          '«La gravedad se invierte ante el vacío cósmico. El Altar de la Comunión aguarda la Gota de Luz de Elowen.»',
+          '/assets/icons/icon_crypt_key.png',
+          '#ff33aa'
+        );
+      } else if (targetArea === 'londinium_citadel') {
+        this.dungeonAreaManager.enterLondiniumCitadel();
+        this.setPlayerPosition(0, 0, -305);
+        this.cameraYaw = 0;
+        this.targetCameraYaw = 0;
+        this.audio.playAstralDistortion?.();
+        this.setDialogueToast(
+          'Londinium — Ciudadela Dorada',
+          '«El Salón de los Espejos y el Trono Astral resplandecen con oro falso. La presencia de Malphas es abrumadora.»',
+          '/assets/icons/icon_oakhaven_cross.png',
+          '#cc44ff'
+        );
+      } else if (targetArea === 'great_stone_bridge') {
+        this.dungeonAreaManager.enterGreatStoneBridge();
+        this.setPlayerPosition(0, 0, -242);
+        this.cameraYaw = 0;
+        this.targetCameraYaw = 0;
+        this.audio.playShieldCrush?.();
+        this.setDialogueToast(
+          'Gran Puente de Piedra',
+          '«La calzada fluvial se alza sobre la niebla. El convoy de prisioneros y el Capitán Vane aguardan más adelante.»',
+          '/assets/icons/icon_oakhaven_cross.png',
+          '#ffd700'
+        );
+      } else if (targetArea === 'belltower_summit') {
+        this.dungeonAreaManager.enterBelltower();
+        this.setPlayerPosition(0, 0, -188);
+        this.cameraYaw = 0;
+        this.targetCameraYaw = 0;
+        this.audio.playBellToll?.();
+        this.setDialogueToast(
+          'Campanario del Sur',
+          '«El calor del Gran Crisol hace temblar las vigas. La celda de sal de Elowen se encuentra en esta cúspide.»',
+          '/assets/icons/icon_black_willow_feather.png',
+          '#ff7722'
+        );
+      } else if (targetArea === 'black_willow_forest') {
         this.dungeonAreaManager.enterBlackWillowForest();
         this.setPlayerPosition(0, 0, -128);
         this.cameraYaw = 0;
         this.targetCameraYaw = 0;
-        if (this.inquisitorHpBarContainer) {
-          this.inquisitorHpBarContainer.style.display = 'none';
-        }
         this.audio.playWillowWhisper?.();
         this.setDialogueToast(
           'Bosque del Sauce Negro',
@@ -2635,9 +3446,6 @@ export class Oakhaven3DExperience {
         }
         this.cameraYaw = 0;
         this.targetCameraYaw = 0;
-        if (this.rootProwlerHpBarContainer) {
-          this.rootProwlerHpBarContainer.style.display = 'none';
-        }
         this.setDialogueToast(
           'Criptas de San Jude',
           '«El aire es frío y huele a polvo consagrado. Cuidado con las baldosas de hierro y las sombras que vigilan el altar.»',
@@ -2649,12 +3457,6 @@ export class Oakhaven3DExperience {
         this.setPlayerPosition(0, 0, -42);
         this.cameraYaw = 0;
         this.targetCameraYaw = 0;
-        if (this.inquisitorHpBarContainer) {
-          this.inquisitorHpBarContainer.style.display = 'none';
-        }
-        if (this.rootProwlerHpBarContainer) {
-          this.rootProwlerHpBarContainer.style.display = 'none';
-        }
         this.setDialogueToast(
           'Cementerio de Oakhaven',
           '«Has regresado a la superficie. La niebla de Oakhaven te envuelve una vez más.»',
@@ -2699,7 +3501,7 @@ export class Oakhaven3DExperience {
     this.setDialogueToast(
       'Sarcófago Profanado',
       '«Dentro del ataúd de piedra reposaban frascos de agua bendita y hierbas de plata usadas en los antiguos ritos funerarios.»',
-      '/assets/icons/icon_water_blessed.png',
+      '/assets/icons/icon_holy_water.png',
       '#a3ffc7'
     );
   }
@@ -2750,7 +3552,7 @@ export class Oakhaven3DExperience {
       this.setDialogueToast(
         'El Inquisidor Caído',
         '«Las cadenas del fanatismo se rompen... El Sello de la Inquisición es tuyo. Llévalo ante la luz.»',
-        '/assets/icons/icon_inquisition_sigil.png',
+        '/assets/icons/icon_oakhaven_cross.png',
         '#ffd700'
       );
     }
@@ -2916,6 +3718,50 @@ export class Oakhaven3DExperience {
       }
     }
 
+    // 5. Check Act II - V Canonical Bosses
+    if (this.dungeonAreaManager.currentArea === 'belltower_summit' && !this.crucibleGuardianEncounter.isDefeated) {
+      if (pPos.distanceTo(this.crucibleGuardianGroup.position) <= vortexRadius) {
+        const hitRes = this.crucibleGuardianEncounter.takeDamage(65, this.crucibleGuardianEncounter.state === 'STUNNED');
+        this.spawnFloatingText(this.crucibleGuardianGroup.position, `🗡️ -${hitRes.actualDamage} (VÓRTICE)`, '#cc66ff');
+        this.crucibleGuardianEncounter.setState('STUNNED');
+        this.crucibleTimer = 1.4;
+        if (hitRes.defeated) this.handleCrucibleGuardianDefeat();
+      }
+    }
+
+    if (this.dungeonAreaManager.currentArea === 'great_stone_bridge' && !this.captainVaneEncounter.isDefeated) {
+      if (pPos.distanceTo(this.captainVaneGroup.position) <= vortexRadius) {
+        if (this.captainVaneEncounter.shieldRaised) {
+          this.captainVaneEncounter.breakShield();
+          this.vaneTimer = 1.8;
+          this.audio.playSfx('shield_break');
+          if (this.vaneShieldMesh) this.vaneShieldMesh.rotation.x = 1.1;
+          this.spawnFloatingText(this.captainVaneGroup.position, '💥 ¡ESCUDO DE TORRE QUEBRADO!', '#ffd700');
+        }
+        const hitRes = this.captainVaneEncounter.takeDamage(65, false, true);
+        this.spawnFloatingText(this.captainVaneGroup.position, `🗡️ -${hitRes.actualDamage} (VÓRTICE)`, '#cc66ff');
+        if (hitRes.defeated) this.handleCaptainVaneDefeat();
+      }
+    }
+
+    if (this.dungeonAreaManager.currentArea === 'londinium_citadel' && !this.rexMalphasEncounter.isDefeated) {
+      if (pPos.distanceTo(this.rexMalphasGroup.position) <= vortexRadius) {
+        const hitRes = this.rexMalphasEncounter.takeDamage(65);
+        this.spawnFloatingText(this.rexMalphasGroup.position, `🗡️ -${hitRes.actualDamage} (VÓRTICE)`, '#cc66ff');
+        if (hitRes.transitionedToPhase2) this.triggerRexMalphasPhase2();
+        if (hitRes.defeated) this.handleRexMalphasDefeat();
+      }
+    }
+
+    if (this.dungeonAreaManager.currentArea === 'inverted_cathedral' && !this.astarothEncounter.isDefeated) {
+      const distHoriz = new THREE.Vector2(pPos.x - this.astarothGroup.position.x, pPos.z - this.astarothGroup.position.z).length();
+      if (distHoriz <= vortexRadius + 1.4) {
+        const hitRes = this.astarothEncounter.takeDamage(65, this.hasForgedAlbaGris);
+        this.spawnFloatingText(this.astarothGroup.position, `🗡️ -${hitRes.actualDamage} (VÓRTICE)`, '#cc66ff');
+        if (hitRes.defeated) this.handleAstarothDefeat();
+      }
+    }
+
     this.updateHUD();
   }
 
@@ -2932,6 +3778,8 @@ export class Oakhaven3DExperience {
       this.rootProwlerGroup.position.y = -0.4;
       return;
     }
+
+    if (!this.isGameplayActive()) return;
 
     const pPos = this.playerGroup.position;
     const prowlerPos = this.rootProwlerGroup.position;
@@ -3029,6 +3877,647 @@ export class Oakhaven3DExperience {
   }
 
   // =========================================================================
+  // ACT II BOSS: EL GUARDIÁN DEL CRISOL (CRUCIBLE GUARDIAN UPDATE LOOP)
+  // =========================================================================
+  private updateCrucibleGuardian(delta: number): void {
+    if (this.dungeonAreaManager.currentArea !== 'belltower_summit') {
+      if (this.crucibleHpBarContainer) this.crucibleHpBarContainer.style.display = 'none';
+      return;
+    }
+
+    if (this.crucibleGuardianEncounter.isDefeated) {
+      this.crucibleGuardianGroup.position.y = -0.4;
+      if (this.crucibleSlagLight) this.crucibleSlagLight.intensity = Math.max(0, this.crucibleSlagLight.intensity - delta * 2);
+      return;
+    }
+
+    if (!this.isGameplayActive()) return;
+
+    const pPos = this.playerGroup.position;
+    const gPos = this.crucibleGuardianGroup.position;
+    const toPlayer = pPos.clone().sub(gPos);
+    toPlayer.y = 0;
+    const distToPlayer = toPlayer.length();
+
+    if (this.crucibleHpBarContainer) {
+      this.crucibleHpBarContainer.style.display = distToPlayer <= 16 ? 'block' : 'none';
+    }
+
+    // Orient towards player
+    if (distToPlayer > 0.1) {
+      const targetAngle = Math.atan2(toPlayer.x, toPlayer.z);
+      this.crucibleGuardianGroup.rotation.y = THREE.MathUtils.lerp(this.crucibleGuardianGroup.rotation.y, targetAngle, 0.08);
+    }
+
+    if (this.crucibleGuardianEncounter.state === 'DORMANT') {
+      if (pPos.z <= -191) {
+        this.crucibleGuardianEncounter.setState('CHASE');
+        this.audio.playBellToll?.();
+        this.audio.playSfx('warning');
+        this.spawnFloatingText(gPos, '🔨 ¡EL GUARDIÁN DEL CRISOL DESPIERTA!', '#ff7722');
+        this.setDialogueToast(
+          'El Guardián del Crisol',
+          '«¡Nadie profanará la torre sagrada! ¡El crisol de bronce devorará la carne de los herejes!»',
+          '/assets/concepts/concept_morwenna.png',
+          '#ff7722'
+        );
+      }
+      return;
+    }
+
+    if (this.crucibleGuardianEncounter.state === 'CHASE') {
+      if (this.crucibleWarningMesh) this.crucibleWarningMesh.visible = false;
+      if (distToPlayer > 2.8) {
+        toPlayer.normalize();
+        gPos.add(toPlayer.multiplyScalar(2.2 * delta));
+        gPos.x = THREE.MathUtils.clamp(gPos.x, -5.5, 5.5);
+        gPos.z = THREE.MathUtils.clamp(gPos.z, -218, -186);
+      } else {
+        const isBurst = Math.random() < 0.35;
+        this.crucibleGuardianEncounter.setState(isBurst ? 'SLAG_BURST' : 'HAMMER_SLAM');
+        this.crucibleTimer = isBurst ? 0.8 : 0.65;
+        if (this.crucibleWarningMesh) this.crucibleWarningMesh.visible = true;
+        this.audio.playSfx('warning');
+      }
+    } else if (this.crucibleGuardianEncounter.state === 'HAMMER_SLAM' || this.crucibleGuardianEncounter.state === 'SLAG_BURST') {
+      this.crucibleTimer -= delta;
+      if (this.crucibleWarningMesh) {
+        this.crucibleWarningMesh.rotation.y += delta * 8;
+        this.crucibleWarningMesh.visible = Math.floor(this.clock.elapsedTime * 20) % 2 === 0;
+      }
+
+      if (this.crucibleTimer <= 0) {
+        if (this.crucibleWarningMesh) this.crucibleWarningMesh.visible = false;
+        const isBurst = this.crucibleGuardianEncounter.state === 'SLAG_BURST';
+        const attackRes = this.crucibleGuardianEncounter.evaluateAttack(distToPlayer, this.playerStats.isDodging, isBurst);
+        if (attackRes.hit) {
+          const parryWindow = 280 + this.inventory.getParryBonusMs();
+          const isParry = this.playerStats.isGuarding && (performance.now() - this.lastGuardTime) <= parryWindow;
+          if (isParry) {
+            this.audio.playSfx('parry');
+            this.triggerHolyFlash(0.85);
+            this.crucibleGuardianEncounter.setState('STUNNED');
+            this.crucibleTimer = 2.0 * this.getStaggerMultiplier();
+            this.spawnFloatingText(pPos, '⚡ ¡PARRY DE MARTILLO!', '#66ccff');
+            this.spawnFloatingText(gPos, '⚡ ¡VULNERABLE! [E] ¡REMATAR!', '#ffd700');
+            this.updateHUD();
+            return;
+          } else if (this.playerStats.isGuarding) {
+            const blockedDmg = Math.round(attackRes.damage * 0.4);
+            this.playerStats.health = Math.max(0, this.playerStats.health - blockedDmg);
+            this.playerStats.posture = Math.max(0, this.playerStats.posture - 25);
+            this.audio.playShieldCrush();
+            this.spawnFloatingText(pPos, `-${blockedDmg} (¡BLOQUEO!)`, '#ffd700');
+          } else {
+            const dmg = this.calculateIncomingDamage(attackRes.damage, 6);
+            this.playerStats.health = Math.max(0, this.playerStats.health - dmg);
+            this.triggerDamageVignette(0.65);
+            this.audio.playCombatHit(true);
+            this.spawnFloatingText(pPos, `-${dmg} (${isBurst ? 'ESTALLIDO DE ESCORIA' : 'MARTILLAZO DE CRISOL'})`, '#ff3344');
+
+            if (this.playerStats.health <= 0) {
+              this.handlePlayerDefeatAndRespawn();
+              return;
+            }
+          }
+        } else if (this.playerStats.isDodging) {
+          this.audio.playSfx('dodge');
+          this.spawnFloatingText(pPos, '⚡ ¡ESQUIVADO PERFECTO!', '#00e5ff');
+        }
+
+        this.crucibleGuardianEncounter.setState('CHASE');
+        this.updateHUD();
+      }
+    } else if (this.crucibleGuardianEncounter.state === 'STUNNED') {
+      this.crucibleTimer -= delta;
+      this.crucibleGuardianGroup.position.y = -0.15;
+      if (this.crucibleTimer <= 0) {
+        this.crucibleGuardianGroup.position.y = 0;
+        this.crucibleGuardianEncounter.setState('CHASE');
+      }
+    }
+  }
+
+  public handleCrucibleGuardianDefeat(): void {
+    this.crucibleGuardianEncounter.setState('DEAD');
+    this.crucibleGuardianGroup.position.y = -0.4;
+    if (this.crucibleWarningMesh) this.crucibleWarningMesh.visible = false;
+    this.audio.playFinisherSound(true);
+    this.triggerHolyFlash(1.0);
+
+    const reward = this.crucibleGuardianEncounter.claimRewards(this.inventory, this.progression);
+    if (reward.claimed) {
+      this.spawnFloatingText(
+        this.crucibleGuardianGroup.position,
+        `👑 ¡GUARDIÁN DEL CRISOL PURIFICADO! (+${reward.expAwarded} EXP & LAMENTO DE OAKHAVEN)`,
+        '#ffaa44'
+      );
+      this.canonChapterManager.unlockChapter(9);
+      this.setDialogueToast(
+        'El Guardián del Crisol Derrotado',
+        '«El coloso de bronce colapsa despidiendo ascuas. La celda de sal de Elowen ha quedado abierta y la reliquia del Lamento de Oakhaven es tuya. Avanza hacia el Gran Crisol para marchar al Gran Puente.»',
+        '/assets/concepts/concept_morwenna.png',
+        '#ffd700'
+      );
+    }
+    if (this.crucibleHpBarContainer) {
+      setTimeout(() => {
+        if (this.crucibleHpBarContainer) this.crucibleHpBarContainer.style.display = 'none';
+      }, 2500);
+    }
+    this.updateHUD();
+  }
+
+  // =========================================================================
+  // ACT III BOSS: CAPITÁN ÁUREO VANE (CAPTAIN VANE UPDATE LOOP)
+  // =========================================================================
+  private updateCaptainVane(delta: number): void {
+    if (this.dungeonAreaManager.currentArea !== 'great_stone_bridge') {
+      if (this.vaneHpBarContainer) this.vaneHpBarContainer.style.display = 'none';
+      return;
+    }
+
+    if (this.captainVaneEncounter.isDefeated) {
+      this.captainVaneGroup.position.y = -0.4;
+      return;
+    }
+
+    if (!this.isGameplayActive()) return;
+
+    const pPos = this.playerGroup.position;
+    const vPos = this.captainVaneGroup.position;
+    const toPlayer = pPos.clone().sub(vPos);
+    toPlayer.y = 0;
+    const distToPlayer = toPlayer.length();
+
+    if (this.vaneHpBarContainer) {
+      this.vaneHpBarContainer.style.display = distToPlayer <= 16 ? 'block' : 'none';
+    }
+
+    // Orient towards player
+    if (distToPlayer > 0.1) {
+      const targetAngle = Math.atan2(toPlayer.x, toPlayer.z);
+      this.captainVaneGroup.rotation.y = THREE.MathUtils.lerp(this.captainVaneGroup.rotation.y, targetAngle, 0.08);
+    }
+
+    if (this.captainVaneEncounter.state === 'GUARDING') {
+      if (pPos.z <= -248) {
+        this.captainVaneEncounter.setState('CHASE');
+        this.audio.playShieldCrush?.();
+        this.audio.playSfx('warning');
+        this.spawnFloatingText(vPos, '🛡️ ¡EL CAPITÁN ÁUREO VANE ALZA SU ESCUDO!', '#ffd700');
+        this.setDialogueToast(
+          'Capitán Áureo Vane',
+          '«¡Por el Rey Alaric y el Cáliz Solar! ¡Nadie cruzará el Gran Puente de Piedra con vida!»',
+          '/assets/icons/icon_oakhaven_cross.png',
+          '#ffd700'
+        );
+      }
+      return;
+    }
+
+    if (this.captainVaneEncounter.state === 'CHASE') {
+      if (this.vaneWarningMesh) this.vaneWarningMesh.visible = false;
+      if (distToPlayer > 2.6) {
+        toPlayer.normalize();
+        vPos.add(toPlayer.multiplyScalar(2.4 * delta));
+        vPos.x = THREE.MathUtils.clamp(vPos.x, -4.0, 4.0);
+        vPos.z = THREE.MathUtils.clamp(vPos.z, -276, -244);
+      } else {
+        const isSlash = !this.captainVaneEncounter.shieldRaised || Math.random() < 0.5;
+        this.captainVaneEncounter.setState(isSlash ? 'GREAT_SLASH' : 'BASH');
+        this.vaneTimer = isSlash ? 0.65 : 0.55;
+        if (this.vaneWarningMesh) this.vaneWarningMesh.visible = true;
+        this.audio.playSfx('warning');
+      }
+    } else if (this.captainVaneEncounter.state === 'BASH' || this.captainVaneEncounter.state === 'GREAT_SLASH') {
+      this.vaneTimer -= delta;
+      if (this.vaneWarningMesh) {
+        this.vaneWarningMesh.rotation.y += delta * 8;
+        this.vaneWarningMesh.visible = Math.floor(this.clock.elapsedTime * 20) % 2 === 0;
+      }
+
+      if (this.vaneTimer <= 0) {
+        if (this.vaneWarningMesh) this.vaneWarningMesh.visible = false;
+        const isSlash = this.captainVaneEncounter.state === 'GREAT_SLASH';
+        const attackRes = this.captainVaneEncounter.evaluateAttack(distToPlayer, this.playerStats.isDodging, isSlash);
+        if (attackRes.hit) {
+          const parryWindow = 280 + this.inventory.getParryBonusMs();
+          const isParry = this.playerStats.isGuarding && (performance.now() - this.lastGuardTime) <= parryWindow;
+          if (isParry) {
+            this.audio.playSfx('parry');
+            this.audio.playSfx('shield_break');
+            this.triggerHolyFlash(0.85);
+            this.captainVaneEncounter.breakShield();
+            if (this.vaneShieldMesh) this.vaneShieldMesh.rotation.x = 1.1;
+            this.vaneTimer = 2.0 * this.getStaggerMultiplier();
+            this.spawnFloatingText(pPos, '⚡ ¡PARRY PERFECTO! ¡ESCUDO QUEBRADO!', '#66ccff');
+            this.spawnFloatingText(vPos, '⚡ ¡ATURDIDO! [E] ¡REMATAR!', '#ffd700');
+            this.updateHUD();
+            return;
+          } else if (this.playerStats.isGuarding) {
+            const blockedDmg = Math.round(attackRes.damage * 0.4);
+            this.playerStats.health = Math.max(0, this.playerStats.health - blockedDmg);
+            this.playerStats.posture = Math.max(0, this.playerStats.posture - 25);
+            this.audio.playShieldCrush();
+            this.spawnFloatingText(pPos, `-${blockedDmg} (¡BLOQUEO!)`, '#ffd700');
+          } else {
+            const dmg = this.calculateIncomingDamage(attackRes.damage, 7);
+            this.playerStats.health = Math.max(0, this.playerStats.health - dmg);
+            this.triggerDamageVignette(0.65);
+            this.audio.playCombatHit(true);
+            this.spawnFloatingText(pPos, `-${dmg} (${isSlash ? 'TAJO DE FALSO VEREDICTO' : 'GOLPE DE ESCUDO ÁUREO'})`, '#ffd700');
+
+            if (this.playerStats.health <= 0) {
+              this.handlePlayerDefeatAndRespawn();
+              return;
+            }
+          }
+        } else if (this.playerStats.isDodging) {
+          this.audio.playSfx('dodge');
+          this.spawnFloatingText(pPos, '⚡ ¡ESQUIVADO PERFECTO!', '#00e5ff');
+        }
+
+        this.captainVaneEncounter.setState('CHASE');
+        this.updateHUD();
+      }
+    } else if (this.captainVaneEncounter.state === 'STUNNED') {
+      this.vaneTimer -= delta;
+      this.captainVaneGroup.position.y = -0.15;
+      if (this.vaneTimer <= 0) {
+        this.captainVaneGroup.position.y = 0;
+        this.captainVaneEncounter.setState('CHASE');
+      }
+    }
+  }
+
+  public handleCaptainVaneDefeat(): void {
+    this.captainVaneEncounter.setState('DEAD');
+    this.captainVaneGroup.position.y = -0.4;
+    if (this.vaneWarningMesh) this.vaneWarningMesh.visible = false;
+    this.audio.playFinisherSound(true);
+    this.triggerHolyFlash(1.0);
+
+    const reward = this.captainVaneEncounter.claimRewards(this.inventory, this.progression);
+    if (reward.claimed) {
+      this.spawnFloatingText(
+        this.captainVaneGroup.position,
+        `👑 ¡CAPITÁN ÁUREO VANE DERROTADO! (+${reward.expAwarded} EXP & FALSO VEREDICTO)`,
+        '#ffd700'
+      );
+      this.canonChapterManager.unlockChapter(13);
+      this.setDialogueToast(
+        'Capitán Áureo Vane Derrotado',
+        '«El monumental escudo de torre cae con estruendo sobre las losas del puente. Has desarmado el Falso Veredicto y el acceso hacia Londinium al norte está libre.»',
+        '/assets/icons/icon_oakhaven_cross.png',
+        '#ffd700'
+      );
+    }
+    if (this.vaneHpBarContainer) {
+      setTimeout(() => {
+        if (this.vaneHpBarContainer) this.vaneHpBarContainer.style.display = 'none';
+      }, 2500);
+    }
+    this.updateHUD();
+  }
+
+  // =========================================================================
+  // ACT IV BOSS: REX MALPHAS / ALARIC (THE ASTRAL DESPOT UPDATE LOOP)
+  // =========================================================================
+  private triggerRexMalphasPhase2(): void {
+    this.audio.playBossPhaseChangeSound();
+    this.audio.playAstralDistortion?.();
+    this.triggerScreenShake(0.7);
+    if (this.malphasWarpRingMesh) {
+      this.malphasWarpRingMesh.visible = true;
+    }
+    this.malphasTimer = 0.85;
+    this.spawnFloatingText(this.rexMalphasGroup.position, '🌌 ¡FASE 2: LA LEY DEL DESEO! 🌌', '#cc44ff');
+    this.setDialogueToast(
+      'Rex Malphas (Alaric)',
+      '«¡La realidad misma se dobla ante mi voluntad! ¡Contempla la Ley del Deseo, hijo de las cenizas!»',
+      '/assets/concepts/concept_thomas.png',
+      '#cc44ff'
+    );
+    if (this.malphasHpBarContainer) {
+      this.malphasHpBarContainer.style.borderColor = '#ff33cc';
+      const titleEl = this.malphasHpBarContainer.querySelector('div') as HTMLDivElement | null;
+      if (titleEl) {
+        titleEl.innerText = '🌌 REX MALPHAS — FASE 2: LEY DEL DESEO 🌌';
+        titleEl.style.color = '#ffaaee';
+      }
+    }
+  }
+
+  private updateRexMalphas(delta: number): void {
+    if (this.dungeonAreaManager.currentArea !== 'londinium_citadel') {
+      if (this.malphasHpBarContainer) this.malphasHpBarContainer.style.display = 'none';
+      return;
+    }
+
+    if (this.rexMalphasEncounter.isDefeated) {
+      this.rexMalphasGroup.position.y = -0.4;
+      if (this.malphasWarpRingMesh) this.malphasWarpRingMesh.visible = false;
+      return;
+    }
+
+    if (!this.isGameplayActive()) return;
+
+    const pPos = this.playerGroup.position;
+    const mPos = this.rexMalphasGroup.position;
+    const toPlayer = pPos.clone().sub(mPos);
+    toPlayer.y = 0;
+    const distToPlayer = toPlayer.length();
+
+    if (this.malphasHpBarContainer) {
+      this.malphasHpBarContainer.style.display = distToPlayer <= 18 ? 'block' : 'none';
+    }
+
+    // Orient towards player
+    if (distToPlayer > 0.1) {
+      const targetAngle = Math.atan2(toPlayer.x, toPlayer.z);
+      this.rexMalphasGroup.rotation.y = THREE.MathUtils.lerp(this.rexMalphasGroup.rotation.y, targetAngle, 0.08);
+    }
+
+    // Phase 2 continuous warp halo rotation
+    if (this.rexMalphasEncounter.phase === 2 && this.malphasWarpRingMesh) {
+      this.malphasWarpRingMesh.visible = true;
+      this.malphasWarpRingMesh.rotation.z += delta * 3.5;
+    }
+
+    if (this.rexMalphasEncounter.state === 'ASTRAL_IDLE') {
+      if (pPos.z <= -310) {
+        this.rexMalphasEncounter.setState('CHASE');
+        this.audio.playAstralDistortion?.();
+        this.audio.playSfx('warning');
+        this.spawnFloatingText(mPos, '👑 ¡REX MALPHAS DESCIENDE DEL TRONO!', '#cc44ff');
+        this.setDialogueToast(
+          'Rex Malphas (Alaric)',
+          '«¿Reconoces a tu propio padre, Thomas? Yo fundé el Aquelarre del Sauce... y yo mismo lo sacrifiqué para ceñirme la corona de Londinium.»',
+          '/assets/concepts/concept_thomas.png',
+          '#cc44ff'
+        );
+      }
+      return;
+    }
+
+    if (this.rexMalphasEncounter.state === 'CHASE') {
+      if (this.malphasWarningMesh) this.malphasWarningMesh.visible = false;
+      const speed = this.rexMalphasEncounter.phase === 2 ? 3.4 : 2.5;
+
+      if (distToPlayer > 2.7) {
+        toPlayer.normalize();
+        mPos.add(toPlayer.multiplyScalar(speed * delta));
+        mPos.x = THREE.MathUtils.clamp(mPos.x, -6.5, 6.5);
+        mPos.z = THREE.MathUtils.clamp(mPos.z, -342, -308);
+      } else {
+        const isPhase2 = this.rexMalphasEncounter.phase === 2;
+        this.rexMalphasEncounter.setState(isPhase2 ? 'LEY_DEL_DESEO' : 'SOLAR_COMBO');
+        this.malphasTimer = isPhase2 ? 0.55 : 0.65;
+        if (this.malphasWarningMesh) this.malphasWarningMesh.visible = true;
+        this.audio.playSfx('warning');
+      }
+    } else if (this.rexMalphasEncounter.state === 'SOLAR_COMBO' || this.rexMalphasEncounter.state === 'LEY_DEL_DESEO') {
+      this.malphasTimer -= delta;
+      if (this.malphasWarningMesh) {
+        this.malphasWarningMesh.rotation.y += delta * 8;
+        this.malphasWarningMesh.visible = Math.floor(this.clock.elapsedTime * 20) % 2 === 0;
+      }
+
+      if (this.malphasTimer <= 0) {
+        if (this.malphasWarningMesh) this.malphasWarningMesh.visible = false;
+        const isTimeWarp = this.rexMalphasEncounter.state === 'LEY_DEL_DESEO';
+        const attackRes = this.rexMalphasEncounter.evaluateAttack(distToPlayer, this.playerStats.isDodging, isTimeWarp);
+
+        if (attackRes.hit) {
+          const parryWindow = 280 + this.inventory.getParryBonusMs();
+          const isParry = this.playerStats.isGuarding && (performance.now() - this.lastGuardTime) <= parryWindow;
+          if (isParry) {
+            this.audio.playSfx('parry');
+            this.triggerHolyFlash(0.85);
+            this.rexMalphasEncounter.setState('STUNNED');
+            this.malphasTimer = 2.0 * this.getStaggerMultiplier();
+            this.spawnFloatingText(pPos, '⚡ ¡PARRY ASTRAL PERFECTO!', '#66ccff');
+            this.spawnFloatingText(mPos, '⚡ ¡ATURDIDO! [E] ¡REMATAR!', '#ffd700');
+            this.updateHUD();
+            return;
+          } else if (this.playerStats.isGuarding) {
+            const blockedDmg = Math.round(attackRes.damage * 0.45);
+            this.playerStats.health = Math.max(0, this.playerStats.health - blockedDmg);
+            this.playerStats.posture = Math.max(0, this.playerStats.posture - 30);
+            this.audio.playShieldCrush();
+            this.spawnFloatingText(pPos, `-${blockedDmg} (¡BLOQUEO ASTRAL!)`, '#ffd700');
+          } else {
+            const dmg = this.calculateIncomingDamage(attackRes.damage, 8);
+            this.playerStats.health = Math.max(0, this.playerStats.health - dmg);
+            this.triggerDamageVignette(0.7);
+            this.audio.playCombatHit(true);
+            this.spawnFloatingText(pPos, `-${dmg} (${isTimeWarp ? 'LEY DEL DESEO' : 'MANDOBLE ÁUREO'})`, '#cc44ff');
+
+            if (this.playerStats.health <= 0) {
+              this.handlePlayerDefeatAndRespawn();
+              return;
+            }
+          }
+        } else if (this.playerStats.isDodging) {
+          this.audio.playSfx('dodge');
+          this.spawnFloatingText(pPos, '⚡ ¡ESQUIVADO PERFECTO!', '#00e5ff');
+        }
+
+        this.rexMalphasEncounter.setState('CHASE');
+        this.updateHUD();
+      }
+    } else if (this.rexMalphasEncounter.state === 'STUNNED') {
+      this.malphasTimer -= delta;
+      this.rexMalphasGroup.position.y = -0.15;
+      if (this.malphasTimer <= 0) {
+        this.rexMalphasGroup.position.y = 0;
+        this.rexMalphasEncounter.setState('CHASE');
+      }
+    }
+  }
+
+  public handleRexMalphasDefeat(): void {
+    this.rexMalphasEncounter.setState('DEAD');
+    this.rexMalphasGroup.position.y = -0.4;
+    if (this.malphasWarningMesh) this.malphasWarningMesh.visible = false;
+    if (this.malphasWarpRingMesh) this.malphasWarpRingMesh.visible = false;
+    this.audio.playFinisherSound(true);
+    this.triggerHolyFlash(1.0);
+
+    const reward = this.rexMalphasEncounter.claimRewards(this.inventory, this.progression);
+    if (reward.claimed) {
+      this.spawnFloatingText(
+        this.rexMalphasGroup.position,
+        `👑 ¡REX MALPHAS DERROCADO! (+${reward.expAwarded} EXP & ESPEJISMO DE ORO Y HUMO)`,
+        '#cc44ff'
+      );
+      this.canonChapterManager.unlockChapter(17);
+      this.setDialogueToast(
+        'Rex Malphas Derrocado',
+        '«Alaric cae sobre la escalinata del trono. La corona partida rueda por el mármol. Acércate al Trono Astral [E] para descender a la Catedral Invertida.»',
+        '/assets/concepts/concept_thomas.png',
+        '#cc44ff'
+      );
+    }
+    if (this.malphasHpBarContainer) {
+      setTimeout(() => {
+        if (this.malphasHpBarContainer) this.malphasHpBarContainer.style.display = 'none';
+      }, 2500);
+    }
+    this.updateHUD();
+  }
+
+  // =========================================================================
+  // ACT V FINAL TITAN: ASTAROTH — EL SOL DEL ABISMO (TITAN UPDATE LOOP)
+  // =========================================================================
+  private updateAstarothTitan(delta: number): void {
+    if (this.dungeonAreaManager.currentArea !== 'inverted_cathedral') {
+      if (this.astarothHpBarContainer) this.astarothHpBarContainer.style.display = 'none';
+      return;
+    }
+
+    if (this.astarothEncounter.isDefeated) {
+      if (this.astarothCoreLight) this.astarothCoreLight.intensity = Math.max(0, this.astarothCoreLight.intensity - delta * 2);
+      return;
+    }
+
+    if (!this.isGameplayActive()) return;
+
+    const pPos = this.playerGroup.position;
+    const aPos = this.astarothGroup.position;
+    const toPlayer = pPos.clone().sub(aPos);
+    toPlayer.y = 0;
+    const distToPlayer = toPlayer.length();
+
+    if (this.astarothHpBarContainer) {
+      this.astarothHpBarContainer.style.display = distToPlayer <= 25 ? 'block' : 'none';
+    }
+
+    // Floating Cosmic Bobbing
+    this.astarothGroup.position.y = Math.sin(this.clock.elapsedTime * 2.2) * 0.25;
+
+    if (this.astarothEncounter.state === 'COSMIC_DAWN') {
+      if (pPos.z <= -382) {
+        this.astarothEncounter.setState('CHASE');
+        this.audio.playAstralDistortion?.();
+        this.audio.playSfx('warning');
+        this.spawnFloatingText(aPos, '🌌 ¡ASTAROTH: EL SOL DEL ABISMO HA DESPERTADO!', '#ff2288');
+        this.setDialogueToast(
+          'Astaroth: Padre de las Cenizas',
+          '«Soy el Padre de las Cenizas, la noche eterna antes del primer alba. Vuestra carne arderá en el Sol del Abismo.»',
+          '/assets/icons/icon_crypt_key.png',
+          '#ff2288'
+        );
+      }
+      return;
+    }
+
+    if (this.astarothEncounter.state === 'CHASE') {
+      if (this.astarothWarningMesh) this.astarothWarningMesh.visible = false;
+
+      if (distToPlayer > 3.8) {
+        toPlayer.normalize();
+        aPos.add(toPlayer.multiplyScalar(2.0 * delta));
+        aPos.x = THREE.MathUtils.clamp(aPos.x, -7.5, 7.5);
+        aPos.z = THREE.MathUtils.clamp(aPos.z, -412, -372);
+      } else {
+        const roll = Math.random();
+        this.astarothEncounter.setState(roll < 0.5 ? 'METEOR_STORM' : 'BLACK_SUN_BURST');
+        this.astarothTimer = 0.75;
+        if (this.astarothWarningMesh) this.astarothWarningMesh.visible = true;
+        this.audio.playSfx('warning');
+      }
+    } else if (this.astarothEncounter.state === 'METEOR_STORM' || this.astarothEncounter.state === 'BLACK_SUN_BURST') {
+      this.astarothTimer -= delta;
+      if (this.astarothWarningMesh) {
+        this.astarothWarningMesh.rotation.y += delta * 6;
+        this.astarothWarningMesh.visible = Math.floor(this.clock.elapsedTime * 20) % 2 === 0;
+      }
+
+      if (this.astarothTimer <= 0) {
+        if (this.astarothWarningMesh) this.astarothWarningMesh.visible = false;
+        const isBlackSun = this.astarothEncounter.state === 'BLACK_SUN_BURST';
+        const attackRes = this.astarothEncounter.evaluateAttack(distToPlayer, this.playerStats.isDodging, isBlackSun);
+
+        if (attackRes.hit) {
+          const parryWindow = 280 + this.inventory.getParryBonusMs();
+          const isParry = this.playerStats.isGuarding && (performance.now() - this.lastGuardTime) <= parryWindow;
+          if (isParry) {
+            this.audio.playSfx('parry');
+            this.triggerHolyFlash(1.0);
+            this.astarothEncounter.setState('STUNNED');
+            this.astarothTimer = 2.0 * this.getStaggerMultiplier();
+            this.spawnFloatingText(pPos, '⚡ ¡PARRY CÓSMICO PERFECTO!', '#88ffff');
+            this.spawnFloatingText(aPos, '⚡ ¡SOL DEL ABISMO QUEBRADO! [E] ¡REMATAR!', '#ffd700');
+            this.updateHUD();
+            return;
+          } else if (this.playerStats.isGuarding) {
+            const blockedDmg = Math.round(attackRes.damage * 0.5);
+            this.playerStats.health = Math.max(0, this.playerStats.health - blockedDmg);
+            this.playerStats.posture = Math.max(0, this.playerStats.posture - 35);
+            this.audio.playShieldCrush();
+            this.spawnFloatingText(pPos, `-${blockedDmg} (¡BLOQUEO CÓSMICO!)`, '#ffd700');
+          } else {
+            const dmg = this.calculateIncomingDamage(attackRes.damage, 10);
+            this.playerStats.health = Math.max(0, this.playerStats.health - dmg);
+            this.triggerDamageVignette(0.75);
+            this.audio.playCombatHit(true);
+            this.spawnFloatingText(pPos, `-${dmg} (${isBlackSun ? 'COLAPSO DEL SOL NEGRO' : 'TORMENTA DE METEOROS'})`, '#ff2288');
+
+            if (this.playerStats.health <= 0) {
+              this.handlePlayerDefeatAndRespawn();
+              return;
+            }
+          }
+        } else if (this.playerStats.isDodging) {
+          this.audio.playSfx('dodge');
+          this.spawnFloatingText(pPos, '⚡ ¡ESQUIVADO PERFECTO!', '#00e5ff');
+        }
+
+        this.astarothEncounter.setState('CHASE');
+        this.updateHUD();
+      }
+    } else if (this.astarothEncounter.state === 'STUNNED') {
+      this.astarothTimer -= delta;
+      if (this.astarothTimer <= 0) {
+        this.astarothEncounter.setState('CHASE');
+      }
+    }
+  }
+
+  public handleAstarothDefeat(): void {
+    this.astarothEncounter.setState('DEAD');
+    if (this.astarothWarningMesh) this.astarothWarningMesh.visible = false;
+    this.audio.playCosmicChime?.();
+    this.triggerHolyFlash(1.8);
+
+    const reward = this.astarothEncounter.claimRewards(this.inventory, this.progression);
+    if (reward.claimed) {
+      this.hasForgedAlbaGris = true;
+      this.applyAlbaGrisSwordVisual();
+      this.spawnFloatingText(
+        this.astarothGroup.position,
+        `👑 ¡ASTAROTH HA SIDO DESTRUIDO! (+${reward.expAwarded} EXP & EL PRIMER AMANECER)`,
+        '#ffd700'
+      );
+      this.canonChapterManager.unlockChapter(20);
+
+      this.showDialogueModal(
+        '👑 ¡EL PRIMER AMANECER DE ALBION! — CANON COMPLETO 👑',
+        '«El Sol del Abismo se quiebra en un cataclismo de luz celestial. La gravedad invertida se disuelve, regresando la tierra a su orden primordial. Los primeros rayos de un sol cálido y dorado bañan el horizonte de Albion después de dieciocho años de sombras. Elowen, Khaterine, Shalem y Thomas contemplan el nuevo mundo libre de la inquisición. ¡HAS COMPLETADO LOS 20 CAPÍTULOS DEL CANON SAGRADO!»',
+        '✦ RECOMPENSA FINAL: EL PRIMER AMANECER DE ALBION (VICTORIA TOTAL) ✦'
+      );
+    }
+    if (this.astarothHpBarContainer) {
+      setTimeout(() => {
+        if (this.astarothHpBarContainer) this.astarothHpBarContainer.style.display = 'none';
+      }, 2500);
+    }
+    this.updateHUD();
+  }
+
+  // =========================================================================
   // HTML / HUD OVERLAY FOR 3D EXPERIENCE
   // =========================================================================
   private createUIOverlay(): void {
@@ -3094,6 +4583,9 @@ export class Oakhaven3DExperience {
             <button id="btn-toggle-skills" style="background: #28183c; color: #ffd700; border: 1px solid #b8860b; padding: 3px 7px; border-radius: 4px; font-family: monospace; font-size: 7.5px; cursor: pointer; font-weight: bold;">
               🌟 [H] HABILIDADES
             </button>
+            <button id="btn-toggle-compendium" style="background: #2b1d3d; color: #ffd700; border: 1px solid #d4af37; padding: 3px 7px; border-radius: 4px; font-family: monospace; font-size: 7.5px; cursor: pointer; font-weight: bold;">
+              📜 [N] COMPENDIO
+            </button>
             <button id="btn-save-sanctuary" style="background: #1c2538; color: #99ddff; border: 1px solid #3b6b99; padding: 3px 7px; border-radius: 4px; font-family: monospace; font-size: 7.5px; cursor: pointer; font-weight: bold;">
               💾 [G] SANTUARIO
             </button>
@@ -3118,13 +4610,19 @@ export class Oakhaven3DExperience {
           <button id="btn-toggle-cam" style="background: #141f2a; color: #99ddff; border: 1px solid #336699; padding: 3px 8px; border-radius: 4px; font-family: monospace; font-size: 7.5px; cursor: pointer;">
             🎥 [C] CÁMARA: OBLICUA 3/4
           </button>
-          <!-- Crypts Inspection Shortcuts -->
+          <!-- Fast Travel Act Inspection Shortcuts -->
           <div style="display: flex; gap: 3px; margin-top: 2px;">
             <button id="btn-dbg-portal" style="background: #1a162b; color: #a3ffc7; border: 1px solid #2ecc71; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer;">[1] PORTAL</button>
             <button id="btn-dbg-criptas" style="background: #1a162b; color: #a3ffc7; border: 1px solid #2ecc71; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer;">[2] CRIPTAS</button>
             <button id="btn-dbg-sarcofago" style="background: #1a162b; color: #a3ffc7; border: 1px solid #2ecc71; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer;">[3] BOTÍN</button>
             <button id="btn-dbg-inquisidor" style="background: #1a162b; color: #a3ffc7; border: 1px solid #2ecc71; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer;">[4] JEFE</button>
             <button id="btn-dbg-derrota" style="background: #1a162b; color: #a3ffc7; border: 1px solid #2ecc71; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer;">[5] VICTORIA</button>
+          </div>
+          <div style="display: flex; gap: 3px; margin-top: 2px;">
+            <button id="btn-dbg-campanario" style="background: #2b1d0c; color: #ffaa55; border: 1px solid #e67e22; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer;">[9] ACT II</button>
+            <button id="btn-dbg-puente" style="background: #2b260c; color: #ffd755; border: 1px solid #d4af37; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer;">[0] ACT III</button>
+            <button id="btn-dbg-londinium" style="background: #1d0c2b; color: #d488ff; border: 1px solid #9b59b6; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer;">[P] ACT IV</button>
+            <button id="btn-dbg-catedral" style="background: #2b0c1d; color: #ff88b8; border: 1px solid #e84393; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer;">[O] ACT V</button>
           </div>
         </div>
       </div>
@@ -3196,6 +4694,46 @@ export class Oakhaven3DExperience {
         </div>
         <div style="width: 100%; height: 6px; background: #231233; border: 1px solid #7722aa; border-radius: 2px; overflow: hidden;">
           <div id="p3d-root-prowler-hp-fill" style="width: 100%; height: 100%; background: #bb44ff; transition: width 0.15s ease;"></div>
+        </div>
+      </div>
+
+      <!-- Boss Act II: Guardián del Crisol 3D Target HUD -->
+      <div id="p3d-crucible-guardian-hud" style="position: absolute; top: 122px; left: 50%; transform: translateX(-50%); background: rgba(28, 14, 8, 0.95); border: 1.2px solid #ff7722; border-radius: 4px; padding: 4px 12px; width: 235px; text-align: center; box-shadow: 0 4px 20px rgba(255, 119, 34, 0.45); display: none;">
+        <div style="font-size: 7.5px; font-weight: bold; color: #ffd2aa; margin-bottom: 2px; letter-spacing: 0.5px;">
+          🔨 EL GUARDIÁN DEL CRISOL DE BRONCE 🔨
+        </div>
+        <div style="width: 100%; height: 6px; background: #331508; border: 1px solid #a04000; border-radius: 2px; overflow: hidden;">
+          <div id="p3d-crucible-guardian-hp-fill" style="width: 100%; height: 100%; background: #ff7722; transition: width 0.15s ease;"></div>
+        </div>
+      </div>
+
+      <!-- Boss Act III: Capitán Áureo Vane 3D Target HUD -->
+      <div id="p3d-captain-vane-hud" style="position: absolute; top: 122px; left: 50%; transform: translateX(-50%); background: rgba(30, 24, 8, 0.95); border: 1.2px solid #ffd700; border-radius: 4px; padding: 4px 12px; width: 235px; text-align: center; box-shadow: 0 4px 20px rgba(255, 215, 0, 0.45); display: none;">
+        <div style="font-size: 7.5px; font-weight: bold; color: #fff3aa; margin-bottom: 2px; letter-spacing: 0.5px;">
+          🛡️ CAPITÁN ÁUREO VANE — ESCUDO DE TORRE 🛡️
+        </div>
+        <div style="width: 100%; height: 6px; background: #382c0a; border: 1px solid #b8860b; border-radius: 2px; overflow: hidden;">
+          <div id="p3d-captain-vane-hp-fill" style="width: 100%; height: 100%; background: #ffd700; transition: width 0.15s ease;"></div>
+        </div>
+      </div>
+
+      <!-- Boss Act IV: Rex Malphas 3D Target HUD -->
+      <div id="p3d-rex-malphas-hud" style="position: absolute; top: 122px; left: 50%; transform: translateX(-50%); background: rgba(28, 8, 28, 0.95); border: 1.2px solid #cc44ff; border-radius: 4px; padding: 4px 12px; width: 235px; text-align: center; box-shadow: 0 4px 20px rgba(204, 68, 255, 0.45); display: none;">
+        <div style="font-size: 7.5px; font-weight: bold; color: #eeddff; margin-bottom: 2px; letter-spacing: 0.5px;">
+          👑 REX MALPHAS — EL DESPOTA ASTRAL (ALARIC) 👑
+        </div>
+        <div style="width: 100%; height: 6px; background: #260a2b; border: 1px solid #7c1d8c; border-radius: 2px; overflow: hidden;">
+          <div id="p3d-rex-malphas-hp-fill" style="width: 100%; height: 100%; background: #cc44ff; transition: width 0.15s ease;"></div>
+        </div>
+      </div>
+
+      <!-- Boss Act V: Astaroth Titan 3D Target HUD -->
+      <div id="p3d-astaroth-hud" style="position: absolute; top: 122px; left: 50%; transform: translateX(-50%); background: rgba(16, 5, 26, 0.98); border: 1.5px solid #ff2288; border-radius: 4px; padding: 4px 14px; width: 250px; text-align: center; box-shadow: 0 4px 25px rgba(255, 34, 136, 0.55); display: none;">
+        <div style="font-size: 7.5px; font-weight: bold; color: #ffaacc; margin-bottom: 2px; letter-spacing: 0.8px;">
+          🌌 ASTAROTH: EL PADRE DE LAS CENIZAS — SOL DEL ABISMO 🌌
+        </div>
+        <div style="width: 100%; height: 7px; background: #2b0c1e; border: 1px solid #8c1d55; border-radius: 2px; overflow: hidden;">
+          <div id="p3d-astaroth-hp-fill" style="width: 100%; height: 100%; background: #ff2288; transition: width 0.15s ease;"></div>
         </div>
       </div>
 
@@ -3279,6 +4817,33 @@ export class Oakhaven3DExperience {
         </div>
       </div>
 
+      <!-- Canonical 20-Chapter Compendium Modal -->
+      <div id="p3d-compendium-modal" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(12, 7, 22, 0.98); border: 2px solid #ffd700; border-radius: 6px; padding: 14px 18px; max-width: 680px; width: 94%; box-shadow: 0 14px 55px rgba(0,0,0,0.98); display: none; z-index: 130; pointer-events: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1.5px solid #d4af37; padding-bottom: 6px; margin-bottom: 8px;">
+          <div>
+            <div style="font-size: 10.5px; font-weight: bold; color: #ffd700; letter-spacing: 0.8px;">
+              📜 COMPENDIO CANÓNICO DE ALBION — 20 CAPÍTULOS 📜
+            </div>
+            <div id="p3d-compendium-progress" style="font-family: monospace; font-size: 7.5px; color: #a3ffc7; margin-top: 2px;">
+              Progreso Canónico: 1 / 20 Capítulos (5%)
+            </div>
+          </div>
+          <button id="p3d-compendium-close" style="background: #2a1440; color: #ffaaaa; border: 1px solid #7a2222; border-radius: 3px; padding: 2px 8px; font-size: 8px; cursor: pointer; font-weight: bold;">[X] CERRAR</button>
+        </div>
+        <!-- Act Tabs -->
+        <div id="p3d-compendium-tabs" style="display: flex; gap: 4px; margin-bottom: 8px; overflow-x: auto; padding-bottom: 4px;">
+          <button class="p3d-act-tab" data-act="1" style="background: #3b2812; color: #ffd7aa; border: 1px solid #d49a37; padding: 2.5px 6px; border-radius: 3px; font-size: 7px; cursor: pointer;">ACTO I: OAKHAVEN</button>
+          <button class="p3d-act-tab" data-act="2" style="background: #1a162b; color: #dcd0ea; border: 1px solid #5a3d78; padding: 2.5px 6px; border-radius: 3px; font-size: 7px; cursor: pointer;">ACTO II: CAMPANARIO</button>
+          <button class="p3d-act-tab" data-act="3" style="background: #1a162b; color: #dcd0ea; border: 1px solid #5a3d78; padding: 2.5px 6px; border-radius: 3px; font-size: 7px; cursor: pointer;">ACTO III: GRAN PUENTE</button>
+          <button class="p3d-act-tab" data-act="4" style="background: #1a162b; color: #dcd0ea; border: 1px solid #5a3d78; padding: 2.5px 6px; border-radius: 3px; font-size: 7px; cursor: pointer;">ACTO IV: LONDINIUM</button>
+          <button class="p3d-act-tab" data-act="5" style="background: #1a162b; color: #dcd0ea; border: 1px solid #5a3d78; padding: 2.5px 6px; border-radius: 3px; font-size: 7px; cursor: pointer;">ACTO V: CATEDRAL</button>
+        </div>
+        <!-- Chapter Cards List -->
+        <div id="p3d-compendium-list" style="display: flex; flex-direction: column; gap: 7px; max-height: 250px; overflow-y: auto; padding-right: 4px;">
+          <!-- Dynamically filled by renderCompendiumModal() -->
+        </div>
+      </div>
+
       <!-- Dialogue Toast (Bottom Center) -->
       <div id="p3d-dialogue-toast-container" style="position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 9px; background: rgba(14, 9, 23, 0.96); border: 1.2px solid #d4af37; border-radius: 4px; padding: 4px 12px; max-width: 560px; width: 85%; box-shadow: 0 6px 25px rgba(0,0,0,0.9);">
         <img id="p3d-dialogue-portrait" src="/assets/concepts/concept_shalem.png" alt="Retrato Hablante" style="width: 32px; height: 32px; border: 1.2px solid #d4af37; border-radius: 4px; object-fit: cover; object-position: top center; flex-shrink: 0;" />
@@ -3299,7 +4864,7 @@ export class Oakhaven3DExperience {
 
       <!-- Bottom Controls Bar -->
       <div style="position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); background: rgba(8, 4, 14, 0.95); border: 1px solid #3d2852; border-radius: 3px; padding: 2px 10px; font-family: monospace; font-size: 7px; color: #c5b4db; white-space: nowrap;">
-        WASD: Moverse 3D | TAB: Héroe | I: Inventario | B: Botica/Alquimia | H: Habilidades | Q: Curar | G: Guardar Santuario | J/K: Ataque | L: Guardia | Espacio: Esquivar | T: Lanzar | U: Eco Aquelarre | E: Hablar/Recoger | M: Audio | C: Cámara
+        WASD: Moverse 3D | TAB: Héroe | N: Compendio (20 Caps) | I: Inventario | B: Botica | H: Habilidades | Q: Curar | G: Guardar | J/K: Ataque | L: Guardia | Espacio: Esquivar | T: Lanzar | U: Eco Aquelarre | E: Interactuar | M: Audio | C: Cámara
       </div>
     `;
 
@@ -3397,6 +4962,35 @@ export class Oakhaven3DExperience {
       });
     }
 
+    // Act Fast Travel Shortcuts
+    const btnDbgCampanario = this.uiOverlay.querySelector('#btn-dbg-campanario') as HTMLButtonElement | null;
+    if (btnDbgCampanario) {
+      btnDbgCampanario.addEventListener('click', () => {
+        this.transitionToArea('belltower_summit');
+      });
+    }
+
+    const btnDbgPuente = this.uiOverlay.querySelector('#btn-dbg-puente') as HTMLButtonElement | null;
+    if (btnDbgPuente) {
+      btnDbgPuente.addEventListener('click', () => {
+        this.transitionToArea('great_stone_bridge');
+      });
+    }
+
+    const btnDbgLondinium = this.uiOverlay.querySelector('#btn-dbg-londinium') as HTMLButtonElement | null;
+    if (btnDbgLondinium) {
+      btnDbgLondinium.addEventListener('click', () => {
+        this.transitionToArea('londinium_citadel');
+      });
+    }
+
+    const btnDbgCatedral = this.uiOverlay.querySelector('#btn-dbg-catedral') as HTMLButtonElement | null;
+    if (btnDbgCatedral) {
+      btnDbgCatedral.addEventListener('click', () => {
+        this.transitionToArea('inverted_cathedral');
+      });
+    }
+
     this.enemyHpBarContainer = this.uiOverlay.querySelector('#p3d-enemy-hud') as HTMLDivElement;
     this.enemyHpBarFill = this.uiOverlay.querySelector('#p3d-enemy-hp-fill') as HTMLDivElement;
 
@@ -3413,6 +5007,16 @@ export class Oakhaven3DExperience {
     this.inquisitorHpBarFill = this.uiOverlay.querySelector('#p3d-inquisitor-hp-fill') as HTMLDivElement;
     this.rootProwlerHpBarContainer = this.uiOverlay.querySelector('#p3d-root-prowler-hud') as HTMLDivElement;
     this.rootProwlerHpBarFill = this.uiOverlay.querySelector('#p3d-root-prowler-hp-fill') as HTMLDivElement;
+
+    this.crucibleHpBarContainer = this.uiOverlay.querySelector('#p3d-crucible-guardian-hud') as HTMLDivElement;
+    this.crucibleHpBarFill = this.uiOverlay.querySelector('#p3d-crucible-guardian-hp-fill') as HTMLDivElement;
+    this.vaneHpBarContainer = this.uiOverlay.querySelector('#p3d-captain-vane-hud') as HTMLDivElement;
+    this.vaneHpBarFill = this.uiOverlay.querySelector('#p3d-captain-vane-hp-fill') as HTMLDivElement;
+    this.malphasHpBarContainer = this.uiOverlay.querySelector('#p3d-rex-malphas-hud') as HTMLDivElement;
+    this.malphasHpBarFill = this.uiOverlay.querySelector('#p3d-rex-malphas-hp-fill') as HTMLDivElement;
+    this.astarothHpBarContainer = this.uiOverlay.querySelector('#p3d-astaroth-hud') as HTMLDivElement;
+    this.astarothHpBarFill = this.uiOverlay.querySelector('#p3d-astaroth-hp-fill') as HTMLDivElement;
+
     this.zoneTransitionOverlay = this.uiOverlay.querySelector('#p3d-zone-transition') as HTMLDivElement;
     this.zoneTitleEl = this.uiOverlay.querySelector('#p3d-zone-title') as HTMLDivElement;
     this.zoneSubtitleEl = this.uiOverlay.querySelector('#p3d-zone-subtitle') as HTMLDivElement;
@@ -3444,6 +5048,35 @@ export class Oakhaven3DExperience {
     const btnAlchemyClose = this.uiOverlay.querySelector('#p3d-alchemy-close') as HTMLButtonElement;
     if (btnAlchemyClose) {
       btnAlchemyClose.addEventListener('click', () => this.toggleAlchemyModal());
+    }
+
+    this.compendiumModalEl = this.uiOverlay.querySelector('#p3d-compendium-modal') as HTMLDivElement;
+    const btnCompendium = this.uiOverlay.querySelector('#btn-toggle-compendium') as HTMLButtonElement;
+    if (btnCompendium) {
+      btnCompendium.addEventListener('click', () => this.toggleCompendiumModal());
+    }
+    const btnCompClose = this.uiOverlay.querySelector('#p3d-compendium-close') as HTMLButtonElement;
+    if (btnCompClose) {
+      btnCompClose.addEventListener('click', () => this.toggleCompendiumModal());
+    }
+
+    // Act tabs in Compendium Modal
+    if (this.compendiumModalEl) {
+      const tabs = this.compendiumModalEl.querySelectorAll('.p3d-act-tab') as NodeListOf<HTMLButtonElement>;
+      tabs.forEach(tab => {
+        tab.addEventListener('click', (e) => {
+          const actNum = parseInt((e.currentTarget as HTMLButtonElement).getAttribute('data-act') || '1', 10);
+          tabs.forEach(t => {
+            t.style.background = '#1a162b';
+            t.style.color = '#dcd0ea';
+            t.style.borderColor = '#5a3d78';
+          });
+          tab.style.background = '#3b2812';
+          tab.style.color = '#ffd7aa';
+          tab.style.borderColor = '#d49a37';
+          this.renderCompendiumModal(actNum);
+        });
+      });
     }
 
     this.morwennaHpBarContainer = this.uiOverlay.querySelector('#p3d-boss-hud') as HTMLDivElement;
@@ -3485,6 +5118,7 @@ export class Oakhaven3DExperience {
   // =========================================================================
   public getInputContext(): InputContext {
     if (this.isPlayerDefeated) return 'defeated';
+    if (this.isCompendiumOpen) return 'compendium';
     if (this.isDialogueOpen) return 'dialogue';
     if (this.isInventoryOpen) return 'inventory';
     if (this.isSkillTreeOpen) return 'skillTree';
@@ -3503,6 +5137,9 @@ export class Oakhaven3DExperience {
     }
     if (this.wardBarrierMesh) {
       this.wardBarrierMesh.visible = false;
+    }
+    if (this.proximityBadgeEl) {
+      this.proximityBadgeEl.style.display = 'none';
     }
     this.isPointerDragging = false;
   }
@@ -3594,6 +5231,14 @@ export class Oakhaven3DExperience {
       return;
     }
 
+    // --- CONTEXT: COMPENDIUM MODAL ---
+    if (context === 'compendium') {
+      if (!e.repeat && (e.key === 'Escape' || key === 'n')) {
+        this.toggleCompendiumModal();
+      }
+      return;
+    }
+
     // --- CONTEXT: DEFEATED ---
     if (context === 'defeated') {
       return;
@@ -3667,6 +5312,26 @@ export class Oakhaven3DExperience {
     }
     if (key === '8' && !e.repeat) {
       this.handleRootProwlerDefeat();
+      return;
+    }
+    if (key === '9' && !e.repeat) {
+      this.transitionToArea('belltower_summit');
+      return;
+    }
+    if (key === '0' && !e.repeat) {
+      this.transitionToArea('great_stone_bridge');
+      return;
+    }
+    if (key === 'p' && !e.repeat) {
+      this.transitionToArea('londinium_citadel');
+      return;
+    }
+    if (key === 'o' && !e.repeat) {
+      this.transitionToArea('inverted_cathedral');
+      return;
+    }
+    if (key === 'n' && !e.repeat) {
+      this.toggleCompendiumModal();
       return;
     }
 
@@ -4161,6 +5826,132 @@ export class Oakhaven3DExperience {
         }
       }
     }
+
+    // Hit Detection against Act II Boss: Crucible Guardian
+    if (this.dungeonAreaManager.currentArea === 'belltower_summit' && !this.crucibleGuardianEncounter.isDefeated) {
+      const distToGuardian = this.playerGroup.position.distanceTo(this.crucibleGuardianGroup.position);
+      if (distToGuardian <= reach + 0.8) {
+        const baseDmg = this.playerStats.isArmed ? (this.hasForgedAlbaGris ? (isHeavy ? 58 : 38) : (isHeavy ? 44 : 28)) : (isHeavy ? 22 : 14);
+        const skillBonus = 1.0 + (this.progression.getDamageBonusPct(this.activeHero) / 100);
+        const dmg = Math.round(baseDmg * this.attackBuffMultiplier * skillBonus);
+        const isVulnerable = this.crucibleGuardianEncounter.state === 'STUNNED';
+
+        const hitRes = this.crucibleGuardianEncounter.takeDamage(dmg, isVulnerable);
+        this.spawnFloatingText(
+          this.crucibleGuardianGroup.position,
+          isVulnerable ? `-${hitRes.actualDamage} (¡CRÍTICO +40%!)` : `-${hitRes.actualDamage}`,
+          isVulnerable || isHeavy ? '#ffd700' : '#ff7722'
+        );
+        this.audio.playCombatHit(isHeavy || isVulnerable);
+
+        if (isHeavy && this.crucibleGuardianEncounter.state !== 'STUNNED') {
+          this.crucibleGuardianEncounter.setState('STUNNED');
+          this.crucibleTimer = 1.3 * this.getStaggerMultiplier();
+          this.spawnFloatingText(this.crucibleGuardianGroup.position, '⚡ ¡ATURDIDO! [E] ¡REMATAR!', '#ffaa44');
+        }
+
+        this.updateHUD();
+        if (hitRes.defeated) {
+          this.handleCrucibleGuardianDefeat();
+        }
+      }
+    }
+
+    // Hit Detection against Act III Boss: Captain Áureo Vane
+    if (this.dungeonAreaManager.currentArea === 'great_stone_bridge' && !this.captainVaneEncounter.isDefeated) {
+      const distToVane = this.playerGroup.position.distanceTo(this.captainVaneGroup.position);
+      if (distToVane <= reach + 0.8) {
+        const baseDmg = this.playerStats.isArmed ? (this.hasForgedAlbaGris ? (isHeavy ? 58 : 38) : (isHeavy ? 44 : 28)) : (isHeavy ? 22 : 14);
+        const skillBonus = 1.0 + (this.progression.getDamageBonusPct(this.activeHero) / 100);
+        const dmg = Math.round(baseDmg * this.attackBuffMultiplier * skillBonus);
+
+        const toVane = this.captainVaneGroup.position.clone().sub(this.playerGroup.position).normalize();
+        const vaneFwd = new THREE.Vector3(0, 0, 1).applyQuaternion(this.captainVaneGroup.quaternion);
+        const isFrontal = toVane.dot(vaneFwd) < -0.2;
+        const bypassShield = isHeavy || this.hasForgedAlbaGris || this.inventory.hasItem('relic_false_verdict');
+
+        if (isHeavy && this.captainVaneEncounter.shieldRaised) {
+          this.captainVaneEncounter.breakShield();
+          this.vaneTimer = 1.6 * this.getStaggerMultiplier();
+          this.audio.playSfx('shield_break');
+          if (this.vaneShieldMesh) this.vaneShieldMesh.rotation.x = 1.1;
+          this.spawnFloatingText(this.captainVaneGroup.position, '💥 ¡ESCUDO DE TORRE QUEBRADO! [E] ¡REMATAR!', '#ffd700');
+        }
+
+        const hitRes = this.captainVaneEncounter.takeDamage(dmg, isFrontal, bypassShield);
+        if (hitRes.blocked) {
+          this.spawnFloatingText(this.captainVaneGroup.position, `-${hitRes.actualDamage} (¡ESCUDO BLOQUEA 80%! USA [K] O FLANQUEA)`, '#ffd700');
+          this.audio.playShieldCrush();
+        } else {
+          this.spawnFloatingText(this.captainVaneGroup.position, `-${hitRes.actualDamage}`, isHeavy ? '#ffd700' : '#ffee88');
+          this.audio.playCombatHit(isHeavy);
+        }
+
+        this.updateHUD();
+        if (hitRes.defeated) {
+          this.handleCaptainVaneDefeat();
+        }
+      }
+    }
+
+    // Hit Detection against Act IV Boss: Rex Malphas (Alaric)
+    if (this.dungeonAreaManager.currentArea === 'londinium_citadel' && !this.rexMalphasEncounter.isDefeated) {
+      const distToMalphas = this.playerGroup.position.distanceTo(this.rexMalphasGroup.position);
+      if (distToMalphas <= reach + 0.8) {
+        const baseDmg = this.playerStats.isArmed ? (this.hasForgedAlbaGris ? (isHeavy ? 60 : 40) : (isHeavy ? 46 : 30)) : (isHeavy ? 24 : 15);
+        const skillBonus = 1.0 + (this.progression.getDamageBonusPct(this.activeHero) / 100);
+        const dmg = Math.round(baseDmg * this.attackBuffMultiplier * skillBonus);
+
+        const hitRes = this.rexMalphasEncounter.takeDamage(dmg);
+        this.spawnFloatingText(this.rexMalphasGroup.position, `-${hitRes.actualDamage}`, isHeavy ? '#ffd700' : '#cc44ff');
+        this.audio.playCombatHit(isHeavy);
+
+        if (isHeavy && !hitRes.transitionedToPhase2 && this.rexMalphasEncounter.state !== 'STUNNED') {
+          this.rexMalphasEncounter.setState('STUNNED');
+          this.malphasTimer = 1.2 * this.getStaggerMultiplier();
+          this.spawnFloatingText(this.rexMalphasGroup.position, '⚡ ¡ATURDIDO! [E] ¡REMATAR!', '#ffaa44');
+        }
+
+        this.updateHUD();
+        if (hitRes.transitionedToPhase2) {
+          this.triggerRexMalphasPhase2();
+        } else if (hitRes.defeated) {
+          this.handleRexMalphasDefeat();
+        }
+      }
+    }
+
+    // Hit Detection against Act V Final Titan: Astaroth (Sol del Abismo)
+    if (this.dungeonAreaManager.currentArea === 'inverted_cathedral' && !this.astarothEncounter.isDefeated) {
+      const distHoriz = new THREE.Vector2(
+        this.playerGroup.position.x - this.astarothGroup.position.x,
+        this.playerGroup.position.z - this.astarothGroup.position.z
+      ).length();
+      if (distHoriz <= reach + 2.2) {
+        const baseDmg = this.playerStats.isArmed ? (this.hasForgedAlbaGris ? (isHeavy ? 60 : 40) : (isHeavy ? 46 : 30)) : (isHeavy ? 24 : 15);
+        const skillBonus = 1.0 + (this.progression.getDamageBonusPct(this.activeHero) / 100);
+        const dmg = Math.round(baseDmg * this.attackBuffMultiplier * skillBonus);
+
+        const hitRes = this.astarothEncounter.takeDamage(dmg, this.hasForgedAlbaGris);
+        this.spawnFloatingText(
+          this.astarothGroup.position,
+          this.hasForgedAlbaGris ? `✨ -${hitRes.actualDamage} (¡CRÍTICO ALBA GRIS x2!)` : `-${hitRes.actualDamage}`,
+          this.hasForgedAlbaGris ? '#88eeff' : '#ff2288'
+        );
+        this.audio.playCombatHit(isHeavy || this.hasForgedAlbaGris);
+
+        if (isHeavy && this.astarothEncounter.state !== 'STUNNED') {
+          this.astarothEncounter.setState('STUNNED');
+          this.astarothTimer = 1.2 * this.getStaggerMultiplier();
+          this.spawnFloatingText(this.astarothGroup.position, '⚡ ¡NÚCLEO EXPUESTO! [E] ¡REMATAR!', '#ffd700');
+        }
+
+        this.updateHUD();
+        if (hitRes.defeated) {
+          this.handleAstarothDefeat();
+        }
+      }
+    }
   }
 
   // =========================================================================
@@ -4522,6 +6313,122 @@ export class Oakhaven3DExperience {
         }
       }
 
+      // 8b. Check Act II Boss: Crucible Guardian collision
+      if (!collided && this.dungeonAreaManager.currentArea === 'belltower_summit' && !this.crucibleGuardianEncounter.isDefeated) {
+        const dGuard = p.mesh.position.distanceTo(this.crucibleGuardianGroup.position.clone().add(new THREE.Vector3(0, 1.3, 0)));
+        if (dGuard <= 1.9) {
+          collided = true;
+          if (p.isThrownFlask) {
+            this.explodeHolyFireFlask(p.mesh.position.clone(), p.damage);
+          } else {
+            const isVulnerable = this.crucibleGuardianEncounter.state === 'STUNNED';
+            const hitRes = this.crucibleGuardianEncounter.takeDamage(p.damage, isVulnerable);
+            const label = p.arrowType === 'silver' ? 'FLECHA DE PLATA' : p.arrowType === 'fire' ? 'FLECHA DE FUEGO' : 'FLECHA ABISAL';
+            this.spawnFloatingText(this.crucibleGuardianGroup.position, `-${hitRes.actualDamage} (${label})`, p.isHeavy ? '#ffd700' : '#ff7722');
+            this.audio.playCombatHit(p.isHeavy);
+            if (p.arrowType === 'fire') {
+              this.activeBurnEffects.push({ targetId: 'crucible_guardian', ticksLeft: 6, dmgPerTick: 5, timer: 0.5 });
+            }
+            if (p.isHeavy || p.arrowType === 'silver') {
+              this.crucibleGuardianEncounter.setState('STUNNED');
+              this.crucibleTimer = 1.4;
+              this.spawnFloatingText(this.crucibleGuardianGroup.position, '⚡ ¡ATURDIDO! [E] ¡REMATAR!', '#ffaa44');
+            }
+            if (hitRes.defeated) this.handleCrucibleGuardianDefeat();
+            this.updateHUD();
+          }
+        }
+      }
+
+      // 8c. Check Act III Boss: Captain Áureo Vane collision
+      if (!collided && this.dungeonAreaManager.currentArea === 'great_stone_bridge' && !this.captainVaneEncounter.isDefeated) {
+        const dVane = p.mesh.position.distanceTo(this.captainVaneGroup.position.clone().add(new THREE.Vector3(0, 1.2, 0)));
+        if (dVane <= 1.9) {
+          collided = true;
+          if (p.isThrownFlask) {
+            this.explodeHolyFireFlask(p.mesh.position.clone(), p.damage);
+          } else {
+            const isSilver = p.arrowType === 'silver';
+            const toVane = this.captainVaneGroup.position.clone().sub(p.mesh.position).normalize();
+            const vaneFwd = new THREE.Vector3(0, 0, 1).applyQuaternion(this.captainVaneGroup.quaternion);
+            const isFrontal = toVane.dot(vaneFwd) < -0.2;
+
+            if (isSilver && this.captainVaneEncounter.shieldRaised) {
+              this.captainVaneEncounter.breakShield();
+              this.vaneTimer = 1.8;
+              this.audio.playSfx('shield_break');
+              if (this.vaneShieldMesh) this.vaneShieldMesh.rotation.x = 1.1;
+              this.spawnFloatingText(this.captainVaneGroup.position, '💥 ¡PLATA QUIEBRA EL ESCUDO DE TORRE!', '#66ccff');
+            }
+
+            const hitRes = this.captainVaneEncounter.takeDamage(p.damage, isFrontal, isSilver || p.isHeavy);
+            if (hitRes.blocked) {
+              this.spawnFloatingText(this.captainVaneGroup.position, `-${hitRes.actualDamage} (¡BLOQUEADO! USA FLECHA DE PLATA)`, '#ffd700');
+              this.audio.playShieldCrush();
+            } else {
+              const label = isSilver ? '¡ANTI-ESCUDO PLATA!' : p.arrowType === 'fire' ? 'FLECHA DE FUEGO' : 'FLECHA ABISAL';
+              this.spawnFloatingText(this.captainVaneGroup.position, `-${hitRes.actualDamage} (${label})`, isSilver ? '#66ccff' : '#ffd700');
+              this.audio.playCombatHit(p.isHeavy || isSilver);
+              if (p.arrowType === 'fire') {
+                this.activeBurnEffects.push({ targetId: 'captain_vane', ticksLeft: 6, dmgPerTick: 5, timer: 0.5 });
+              }
+            }
+            if (hitRes.defeated) this.handleCaptainVaneDefeat();
+            this.updateHUD();
+          }
+        }
+      }
+
+      // 8d. Check Act IV Boss: Rex Malphas collision
+      if (!collided && this.dungeonAreaManager.currentArea === 'londinium_citadel' && !this.rexMalphasEncounter.isDefeated) {
+        const dMalphas = p.mesh.position.distanceTo(this.rexMalphasGroup.position.clone().add(new THREE.Vector3(0, 1.3, 0)));
+        if (dMalphas <= 1.9) {
+          collided = true;
+          if (p.isThrownFlask) {
+            this.explodeHolyFireFlask(p.mesh.position.clone(), p.damage);
+          } else {
+            const hitRes = this.rexMalphasEncounter.takeDamage(p.damage);
+            const label = p.arrowType === 'silver' ? 'FLECHA DE PLATA' : p.arrowType === 'fire' ? 'FLECHA DE FUEGO' : 'FLECHA ABISAL';
+            this.spawnFloatingText(this.rexMalphasGroup.position, `-${hitRes.actualDamage} (${label})`, '#cc44ff');
+            this.audio.playCombatHit(p.isHeavy);
+            if (p.arrowType === 'fire') {
+              this.activeBurnEffects.push({ targetId: 'rex_malphas', ticksLeft: 6, dmgPerTick: 6, timer: 0.5 });
+            }
+            if (hitRes.transitionedToPhase2) {
+              this.triggerRexMalphasPhase2();
+            } else if (hitRes.defeated) {
+              this.handleRexMalphasDefeat();
+            }
+            this.updateHUD();
+          }
+        }
+      }
+
+      // 8e. Check Act V Final Titan: Astaroth collision (horizontal cylinder hitbox under floating Black Sun)
+      if (!collided && this.dungeonAreaManager.currentArea === 'inverted_cathedral' && !this.astarothEncounter.isDefeated) {
+        const dAstarothHoriz = new THREE.Vector2(
+          p.mesh.position.x - this.astarothGroup.position.x,
+          p.mesh.position.z - this.astarothGroup.position.z
+        ).length();
+        if (dAstarothHoriz <= 3.0) {
+          collided = true;
+          if (p.isThrownFlask) {
+            this.explodeHolyFireFlask(p.mesh.position.clone(), p.damage);
+          } else {
+            const empower = this.hasForgedAlbaGris || p.arrowType === 'silver';
+            const hitRes = this.astarothEncounter.takeDamage(p.damage, empower);
+            const label = empower ? '¡CRÍTICO LUZ/PLATA x2!' : p.arrowType === 'fire' ? 'FLECHA DE FUEGO' : 'FLECHA ABISAL';
+            this.spawnFloatingText(this.astarothGroup.position, `-${hitRes.actualDamage} (${label})`, empower ? '#88eeff' : '#ff2288');
+            this.audio.playCombatHit(p.isHeavy || empower);
+            if (p.arrowType === 'fire') {
+              this.activeBurnEffects.push({ targetId: 'astaroth', ticksLeft: 6, dmgPerTick: 8, timer: 0.5 });
+            }
+            if (hitRes.defeated) this.handleAstarothDefeat();
+            this.updateHUD();
+          }
+        }
+      }
+
       // 9. Check Destructibles collision
       if (!collided) {
         for (const prop of this.destructibles) {
@@ -4685,11 +6592,12 @@ export class Oakhaven3DExperience {
     this.playerFistsGroup.visible = true;
     this.audio.playSfx('dodge');
 
-    // Create Dropped Sword in World
+    // Create Dropped Sword in World (clamped to current zone bounds)
     const forward = new THREE.Vector3(0, 0, -1).applyEuler(this.playerGroup.rotation);
     const dropPos = this.playerGroup.position.clone().add(forward.multiplyScalar(4.5));
-    dropPos.x = THREE.MathUtils.clamp(dropPos.x, -5.5, 5.5);
-    dropPos.z = THREE.MathUtils.clamp(dropPos.z, -22, 10);
+    const bounds = this.dungeonAreaManager.getBounds();
+    dropPos.x = THREE.MathUtils.clamp(dropPos.x, bounds.minX + 0.4, bounds.maxX - 0.4);
+    dropPos.z = THREE.MathUtils.clamp(dropPos.z, bounds.minZ + 0.5, bounds.maxZ - 0.5);
     dropPos.y = 0.45;
 
     this.droppedSwordGroup = new THREE.Group();
@@ -4972,6 +6880,39 @@ export class Oakhaven3DExperience {
       }
     }
 
+    // Check Act II - V Canonical Bosses for Holy Fire Flask splash
+    if (this.dungeonAreaManager.currentArea === 'belltower_summit' && !this.crucibleGuardianEncounter.isDefeated && pos.distanceTo(this.crucibleGuardianGroup.position) <= radius + 0.5) {
+      const hitRes = this.crucibleGuardianEncounter.takeDamage(dmg, this.crucibleGuardianEncounter.state === 'STUNNED');
+      this.spawnFloatingText(this.crucibleGuardianGroup.position, `-${hitRes.actualDamage} (FRASCO FATUO)`, '#ff5500');
+      this.activeBurnEffects.push({ targetId: 'crucible_guardian', ticksLeft: 6, dmgPerTick: 5, timer: 0.5 });
+      if (hitRes.defeated) this.handleCrucibleGuardianDefeat();
+    }
+
+    if (this.dungeonAreaManager.currentArea === 'great_stone_bridge' && !this.captainVaneEncounter.isDefeated && pos.distanceTo(this.captainVaneGroup.position) <= radius + 0.5) {
+      const hitRes = this.captainVaneEncounter.takeDamage(dmg, false, true);
+      this.spawnFloatingText(this.captainVaneGroup.position, `-${hitRes.actualDamage} (FRASCO FATUO)`, '#ff5500');
+      this.activeBurnEffects.push({ targetId: 'captain_vane', ticksLeft: 6, dmgPerTick: 5, timer: 0.5 });
+      if (hitRes.defeated) this.handleCaptainVaneDefeat();
+    }
+
+    if (this.dungeonAreaManager.currentArea === 'londinium_citadel' && !this.rexMalphasEncounter.isDefeated && pos.distanceTo(this.rexMalphasGroup.position) <= radius + 0.5) {
+      const hitRes = this.rexMalphasEncounter.takeDamage(dmg);
+      this.spawnFloatingText(this.rexMalphasGroup.position, `-${hitRes.actualDamage} (FRASCO FATUO)`, '#ff5500');
+      this.activeBurnEffects.push({ targetId: 'rex_malphas', ticksLeft: 6, dmgPerTick: 6, timer: 0.5 });
+      if (hitRes.transitionedToPhase2) this.triggerRexMalphasPhase2();
+      else if (hitRes.defeated) this.handleRexMalphasDefeat();
+    }
+
+    if (this.dungeonAreaManager.currentArea === 'inverted_cathedral' && !this.astarothEncounter.isDefeated) {
+      const dHoriz = new THREE.Vector2(pos.x - this.astarothGroup.position.x, pos.z - this.astarothGroup.position.z).length();
+      if (dHoriz <= radius + 1.8) {
+        const hitRes = this.astarothEncounter.takeDamage(dmg, this.hasForgedAlbaGris);
+        this.spawnFloatingText(this.astarothGroup.position, `-${hitRes.actualDamage} (FRASCO FATUO)`, '#ff5500');
+        this.activeBurnEffects.push({ targetId: 'astaroth', ticksLeft: 6, dmgPerTick: 8, timer: 0.5 });
+        if (hitRes.defeated) this.handleAstarothDefeat();
+      }
+    }
+
     // Check Destructibles
     for (const prop of this.destructibles) {
       if (!prop.isDestroyed && pos.distanceTo(prop.position) <= radius + 0.5) {
@@ -4986,6 +6927,7 @@ export class Oakhaven3DExperience {
   // 3D PROXIMITY INTERACTIONS & DIALOGUE SYSTEM
   // =========================================================================
   public handleContextInteraction(): void {
+    if (this.isCompendiumOpen) return;
     if (this.isDialogueOpen) {
       this.closeDialogueModal();
       return;
@@ -5042,6 +6984,192 @@ export class Oakhaven3DExperience {
       case 'sister_altar':
         this.interactWithSisterAltar();
         break;
+      case 'forest_to_belltower':
+        this.transitionToArea('belltower_summit');
+        break;
+      case 'belltower_to_forest':
+        this.transitionToArea('black_willow_forest');
+        break;
+      case 'elowen_cell':
+        this.interactWithElowenCell();
+        break;
+      case 'crucible_furnace':
+        this.interactWithCrucibleFurnace();
+        break;
+      case 'belltower_to_bridge':
+        this.transitionToArea('great_stone_bridge');
+        break;
+      case 'refugees_cart':
+        this.interactWithRefugeesCart();
+        break;
+      case 'vane_gate':
+        this.interactWithVaneGate();
+        break;
+      case 'mirror_gallery':
+        this.interactWithMirrorGallery();
+        break;
+      case 'astral_throne':
+        this.interactWithAstralThrone();
+        break;
+      case 'dawn_grey_altar':
+        this.interactWithDawnGreyAltar();
+        break;
+      case 'black_sun_core':
+        this.interactWithBlackSunCore();
+        break;
+    }
+  }
+
+  public interactWithElowenCell(): void {
+    this.audio.playBellToll?.();
+    if (!this.hasCollectedWillowBird) {
+      this.hasCollectedWillowBird = true;
+      if (this.willowBirdMesh) this.willowBirdMesh.visible = false;
+      this.progression.addExp(50);
+      this.canonChapterManager.unlockChapter(7);
+      this.inventory.addItem({
+        id: 'item_willow_bird',
+        name: 'Pájaro de Madera de Sauce',
+        description: 'Talla de madera de sauce dejada por Elowen con un mensaje en lino desde su celda de sal en el Campanario del Sur.',
+        category: 'relic',
+        icon: '🕊️',
+        quantity: 1,
+        maxQuantity: 1,
+        effectType: 'relic_parry_window',
+        effectValue: 30,
+        isEquipped: false
+      });
+      this.spawnFloatingText(this.playerGroup.position, '🕊️ ¡PÁJARO DE SAUCE RECOGIDO! (+50 EXP)', '#ffd700');
+      this.showDialogueModal(
+        '🔔 CELDA DE SAL DE ELOWEN — CAPÍTULO VII 🔔',
+        '«El suelo de la jaula circular está cubierto de sal gruesa y cristales de azufre que abrasaron los pies descalzos de Elowen. Entre los barrotes de hierro descubres su pájaro tallado en madera de sauce con una tira de lino atada a las alas: "Thomas, buscan extinguir la última gota de luz en el Gran Crisol. No temas a la oscuridad de tu sangre."»',
+        '✦ RECOMPENSA: PÁJARO DE MADERA DE SAUCE & +50 EXP (CAPÍTULO VII DESBLOQUEADO) ✦'
+      );
+      this.updateHUD();
+    } else {
+      this.showDialogueModal(
+        '🔔 CELDA DE SAL DEL CAMPANARIO 🔔',
+        '«La celda de sal yace vacía bajo las vigas quemadas. El mensaje de Elowen sigue vivo en tu memoria.»',
+        '✦ CAPÍTULO VII REGISTRADO EN EL COMPENDIO [N] ✦'
+      );
+    }
+  }
+
+  public interactWithCrucibleFurnace(): void {
+    if (!this.crucibleGuardianEncounter.isDefeated) {
+      this.audio.playSfx('warning');
+      this.showDialogueModal(
+        '🔥 EL GRAN CRISOL DE BRONCE 🔥',
+        '«El horno de fundición ruge con escoria incandescente. El Guardián del Crisol vigila cada paso; derrótalo primero para abrir la marcha hacia el Gran Puente de Piedra.»',
+        '⚠ DERROTA AL GUARDIÁN DEL CRISOL PARA ABRIR EL ACTO III ⚠'
+      );
+      return;
+    }
+    this.showDialogueModal(
+      '🔥 EL GRAN CRISOL PURIFICADO 🔥',
+      '«Las llamas profanas del crisol se extinguen tras la caída del Guardián. El camino desciende desde el Campanario del Sur hacia la calzada fluvial del Gran Puente de Piedra.»',
+      '✦ ACTO III DESBLOQUEADO — AVANZA AL SUR DEL CRISOL O USA EL COMPENDIO [N] ✦'
+    );
+    this.canonChapterManager.unlockChapter(10);
+  }
+
+  public interactWithRefugeesCart(): void {
+    this.audio.playCryptDoor?.();
+    if (!this.hasFreedRefugees) {
+      this.hasFreedRefugees = true;
+      this.progression.addExp(75);
+      this.inventory.addItem(CANONICAL_MATERIALS.ash_purified, 2);
+      this.inventory.addItem(CANONICAL_MATERIALS.water_blessed, 2);
+      this.canonChapterManager.unlockChapter(11);
+      this.spawnFloatingText(this.playerGroup.position, '🗝️ ¡MARTÍN Y TOBÍAS LIBERADOS! (+75 EXP)', '#ffd700');
+      this.showDialogueModal(
+        '🗝️ CONVOY DE PRISIONEROS — MARTÍN Y TOBÍAS (CAPÍTULO XI) 🗝️',
+        '«Rompes los cerrojos de hierro de la carreta enrejada. Martín el armero y Tobías el leñador emergen agradecidos de entre las cadenas: "¡Bendito seas, Thomas! El Capitán Áureo Vane lleva el edicto del rey Alaric y un escudo de torre impenetrable por el frente. Usa ataques pesados [K] o flechas de plata para quebrar su guardia!"»',
+        '✦ RECOMPENSA: +75 EXP • +2 AGUA BENDITA • +2 CENIZA PURIFICADA ✦'
+      );
+      this.updateHUD();
+    } else {
+      this.showDialogueModal(
+        '🗝️ CARRETA DE PRISIONEROS LIBERADA 🗝️',
+        '«Martín y Tobías ya han partido a resguardo hacia Oakhaven. Solo queda derrotar al Capitán Áureo Vane para abrir el camino a Londinium.»',
+        '✦ CAPÍTULO XI COMPLETADO ✦'
+      );
+    }
+  }
+
+  public interactWithVaneGate(): void {
+    if (!this.captainVaneEncounter.isDefeated) {
+      this.audio.playShieldCrush();
+      this.spawnFloatingText(this.playerGroup.position, '🛡️ ¡El Capitán Vane bloquea el acceso a Londinium!', '#ffd700');
+      return;
+    }
+    this.canonChapterManager.unlockChapter(14);
+    this.transitionToArea('londinium_citadel');
+  }
+
+  public interactWithMirrorGallery(): void {
+    this.audio.playGlassShatter?.();
+    if (!this.hasClearedMirrorGallery) {
+      this.hasClearedMirrorGallery = true;
+      this.progression.addExp(90);
+      this.canonChapterManager.unlockChapter(15);
+      this.spawnFloatingText(this.playerGroup.position, '🪞 ¡ESPEJO MAESTRO QUEBRADO! (+90 EXP)', '#cc44ff');
+      this.showDialogueModal(
+        '🪞 EL SALÓN DE LOS ESPEJOS — CAPÍTULO XV 🪞',
+        '«Los espejos venecianos proyectan ecos de culpa y humo dorado para quebrar tu voluntad. Al estrellar tu filo contra el cristal maestro, las ilusiones se deshacen en mil esquirlas luminosas revelando el engaño de Alaric.»',
+        '✦ RECOMPENSA: +90 EXP & CAPÍTULO XV DESBLOQUEADO ✦'
+      );
+      this.updateHUD();
+    } else {
+      this.showDialogueModal(
+        '🪞 EL SALÓN DE LOS ESPEJOS 🪞',
+        '«Los cristales hechos añicos ya no pueden ocultarte la verdad del linaje del Sauce Negro.»',
+        '✦ CAPÍTULO XV COMPLETADO ✦'
+      );
+    }
+  }
+
+  public interactWithAstralThrone(): void {
+    if (!this.rexMalphasEncounter.isDefeated) {
+      this.audio.playAstralDistortion?.();
+      this.showDialogueModal(
+        '👑 TRONO ASTRAL DE LONDINIUM 👑',
+        '«La sombra del rey Alaric domina esta sala bajo una bóveda de astros falsos. Derrótalo para desgarrar el velo que conduce a la Catedral Invertida.»',
+        '⚠ DERROTA A REX MALPHAS PARA ABRIR EL ACTO V ⚠'
+      );
+      return;
+    }
+    this.canonChapterManager.unlockChapter(18);
+    this.transitionToArea('inverted_cathedral');
+  }
+
+  public interactWithDawnGreyAltar(): void {
+    if (!this.hasForgedAlbaGris) {
+      this.forgeAlbaGrisSword();
+    } else {
+      this.audio.playCosmicChime?.();
+      this.showDialogueModal(
+        '✨ ALTAR DE LA COMUNIÓN INMACULADA — ALBA GRIS ✨',
+        '«La Gota de Luz Divina de Elowen y el Fuego Negro de Thomas laten en perfecta armonía dentro de Alba Gris. Empúñala contra Astaroth: cada golpe inflige el doble de daño crítico al Sol del Abismo.»',
+        '✦ ALBA GRIS EQUIPADA (+100% DAÑO CRÍTICO CONTRA ASTAROTH) ✦'
+      );
+    }
+  }
+
+  public interactWithBlackSunCore(): void {
+    this.audio.playCosmicChime?.();
+    if (this.astarothEncounter.isDefeated) {
+      this.showDialogueModal(
+        '🌅 EL PRIMER AMANECER DE ALBION — EPÍLOGO CANÓNICO 🌅',
+        '«Donde antes ardía el Sol Negro de Astaroth ahora solo resplandece la claridad del alba. Has recorrido los 20 capítulos del canon de The Light in the Darkness. Puedes abrir el Compendio Canónico [N] en cualquier momento para revivir cualquier acto.»',
+        '👑 CANON COMPLETO — 20/20 CAPÍTULOS 👑'
+      );
+    } else {
+      this.showDialogueModal(
+        '🌌 EL SOL DEL ABISMO 🌌',
+        '«Astaroth, el Padre de las Cenizas, palpita sobre el vacío. Forja Alba Gris en el Altar Blanco antes de asestar el golpe definitivo.»',
+        '⚠ DERROTA A ASTAROTH CON ALBA GRIS ⚠'
+      );
     }
   }
 
@@ -5262,6 +7390,70 @@ export class Oakhaven3DExperience {
         return;
       }
     }
+
+    // Check if Crucible Guardian is stunned
+    if (this.dungeonAreaManager.currentArea === 'belltower_summit' && this.crucibleGuardianEncounter.state === 'STUNNED') {
+      if (this.playerGroup.position.distanceTo(this.crucibleGuardianGroup.position) <= 3.8) {
+        const res = this.crucibleGuardianEncounter.takeDamage(85, true);
+        this.audio.playFinisherSound(true);
+        this.spawnFloatingText(this.crucibleGuardianGroup.position, `⚡ ¡REMATE DE CRISOL! -${res.actualDamage}`, '#ffd700');
+        this.crucibleGuardianGroup.position.y = 0;
+        if (res.defeated) this.handleCrucibleGuardianDefeat();
+        else this.crucibleGuardianEncounter.setState('CHASE');
+        this.updateHUD();
+        return;
+      }
+    }
+
+    // Check if Captain Vane is stunned
+    if (this.dungeonAreaManager.currentArea === 'great_stone_bridge' && this.captainVaneEncounter.state === 'STUNNED') {
+      if (this.playerGroup.position.distanceTo(this.captainVaneGroup.position) <= 3.8) {
+        const res = this.captainVaneEncounter.takeDamage(95, false, true);
+        this.audio.playFinisherSound(true);
+        this.spawnFloatingText(this.captainVaneGroup.position, `⚡ ¡VEREDICTO QUEBRADO! -${res.actualDamage}`, '#ffd700');
+        this.captainVaneGroup.position.y = 0;
+        if (res.defeated) this.handleCaptainVaneDefeat();
+        else this.captainVaneEncounter.setState('CHASE');
+        this.updateHUD();
+        return;
+      }
+    }
+
+    // Check if Rex Malphas is stunned
+    if (this.dungeonAreaManager.currentArea === 'londinium_citadel' && this.rexMalphasEncounter.state === 'STUNNED') {
+      if (this.playerGroup.position.distanceTo(this.rexMalphasGroup.position) <= 3.8) {
+        const res = this.rexMalphasEncounter.takeDamage(105);
+        this.audio.playFinisherSound(true);
+        this.spawnFloatingText(this.rexMalphasGroup.position, `⚡ ¡CORTE REGICIDA! -${res.actualDamage}`, '#cc44ff');
+        this.rexMalphasGroup.position.y = 0;
+        if (res.transitionedToPhase2) this.triggerRexMalphasPhase2();
+        else if (res.defeated) this.handleRexMalphasDefeat();
+        else this.rexMalphasEncounter.setState('CHASE');
+        this.updateHUD();
+        return;
+      }
+    }
+
+    // Check if Astaroth Titan is stunned
+    if (this.dungeonAreaManager.currentArea === 'inverted_cathedral' && this.astarothEncounter.state === 'STUNNED') {
+      const distHoriz = new THREE.Vector2(
+        this.playerGroup.position.x - this.astarothGroup.position.x,
+        this.playerGroup.position.z - this.astarothGroup.position.z
+      ).length();
+      if (distHoriz <= 4.8) {
+        const res = this.astarothEncounter.takeDamage(110, this.hasForgedAlbaGris);
+        this.audio.playFinisherSound(true);
+        this.spawnFloatingText(
+          this.astarothGroup.position,
+          this.hasForgedAlbaGris ? `✨ ¡ESTALLIDO ALBA GRIS! -${res.actualDamage}` : `⚡ ¡REMATE CÓSMICO! -${res.actualDamage}`,
+          '#88eeff'
+        );
+        if (res.defeated) this.handleAstarothDefeat();
+        else this.astarothEncounter.setState('CHASE');
+        this.updateHUD();
+        return;
+      }
+    }
   }
 
   public showDialogueModal(header: string, text: string, rewardText?: string): void {
@@ -5294,9 +7486,21 @@ export class Oakhaven3DExperience {
 
   public setPlayerPosition(x: number, y: number, z: number): void {
     if (this.playerGroup) {
+      const prevPos = this.playerGroup.position.clone();
       this.playerGroup.position.set(x, y, z);
       this.currentCameraLook.set(x, y + 1.35, z);
       this.targetCameraLook.set(x, y + 1.35, z);
+
+      // Snap camera immediately on long-distance zone teleports so it does not fly across empty void
+      if (this.camera && prevPos.distanceTo(this.playerGroup.position) > 20) {
+        if (this.cameraMode === 'isometric') {
+          this.targetCameraPos.set(x * 0.5, y + 7.2, z + 8.8);
+        } else {
+          this.targetCameraPos.set(x, y + 2.4, z + 4.0);
+        }
+        this.camera.position.copy(this.targetCameraPos);
+        this.camera.lookAt(this.currentCameraLook);
+      }
     }
   }
 
@@ -5494,6 +7698,103 @@ export class Oakhaven3DExperience {
         badgeText = '⚡ [E] ¡REMATAR AL ACECHADOR DE RAÍCES!';
         badgeColor = '#ffd700';
       }
+      // North path from Black Willow Forest to Belltower Summit (Act II)
+      else if (pPos.z <= -167.0 && Math.abs(pPos.x) <= 3.5) {
+        targetFound = 'forest_to_belltower';
+        badgeText = '🔔 [E] ASCENDER AL CAMPANARIO DEL SUR (ACTO II)';
+        badgeColor = '#ffaa44';
+      }
+    }
+
+    // 12. Act II: Belltower Summit Interactions
+    if (!targetFound && this.dungeonAreaManager.currentArea === 'belltower_summit') {
+      if (this.crucibleGuardianEncounter.state === 'STUNNED' && pPos.distanceTo(this.crucibleGuardianGroup.position) <= 3.8) {
+        targetFound = 'finisher';
+        badgeText = '⚡ [E] ¡REMATAR AL GUARDIÁN DEL CRISOL!';
+        badgeColor = '#ffd700';
+      } else if (pPos.z >= -187.5 && Math.abs(pPos.x) <= 3.0) {
+        targetFound = 'belltower_to_forest';
+        badgeText = '🌿 [E] DESCENDER AL BOSQUE DEL SAUCE NEGRO';
+        badgeColor = '#bb44ff';
+      } else if (pPos.distanceTo(new THREE.Vector3(-5.5, 0, -202)) <= 3.4) {
+        targetFound = 'elowen_cell';
+        badgeText = this.hasCollectedWillowBird ? '🔔 [E] INSPECCIONAR CELDA DE SAL' : '🕊️ [E] RECOGER PÁJARO DE SAUCE (CELDA DE ELOWEN)';
+        badgeColor = '#ffd700';
+      } else if (pPos.distanceTo(new THREE.Vector3(0, 0, -214)) <= 3.6) {
+        if (this.crucibleGuardianEncounter.isDefeated && pPos.z <= -215.5) {
+          targetFound = 'belltower_to_bridge';
+          badgeText = '🌉 [E] MARCHAR AL GRAN PUENTE DE PIEDRA (ACTO III)';
+          badgeColor = '#ffd700';
+        } else {
+          targetFound = 'crucible_furnace';
+          badgeText = this.crucibleGuardianEncounter.isDefeated
+            ? '🔥 [E] EXAMINAR EL GRAN CRISOL PURIFICADO (AVANZA AL NORTE PARA ACTO III)'
+            : '🔥 [E] EXAMINAR EL GRAN CRISOL DE BRONCE';
+          badgeColor = '#ff7722';
+        }
+      } else if (this.crucibleGuardianEncounter.isDefeated && pPos.z <= -216.0) {
+        targetFound = 'belltower_to_bridge';
+        badgeText = '🌉 [E] MARCHAR AL GRAN PUENTE DE PIEDRA (ACTO III)';
+        badgeColor = '#ffd700';
+      }
+    }
+
+    // 13. Act III: Great Stone Bridge Interactions
+    if (!targetFound && this.dungeonAreaManager.currentArea === 'great_stone_bridge') {
+      if (this.captainVaneEncounter.state === 'STUNNED' && pPos.distanceTo(this.captainVaneGroup.position) <= 3.8) {
+        targetFound = 'finisher';
+        badgeText = '⚡ [E] ¡REMATAR AL CAPITÁN ÁUREO VANE!';
+        badgeColor = '#ffd700';
+      } else if (pPos.distanceTo(new THREE.Vector3(-2.6, 0, -249)) <= 3.5) {
+        targetFound = 'refugees_cart';
+        badgeText = this.hasFreedRefugees ? '🗝️ [E] CARRETA DE MARTÍN Y TOBÍAS (LIBERADOS)' : '🗝️ [E] LIBERAR A MARTÍN Y TOBÍAS DEL CONVOY';
+        badgeColor = '#ffd700';
+      } else if (pPos.z <= -274.5 && Math.abs(pPos.x) <= 3.8) {
+        targetFound = 'vane_gate';
+        badgeText = this.captainVaneEncounter.isDefeated
+          ? '🏛 [E] ENTRAR A LONDINIUM — LA CIUDADELA DORADA (ACTO IV)'
+          : '🛡️ [E] PUERTA DE LONDINIUM (DERROTA AL CAPITÁN VANE)';
+        badgeColor = this.captainVaneEncounter.isDefeated ? '#cc44ff' : '#ffd700';
+      }
+    }
+
+    // 14. Act IV: Londinium Citadel Interactions
+    if (!targetFound && this.dungeonAreaManager.currentArea === 'londinium_citadel') {
+      if (this.rexMalphasEncounter.state === 'STUNNED' && pPos.distanceTo(this.rexMalphasGroup.position) <= 3.8) {
+        targetFound = 'finisher';
+        badgeText = '⚡ [E] ¡ASESTAR GOLPE REGICIDA A REX MALPHAS!';
+        badgeColor = '#cc44ff';
+      } else if (pPos.distanceTo(new THREE.Vector3(-7.0, 0, -320)) <= 3.8) {
+        targetFound = 'mirror_gallery';
+        badgeText = this.hasClearedMirrorGallery ? '🪞 [E] SALÓN DE LOS ESPEJOS (QUEBRADO)' : '🪞 [E] QUEBRAR EL ESPEJO MAESTRO (SALÓN DE ESPEJOS)';
+        badgeColor = '#cc44ff';
+      } else if (pPos.distanceTo(new THREE.Vector3(0, 0, -336)) <= 4.0) {
+        targetFound = 'astral_throne';
+        badgeText = this.rexMalphasEncounter.isDefeated
+          ? '🌌 [E] DESCENDER A LA CATEDRAL INVERTIDA (ACTO V)'
+          : '👑 [E] TRONO ASTRAL DE REX MALPHAS';
+        badgeColor = this.rexMalphasEncounter.isDefeated ? '#ff2288' : '#cc44ff';
+      }
+    }
+
+    // 15. Act V: Inverted Cathedral Interactions
+    if (!targetFound && this.dungeonAreaManager.currentArea === 'inverted_cathedral') {
+      const distAstarothHoriz = new THREE.Vector2(pPos.x - this.astarothGroup.position.x, pPos.z - this.astarothGroup.position.z).length();
+      if (this.astarothEncounter.state === 'STUNNED' && distAstarothHoriz <= 4.8) {
+        targetFound = 'finisher';
+        badgeText = '✨ [E] ¡ASESTAR GOLPE FINAL DE ALBA GRIS A ASTAROTH!';
+        badgeColor = '#88eeff';
+      } else if (pPos.distanceTo(new THREE.Vector3(0, 0, -378)) <= 3.6) {
+        targetFound = 'dawn_grey_altar';
+        badgeText = this.hasForgedAlbaGris
+          ? '✨ [E] ALTAR DE LA COMUNIÓN (ALBA GRIS FORJADA)'
+          : '✨ [E] RECIBIR LA GOTA DE LUZ & FORJAR ALBA GRIS';
+        badgeColor = '#88eeff';
+      } else if (distAstarothHoriz <= 5.0 && this.astarothEncounter.isDefeated) {
+        targetFound = 'black_sun_core';
+        badgeText = '🌅 [E] CONTEMPLAR EL PRIMER AMANECER DE ALBION';
+        badgeColor = '#ffd700';
+      }
     }
 
     this.activeInteractTarget = targetFound;
@@ -5513,6 +7814,10 @@ export class Oakhaven3DExperience {
   // BOSS 3D: MOTHER MORWENNA LOGIC & COMBAT (PHASE 1 & PHASE 2 DESATADA)
   // =========================================================================
   private updateBossMorwenna(delta: number): void {
+    if (this.dungeonAreaManager.currentArea !== 'surface') {
+      if (this.morwennaHpBarContainer) this.morwennaHpBarContainer.style.display = 'none';
+      return;
+    }
     if (!this.isGameplayActive()) return;
     if (this.morwennaState === 'DORMANT') {
       // Trigger awakening when player crosses z <= -8
@@ -5915,6 +8220,7 @@ export class Oakhaven3DExperience {
   // ENEMY 4: CRYPT PENITENT SKELETON PATROL & COMBAT
   // =========================================================================
   private updateSkeleton(delta: number): void {
+    if (this.dungeonAreaManager.currentArea !== 'surface') return;
     if (this.skeletonState === 'DEAD') {
       this.skeletonGroup.position.y = -0.3;
       return;
@@ -6324,6 +8630,10 @@ export class Oakhaven3DExperience {
     this.updateInquisitor(delta);
     this.updateCryptAmbush(delta);
     this.updateRootProwler(delta);
+    this.updateCrucibleGuardian(delta);
+    this.updateCaptainVane(delta);
+    this.updateRexMalphas(delta);
+    this.updateAstarothTitan(delta);
     this.updateProximityInteractions();
     this.updateCamera(delta);
     this.updateFlickeringLights(delta);
@@ -6359,6 +8669,21 @@ export class Oakhaven3DExperience {
     if (this.willowRelicMeshGroup && this.willowRelicMeshGroup.visible) {
       this.willowRelicMeshGroup.rotation.y += delta * 1.2;
       this.willowRelicMeshGroup.position.y = 1.7 + Math.sin(this.clock.elapsedTime * 2.5) * 0.08;
+    }
+
+    // Acts II - V Atmospheric Props Animations
+    if (this.willowBirdMesh && this.willowBirdMesh.visible && this.dungeonAreaManager.currentArea === 'belltower_summit') {
+      this.willowBirdMesh.rotation.y += delta * 1.1;
+      this.willowBirdMesh.position.y = 0.65 + Math.sin(this.clock.elapsedTime * 2.4) * 0.06;
+    }
+    if (this.crucibleSlagLight && !this.crucibleGuardianEncounter.isDefeated && this.dungeonAreaManager.currentArea === 'belltower_summit') {
+      this.crucibleSlagLight.intensity = 3.8 + Math.sin(this.clock.elapsedTime * 7.5) * 0.6;
+    }
+    if (this.dawnGreyTearMesh && this.dawnGreyTearMesh.visible && this.dungeonAreaManager.currentArea === 'inverted_cathedral') {
+      this.dawnGreyTearMesh.position.y = 1.4 + Math.sin(this.clock.elapsedTime * 3.0) * 0.12;
+    }
+    if (this.astarothCoronaMesh && this.dungeonAreaManager.currentArea === 'inverted_cathedral') {
+      this.astarothCoronaMesh.rotation.z += delta * (this.astarothEncounter.isDefeated ? 0.2 : 1.4);
     }
 
     // Update Dagger Vortex if active
@@ -6487,6 +8812,27 @@ export class Oakhaven3DExperience {
       if (hitRes.defeated) {
         this.handleRootProwlerDefeat();
       }
+      this.updateHUD();
+    } else if (targetId === 'crucible_guardian' && !this.crucibleGuardianEncounter.isDefeated) {
+      const hitRes = this.crucibleGuardianEncounter.takeDamage(dmg, false);
+      this.spawnFloatingText(this.crucibleGuardianGroup.position, `🔥 -${hitRes.actualDamage}`, '#ff7722');
+      if (hitRes.defeated) this.handleCrucibleGuardianDefeat();
+      this.updateHUD();
+    } else if (targetId === 'captain_vane' && !this.captainVaneEncounter.isDefeated) {
+      const hitRes = this.captainVaneEncounter.takeDamage(dmg, false, true);
+      this.spawnFloatingText(this.captainVaneGroup.position, `🔥 -${hitRes.actualDamage}`, '#ff7722');
+      if (hitRes.defeated) this.handleCaptainVaneDefeat();
+      this.updateHUD();
+    } else if (targetId === 'rex_malphas' && !this.rexMalphasEncounter.isDefeated) {
+      const hitRes = this.rexMalphasEncounter.takeDamage(dmg);
+      this.spawnFloatingText(this.rexMalphasGroup.position, `🔥 -${hitRes.actualDamage}`, '#ff7722');
+      if (hitRes.transitionedToPhase2) this.triggerRexMalphasPhase2();
+      else if (hitRes.defeated) this.handleRexMalphasDefeat();
+      this.updateHUD();
+    } else if (targetId === 'astaroth' && !this.astarothEncounter.isDefeated) {
+      const hitRes = this.astarothEncounter.takeDamage(dmg, false);
+      this.spawnFloatingText(this.astarothGroup.position, `🔥 -${hitRes.actualDamage}`, '#ff7722');
+      if (hitRes.defeated) this.handleAstarothDefeat();
       this.updateHUD();
     }
   }
@@ -6619,6 +8965,7 @@ export class Oakhaven3DExperience {
   // ENEMY 1: ASH PROWLER AI (PATROL, ALERT, CHASE, COMBAT)
   // =========================================================================
   private updateEnemy(delta: number): void {
+    if (this.dungeonAreaManager.currentArea !== 'surface') return;
     if (this.enemyState === 'DEAD') return;
     if (!this.isGameplayActive()) return;
 
@@ -6790,6 +9137,7 @@ export class Oakhaven3DExperience {
   // ENEMY 2: CENSER BEARER CULTIST AI (PATROL, ALERT, CHASE, COMBAT)
   // =========================================================================
   private updateCultist(delta: number): void {
+    if (this.dungeonAreaManager.currentArea !== 'surface') return;
     if (this.cultistState === 'DEAD') return;
     if (!this.isGameplayActive()) return;
 
@@ -6968,6 +9316,7 @@ export class Oakhaven3DExperience {
   // ENEMY 3: CHAIN ZEALOT FLAGELLANT AI (PATROL, ALERT, CHASE, FLAGELLUM COMBAT)
   // =========================================================================
   private updateZealot(delta: number): void {
+    if (this.dungeonAreaManager.currentArea !== 'surface') return;
     if (this.zealotState === 'DEAD') return;
     if (!this.isGameplayActive()) return;
 
@@ -7672,17 +10021,192 @@ export class Oakhaven3DExperience {
   }
 
   // =========================================================================
+  // CANONICAL 20-CHAPTER COMPENDIUM & SCENARIO FAST TRAVEL
+  // =========================================================================
+  public toggleCompendiumModal(): void {
+    this.isCompendiumOpen = !this.isCompendiumOpen;
+    if (!this.compendiumModalEl) return;
+
+    if (this.isCompendiumOpen) {
+      this.releaseAllInputs();
+      this.compendiumModalEl.style.display = 'block';
+      const activeChapter = this.canonChapterManager.getChapter(this.currentCanonChapterId);
+      const actToShow = activeChapter ? activeChapter.act : 1;
+
+      const tabs = this.compendiumModalEl.querySelectorAll('.p3d-act-tab') as NodeListOf<HTMLButtonElement>;
+      tabs.forEach(t => {
+        const tAct = parseInt(t.getAttribute('data-act') || '1', 10);
+        if (tAct === actToShow) {
+          t.style.background = '#3b2812';
+          t.style.color = '#ffd7aa';
+          t.style.borderColor = '#d49a37';
+        } else {
+          t.style.background = '#1a162b';
+          t.style.color = '#dcd0ea';
+          t.style.borderColor = '#5a3d78';
+        }
+      });
+
+      this.renderCompendiumModal(actToShow);
+      this.audio.playSfx('menu_select');
+    } else {
+      this.compendiumModalEl.style.display = 'none';
+      this.audio.playSfx('menu_select');
+    }
+  }
+
+  public renderCompendiumModal(selectedAct: number = 1): void {
+    if (!this.compendiumModalEl) return;
+
+    const progressEl = this.compendiumModalEl.querySelector('#p3d-compendium-progress') as HTMLDivElement;
+    const listEl = this.compendiumModalEl.querySelector('#p3d-compendium-list') as HTMLDivElement;
+
+    if (progressEl) {
+      const unlockedCount = this.canonChapterManager.getUnlockedCount();
+      const pct = this.canonChapterManager.getProgressPercentage();
+      const currentCap = this.canonChapterManager.getChapter(this.currentCanonChapterId);
+      const currentLabel = currentCap ? `Cap. ${currentCap.romanNumber}` : 'Cap. I';
+      progressEl.innerHTML = `✦ Progreso Canónico: <span style="color:#ffd700; font-weight:bold;">${unlockedCount} / 20 Capítulos (${pct}%)</span> | Capítulo Activo: <span style="color:#88eeff; font-weight:bold;">${currentLabel}</span> | Vista: <span style="color:#e6b8ff; font-weight:bold;">Acto ${selectedAct}</span>`;
+    }
+
+    if (listEl) {
+      listEl.innerHTML = '';
+      const chapters = this.canonChapterManager.getChaptersForAct(selectedAct);
+
+      chapters.forEach(chapter => {
+        const isUnlocked = this.canonChapterManager.isChapterUnlocked(chapter.id);
+        const isCurrent = chapter.id === this.currentCanonChapterId;
+        const card = document.createElement('div');
+        card.style.cssText = `
+          background: ${isCurrent ? 'rgba(34, 22, 54, 0.96)' : 'rgba(22, 14, 34, 0.92)'};
+          border: 1.5px solid ${isCurrent ? '#88eeff' : isUnlocked ? '#d4af37' : '#4a3d5e'};
+          border-radius: 5px;
+          padding: 8px 12px;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        `;
+
+        const topRow = `
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 8.5px; font-weight: bold; color: ${isCurrent ? '#88eeff' : isUnlocked ? '#ffd700' : '#888'};">
+              ${isCurrent ? '★' : '✦'} CAPÍTULO ${chapter.romanNumber}: ${chapter.title.toUpperCase()}
+            </span>
+            <span style="font-family: monospace; font-size: 7px; color: ${isCurrent ? '#88eeff' : isUnlocked ? '#a3ffc7' : '#ff8888'}; font-weight: bold;">
+              ${isCurrent ? '★ ESCENARIO ACTUAL' : isUnlocked ? '✓ DESBLOQUEADO' : '🔒 POR DESCUBRIR'}
+            </span>
+          </div>
+        `;
+
+        const locationRow = `
+          <div style="font-size: 7px; color: #ffaa55; font-family: monospace;">
+            📍 ${chapter.location}
+          </div>
+        `;
+
+        const summaryRow = `
+          <div style="font-size: 7.5px; color: #dcd0ea; font-style: italic; line-height: 1.35;">
+            «${chapter.summary}»
+          </div>
+        `;
+
+        const charactersRow = `
+          <div style="font-size: 7px; color: #b8a6cc; font-family: monospace;">
+            👥 Personajes: ${chapter.keyCharacters.join(', ')}
+            ${chapter.bossOrEncounter ? ` | ⚔️ Encuentro: <span style="color:#ff8888;">${chapter.bossOrEncounter}</span>` : ''}
+            ${chapter.relicReward ? ` | 🎁 Recompensa: <span style="color:#ffd700;">${chapter.relicReward}</span>` : ''}
+          </div>
+        `;
+
+        const travelBtn = `
+          <div style="display: flex; justify-content: flex-end; margin-top: 3px;">
+            <button class="btn-travel-canon" data-chapter-id="${chapter.id}" style="
+              background: #2b1d3d;
+              color: #ffd700;
+              border: 1px solid #d4af37;
+              border-radius: 3px;
+              padding: 3px 9px;
+              font-family: monospace;
+              font-size: 7.5px;
+              font-weight: bold;
+              cursor: pointer;
+              transition: all 0.15s ease;
+            ">
+              🚀 VIAJAR A ESTE ESCENARIO 3D
+            </button>
+          </div>
+        `;
+
+        card.innerHTML = topRow + locationRow + summaryRow + charactersRow + travelBtn;
+        listEl.appendChild(card);
+      });
+
+      // Bind Fast Travel Buttons
+      const travelBtns = listEl.querySelectorAll('.btn-travel-canon') as NodeListOf<HTMLButtonElement>;
+      travelBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const capId = parseInt((e.currentTarget as HTMLButtonElement).getAttribute('data-chapter-id') || '1', 10);
+          this.fastTravelToChapter(capId);
+        });
+      });
+    }
+  }
+
+  public fastTravelToChapter(chapterId: number): void {
+    const chapter = this.canonChapterManager.getChapter(chapterId);
+    if (!chapter) return;
+
+    this.canonChapterManager.unlockChapter(chapterId);
+    this.currentCanonChapterId = chapterId;
+    if (this.isCompendiumOpen) {
+      this.toggleCompendiumModal();
+    }
+
+    if (chapter.targetAreaKey === 'inverted_cathedral') {
+      this.transitionToArea('inverted_cathedral');
+    } else if (chapter.targetAreaKey === 'londinium_citadel') {
+      this.transitionToArea('londinium_citadel');
+    } else if (chapter.targetAreaKey === 'great_stone_bridge') {
+      this.transitionToArea('great_stone_bridge');
+    } else if (chapter.targetAreaKey === 'belltower_summit') {
+      this.transitionToArea('belltower_summit');
+    } else if (chapter.targetAreaKey === 'black_willow_forest') {
+      this.transitionToArea('black_willow_forest');
+    } else if (chapter.targetAreaKey === 'crypts_interior') {
+      this.transitionToArea('crypts_interior');
+    } else {
+      this.transitionToArea('surface');
+      setTimeout(() => {
+        this.setPlayerPosition(0, 0, chapterId === 5 ? -7 : 4);
+      }, 420);
+    }
+
+    setTimeout(() => {
+      this.setDialogueToast(
+        `Capítulo ${chapter.romanNumber}: ${chapter.title}`,
+        `«${chapter.summary}»`,
+        '/assets/icons/icon_black_willow_feather.png',
+        '#ffd700'
+      );
+    }, 440);
+  }
+
+  // =========================================================================
   // PLAYER DEFEAT & RESPAWN (H16 CENTRALIZED POLICY)
   // =========================================================================
   private handlePlayerDefeatAndRespawn(): void {
     this.isPlayerDefeated = false;
     this.dungeonAreaManager.exitToSurface();
-    if (this.inquisitorHpBarContainer) {
-      this.inquisitorHpBarContainer.style.display = 'none';
-    }
-    if (this.rootProwlerHpBarContainer) {
-      this.rootProwlerHpBarContainer.style.display = 'none';
-    }
+    [
+      this.inquisitorHpBarContainer,
+      this.rootProwlerHpBarContainer,
+      this.crucibleHpBarContainer,
+      this.vaneHpBarContainer,
+      this.malphasHpBarContainer,
+      this.astarothHpBarContainer
+    ].forEach(hud => {
+      if (hud) hud.style.display = 'none';
+    });
     const activeId = this.party.getActiveHeroId();
     const bonusHp = this.progression && (activeId === 'thomas' || activeId === 'khaterine')
       ? this.progression.getMaxHealthBonus(activeId as HeroType)
@@ -7834,7 +10358,19 @@ export class Oakhaven3DExperience {
           this.openCemeteryGate();
         }
         if (save.world.checkpoint) {
-          this.playerGroup.position.set(save.world.checkpoint.x, save.world.checkpoint.y, save.world.checkpoint.z);
+          const cz = save.world.checkpoint.z;
+          if (cz <= -360) this.dungeonAreaManager.enterInvertedCathedral();
+          else if (cz <= -295) this.dungeonAreaManager.enterLondiniumCitadel();
+          else if (cz <= -235) this.dungeonAreaManager.enterGreatStoneBridge();
+          else if (cz <= -180) this.dungeonAreaManager.enterBelltower();
+          else if (cz <= -120) this.dungeonAreaManager.enterBlackWillowForest();
+          else if (cz <= -65) this.dungeonAreaManager.enterCrypts();
+          else this.dungeonAreaManager.exitToSurface();
+          this.setPlayerPosition(save.world.checkpoint.x, save.world.checkpoint.y, save.world.checkpoint.z);
+        }
+        if (this.inventory.hasItem('weapon_dawn_grey') && !this.hasForgedAlbaGris) {
+          this.hasForgedAlbaGris = true;
+          this.applyAlbaGrisSwordVisual();
         }
         if (save.world.destroyedPropIds && Array.isArray(save.world.destroyedPropIds)) {
           for (const propId of save.world.destroyedPropIds) {
@@ -8104,11 +10640,12 @@ export class Oakhaven3DExperience {
       } else {
         const flaskStock = this.arsenalManager.getFlaskStock(this.inventory);
         const flaskLabel = flaskStock > 0 ? ` | 🏺 Frasco Sagrado (${flaskStock}) [T]` : ' | [T] Lanzar Arma';
+        const swordLabel = this.hasForgedAlbaGris ? '✨ ARMA: Alba Gris (Biseccionada)' : '⚔ ARMA: Espada Corta';
         weaponBadge.innerText = (this.playerStats.isArmed
-          ? '⚔ ARMA: Espada Corta'
+          ? swordLabel
           : '👊 DESARMADO: Pelea a puños') + flaskLabel;
         weaponBadge.style.cursor = 'default';
-        weaponBadge.style.color = this.playerStats.isArmed ? '#e2d4f0' : '#ffaa55';
+        weaponBadge.style.color = this.playerStats.isArmed ? (this.hasForgedAlbaGris ? '#88eeff' : '#e2d4f0') : '#ffaa55';
       }
     }
 
@@ -8162,6 +10699,30 @@ export class Oakhaven3DExperience {
       if (this.morwennaHealth <= 0) {
         this.morwennaHpBarFill.style.background = '#ffd700';
       }
+    }
+
+    if (this.crucibleHpBarFill) {
+      const pct = Math.max(0, (this.crucibleGuardianEncounter.health / this.crucibleGuardianEncounter.maxHealth) * 100);
+      this.crucibleHpBarFill.style.width = `${pct}%`;
+      if (this.crucibleGuardianEncounter.isDefeated) this.crucibleHpBarFill.style.background = '#ffd700';
+    }
+
+    if (this.vaneHpBarFill) {
+      const pct = Math.max(0, (this.captainVaneEncounter.health / this.captainVaneEncounter.maxHealth) * 100);
+      this.vaneHpBarFill.style.width = `${pct}%`;
+      if (this.captainVaneEncounter.isDefeated) this.vaneHpBarFill.style.background = '#ffd700';
+    }
+
+    if (this.malphasHpBarFill) {
+      const pct = Math.max(0, (this.rexMalphasEncounter.health / this.rexMalphasEncounter.maxHealth) * 100);
+      this.malphasHpBarFill.style.width = `${pct}%`;
+      if (this.rexMalphasEncounter.isDefeated) this.malphasHpBarFill.style.background = '#ffd700';
+    }
+
+    if (this.astarothHpBarFill) {
+      const pct = Math.max(0, (this.astarothEncounter.health / this.astarothEncounter.maxHealth) * 100);
+      this.astarothHpBarFill.style.width = `${pct}%`;
+      if (this.astarothEncounter.isDefeated) this.astarothHpBarFill.style.background = '#ffd700';
     }
 
     const btnQuickBalm = this.uiOverlay.querySelector('#btn-quick-balm') as HTMLButtonElement;

@@ -25,6 +25,10 @@ export interface IAudioPort {
   playWillowWhisper?(): void;
   playBeastRoar?(): void;
   playDaggerVortex?(): void;
+  playBellToll?(): void;
+  playShieldCrush?(): void;
+  playAstralDistortion?(): void;
+  playCosmicChime?(): void;
 }
 
 export interface DialogueLine {
