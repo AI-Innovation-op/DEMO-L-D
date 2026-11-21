@@ -138,21 +138,48 @@ export class HUDScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(40);
 
     // 5.1 Top-Right Control Buttons with 100% Opaque Solid Background (Prevents any text overlap)
-    this.add.rectangle(521, 18, 222, 26, 0x0b0614, 1.0)
+    this.add.rectangle(512, 18, 250, 26, 0x0b0614, 1.0)
       .setStrokeStyle(1, 0xd4af37)
       .setDepth(45);
 
     const audioAdapter = WebAudioSoundAdapter.getInstance();
 
+    // 3D Mode Switch Button
+    const threeBtnBg = this.add.rectangle(414, 18, 48, 18, 0x26143b)
+      .setStrokeStyle(1, 0xd4af37)
+      .setDepth(46)
+      .setInteractive({ useHandCursor: true });
+
+    const threeBtnText = this.add.text(414, 18, '🏛️ 3D', {
+      fontFamily: 'Cinzel, monospace',
+      fontSize: '8px',
+      color: '#ffd700',
+      fontStyle: 'bold',
+      resolution: 2
+    }).setOrigin(0.5).setDepth(47);
+
+    threeBtnBg.on('pointerover', () => {
+      threeBtnBg.setFillStyle(0x45226b);
+      threeBtnText.setColor('#ffffff');
+    });
+    threeBtnBg.on('pointerout', () => {
+      threeBtnBg.setFillStyle(0x26143b);
+      threeBtnText.setColor('#ffd700');
+    });
+    threeBtnBg.on('pointerdown', () => {
+      audioAdapter.playSfx('menu_select');
+      (window as unknown as { launch3DPrototype?: () => void }).launch3DPrototype?.();
+    });
+
     // Sound Mute Toggle Button
-    const audioBtnBg = this.add.rectangle(445, 18, 62, 18, 0x1d142b)
+    const audioBtnBg = this.add.rectangle(468, 18, 52, 18, 0x1d142b)
       .setStrokeStyle(1, 0x6e4b8a)
       .setDepth(46)
       .setInteractive({ useHandCursor: true });
 
-    const audioBtnText = this.add.text(445, 18, audioAdapter.getIsMuted() ? '🔇 MUTE' : '🔊 AUDIO', {
+    const audioBtnText = this.add.text(468, 18, audioAdapter.getIsMuted() ? '🔇 MUTE' : '🔊 AUDIO', {
       fontFamily: 'monospace',
-      fontSize: '8px',
+      fontSize: '7.5px',
       color: audioAdapter.getIsMuted() ? '#ff7777' : '#aaffaa',
       fontStyle: 'bold',
       resolution: 2
@@ -168,14 +195,14 @@ export class HUDScene extends Phaser.Scene {
     audioBtnBg.on('pointerout', () => audioBtnBg.setFillStyle(0x1d142b));
 
     // Character Dialogue Button [C]
-    const dialogBtnBg = this.add.rectangle(517, 18, 70, 18, 0x1d142b)
+    const dialogBtnBg = this.add.rectangle(531, 18, 66, 18, 0x1d142b)
       .setStrokeStyle(1, 0xd4af37)
       .setDepth(46)
       .setInteractive({ useHandCursor: true });
 
-    const dialogBtnText = this.add.text(517, 18, '💬 CHARLA [C]', {
+    const dialogBtnText = this.add.text(531, 18, '💬 CHARLA [C]', {
       fontFamily: 'Cinzel, monospace',
-      fontSize: '8px',
+      fontSize: '7.5px',
       color: '#ffd700',
       fontStyle: 'bold',
       resolution: 2
@@ -202,14 +229,14 @@ export class HUDScene extends Phaser.Scene {
     });
 
     // Elegant Menu Button [P]
-    const menuBtnBg = this.add.rectangle(590, 18, 64, 18, 0x1d142b)
+    const menuBtnBg = this.add.rectangle(599, 18, 60, 18, 0x1d142b)
       .setStrokeStyle(1, 0xd4af37)
       .setDepth(46)
       .setInteractive({ useHandCursor: true });
 
-    const menuBtnText = this.add.text(590, 18, '⚙ MENÚ [P]', {
+    const menuBtnText = this.add.text(599, 18, '⚙ MENÚ [P]', {
       fontFamily: 'Cinzel, monospace',
-      fontSize: '8px',
+      fontSize: '7.5px',
       color: '#ffd700',
       fontStyle: 'bold',
       resolution: 2

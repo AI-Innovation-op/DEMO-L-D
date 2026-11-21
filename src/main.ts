@@ -19,14 +19,24 @@ export function launch3DPrototype(): void {
   const container = document.getElementById('game-container');
   if (!container) return;
 
+  if (three3dExperience) {
+    three3dExperience.destroy();
+    three3dExperience = null;
+  }
+
   const canvas = container.querySelector('canvas');
   if (canvas) {
     canvas.style.display = 'none';
   }
 
+  const instructionsEl = document.getElementById('instructions');
+  if (instructionsEl) {
+    instructionsEl.style.display = 'none';
+  }
+
   if (phaserGame) {
     phaserGame.scene.scenes.forEach(s => {
-      if (s.scene.isActive()) {
+      if (s.scene.isActive() && s.scene.key !== 'BootScene') {
         s.scene.pause();
       }
     });
@@ -46,13 +56,15 @@ export function launch3DPrototype(): void {
   threeWrapper.style.display = 'block';
 
   three3dExperience = new Oakhaven3DExperience(threeWrapper, () => {
-    exit3DPrototype();
+    exit3DPrototype(false);
   });
   (window as unknown as { three3dExperience: Oakhaven3DExperience | null }).three3dExperience = three3dExperience;
   three3dExperience.init();
 }
 
-export function exit3DPrototype(): void {
+export function exit3DPrototype(startDirect2D: boolean = false, scenarioIndex: number = 1): void {
+  const activeHeroFrom3D = three3dExperience ? (three3dExperience as unknown as { activeHero?: 'thomas' | 'khaterine' }).activeHero || 'thomas' : 'thomas';
+
   const threeWrapper = document.getElementById('three-wrapper');
   if (threeWrapper) {
     threeWrapper.style.display = 'none';
@@ -63,6 +75,13 @@ export function exit3DPrototype(): void {
     (window as unknown as { three3dExperience: Oakhaven3DExperience | null }).three3dExperience = null;
   }
 
+  // Remove #3d hash so the page stays in 2D mode
+  if (window.location.hash === '#3d' || window.location.search.includes('mode=3d')) {
+    try {
+      window.history.replaceState(null, '', window.location.pathname);
+    } catch { /* ignore */ }
+  }
+
   const container = document.getElementById('game-container');
   if (container) {
     const canvas = container.querySelector('canvas');
@@ -71,18 +90,46 @@ export function exit3DPrototype(): void {
     }
   }
 
+  const instructionsEl = document.getElementById('instructions');
+  if (instructionsEl) {
+    instructionsEl.style.display = 'block';
+  }
+
   if (phaserGame) {
+    let anyResumed = false;
     phaserGame.scene.scenes.forEach(s => {
       if (s.scene.isPaused()) {
         s.scene.resume();
+        s.cameras?.main?.resetFX();
+        anyResumed = true;
       }
     });
+
+    if (startDirect2D) {
+      phaserGame.scene.scenes.forEach(s => {
+        if (s.scene.isActive() && s.scene.key !== 'GameScene' && s.scene.key !== 'HUDScene') {
+          s.scene.stop();
+        }
+      });
+      phaserGame.scene.start('GameScene', {
+        characterId: activeHeroFrom3D,
+        scenarioIndex
+      });
+    } else if (!anyResumed) {
+      phaserGame.scene.start('TitleScene');
+    }
   }
 }
 
 // Expose globally for UI handlers
-(window as unknown as { launch3DPrototype: typeof launch3DPrototype; exit3DPrototype: typeof exit3DPrototype }).launch3DPrototype = launch3DPrototype;
-(window as unknown as { launch3DPrototype: typeof launch3DPrototype; exit3DPrototype: typeof exit3DPrototype }).exit3DPrototype = exit3DPrototype;
+(window as unknown as {
+  launch3DPrototype: typeof launch3DPrototype;
+  exit3DPrototype: typeof exit3DPrototype;
+}).launch3DPrototype = launch3DPrototype;
+(window as unknown as {
+  launch3DPrototype: typeof launch3DPrototype;
+  exit3DPrototype: typeof exit3DPrototype;
+}).exit3DPrototype = exit3DPrototype;
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -114,10 +161,10 @@ const config: Phaser.Types.Core.GameConfig = {
 window.addEventListener('DOMContentLoaded', () => {
   phaserGame = new Phaser.Game(config);
 
-  // Check URL hash for direct 3D preview
+  // Check URL hash for direct 3D preview (wait until BootScene finishes creating textures)
   if (window.location.hash === '#3d' || window.location.search.includes('mode=3d')) {
     setTimeout(() => {
       launch3DPrototype();
-    }, 400);
+    }, 550);
   }
 });

@@ -16,6 +16,8 @@ import { RootProwler } from '../../domain/encounters/RootProwler';
 import { CrucibleGuardian, CaptainVane, RexMalphas, AstarothTitan } from '../../domain/encounters/ActBosses';
 import { CanonChapterManager } from '../../domain/story/CanonChapterCompendium';
 import { ArsenalManager, ArrowType } from '../../domain/combat/ArsenalManager';
+import { ThreeVisualDesignSystem } from './ThreeVisualDesignSystem';
+import { VISUAL_PACK_3D_CONCEPTS } from '../assets/VisualPackCatalog';
 
 export interface CombatStats3D {
   health: number;
@@ -56,7 +58,7 @@ export interface DebrisParticle3D {
   maxLife: number;
 }
 
-export type InputContext = 'gameplay' | 'dialogue' | 'inventory' | 'skillTree' | 'alchemy' | 'compendium' | 'defeated';
+export type InputContext = 'gameplay' | 'dialogue' | 'inventory' | 'skillTree' | 'alchemy' | 'compendium' | 'designs' | 'defeated';
 
 export class Oakhaven3DExperience {
   private container: HTMLElement;
@@ -389,6 +391,12 @@ export class Oakhaven3DExperience {
   private uiOverlay!: HTMLDivElement;
   private onExitCallback?: () => void;
 
+  // Official Visual Pack & 3D Illumination System
+  private visualDesigns: ThreeVisualDesignSystem = new ThreeVisualDesignSystem();
+  private playerAmbientFollowLight?: THREE.PointLight;
+  private isDesignsModalOpen: boolean = false;
+  private designsModalEl?: HTMLDivElement;
+
   constructor(container: HTMLElement, onExit?: () => void) {
     this.container = container;
     this.onExitCallback = onExit;
@@ -398,14 +406,14 @@ export class Oakhaven3DExperience {
   public init(): void {
     this.clock = new THREE.Clock();
 
-    // 1. Scene & Atmosphere
+    // 1. Scene & Atmosphere (Brightened Gothic Nocturnal Palette for Clear 3D Visibility)
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x06040b);
-    this.scene.fog = new THREE.FogExp2(0x0a0614, 0.045);
+    this.scene.background = new THREE.Color(0x161228);
+    this.scene.fog = new THREE.FogExp2(0x18132c, 0.012);
 
     // 2. Camera (oblique 3/4 isometric by default)
     const aspect = this.container.clientWidth / this.container.clientHeight || 16 / 9;
-    this.camera = new THREE.PerspectiveCamera(48, aspect, 0.1, 100);
+    this.camera = new THREE.PerspectiveCamera(48, aspect, 0.1, 180);
     this.camera.position.set(0, 7.5, 9);
 
     // 3. Renderer with antialiasing and shadow maps
@@ -415,7 +423,7 @@ export class Oakhaven3DExperience {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.15;
+    this.renderer.toneMappingExposure = 1.55;
     this.container.appendChild(this.renderer.domElement);
 
     // 4. Build Environment & World
@@ -454,6 +462,7 @@ export class Oakhaven3DExperience {
     this.createRexMalphasBoss();
     this.createInvertedCathedralAct5();
     this.createAstarothBoss();
+    this.setupOfficial3DVisualDesigns();
 
     // 6. Build 3D UI Overlay
     this.createUIOverlay();
@@ -473,12 +482,15 @@ export class Oakhaven3DExperience {
   // LIGHTING & ATMOSPHERE
   // =========================================================================
   private createLighting(): void {
-    // Dim ambient moon/abyss light
-    const ambient = new THREE.AmbientLight(0x231a38, 1.2);
+    // Brightened gothic moon & sky illumination
+    const ambient = new THREE.AmbientLight(0x524478, 2.5);
     this.scene.add(ambient);
 
-    // Moon Directional Light casting long shadows
-    const moonLight = new THREE.DirectionalLight(0x738cb8, 1.8);
+    const hemi = new THREE.HemisphereLight(0xa8c0f0, 0x483860, 2.0);
+    this.scene.add(hemi);
+
+    // Moon Directional Light casting crisp shadows
+    const moonLight = new THREE.DirectionalLight(0x9ab4e0, 2.6);
     moonLight.position.set(-15, 22, -10);
     moonLight.castShadow = true;
     moonLight.shadow.mapSize.width = 1024;
@@ -492,14 +504,19 @@ export class Oakhaven3DExperience {
     moonLight.shadow.bias = -0.0005;
     this.scene.add(moonLight);
 
+    // Player-following fill light so every zone (Crypts, Forest, Belltower, Bridge, Londinium, Cathedral) is clearly illuminated
+    this.playerAmbientFollowLight = new THREE.PointLight(0xffeedd, 2.6, 30);
+    this.playerAmbientFollowLight.position.set(0, 4.8, 4);
+    this.scene.add(this.playerAmbientFollowLight);
+
     // Great Pyre at the end of the street (Z = -22)
-    const pyreLight = new THREE.PointLight(0xff5511, 4.5, 28);
+    const pyreLight = new THREE.PointLight(0xff5511, 5.5, 34);
     pyreLight.position.set(0, 3, -22);
     this.scene.add(pyreLight);
 
     // Pyre mesh (glowing fire pit)
     const pyreGeo = new THREE.CylinderGeometry(2, 2.6, 1.5, 8);
-    const pyreMat = new THREE.MeshStandardMaterial({ color: 0x1a0d0a, roughness: 0.9 });
+    const pyreMat = new THREE.MeshStandardMaterial({ color: 0x2c1610, roughness: 0.85 });
     const pyreMesh = new THREE.Mesh(pyreGeo, pyreMat);
     pyreMesh.position.set(0, 0.75, -22);
     pyreMesh.castShadow = true;
@@ -523,17 +540,17 @@ export class Oakhaven3DExperience {
     canvas.width = 512;
     canvas.height = 512;
     const ctx = canvas.getContext('2d')!;
-    ctx.fillStyle = '#141219';
+    ctx.fillStyle = '#282338';
     ctx.fillRect(0, 0, 512, 512);
 
     // Stone tiles pattern
-    ctx.strokeStyle = '#272233';
+    ctx.strokeStyle = '#544872';
     ctx.lineWidth = 3;
     const tileSize = 64;
     for (let y = 0; y < 512; y += tileSize) {
       const offsetX = (y / tileSize) % 2 === 0 ? 0 : 32;
       for (let x = -32; x < 544; x += tileSize) {
-        ctx.fillStyle = (x + y) % 128 === 0 ? '#1a1722' : '#110f17';
+        ctx.fillStyle = (x + y) % 128 === 0 ? '#3a3250' : '#2c263e';
         ctx.fillRect(x + offsetX + 2, y + 2, tileSize - 4, tileSize - 4);
         ctx.strokeRect(x + offsetX, y, tileSize, tileSize);
       }
@@ -557,9 +574,9 @@ export class Oakhaven3DExperience {
     this.scene.add(ground);
 
     // 2. Gothic Wooden & Stone Houses along the street
-    const houseMat = new THREE.MeshStandardMaterial({ color: 0x191424, roughness: 0.9 });
-    const roofMat = new THREE.MeshStandardMaterial({ color: 0x0f0b17, roughness: 0.7 });
-    const woodTrimMat = new THREE.MeshStandardMaterial({ color: 0x3d2919, roughness: 0.8 });
+    const houseMat = new THREE.MeshStandardMaterial({ color: 0x362c4c, roughness: 0.85 });
+    const roofMat = new THREE.MeshStandardMaterial({ color: 0x241c38, roughness: 0.7 });
+    const woodTrimMat = new THREE.MeshStandardMaterial({ color: 0x62442c, roughness: 0.75 });
     const windowGlowMat = new THREE.MeshBasicMaterial({ color: 0xff9933 });
 
     for (let z = 12; z >= -24; z -= 7) {
@@ -1743,13 +1760,13 @@ export class Oakhaven3DExperience {
   // CEMETERY & CRYPTS EXPANSION (NORTH OF OAKHAVEN PYRE)
   // =========================================================================
   private createCemeteryAndCrypts(): void {
-    const stoneMat = new THREE.MeshStandardMaterial({ color: 0x1f1d26, roughness: 0.95 });
-    const darkIronMat = new THREE.MeshStandardMaterial({ color: 0x111116, metalness: 0.85, roughness: 0.35 });
+    const stoneMat = new THREE.MeshStandardMaterial({ color: 0x3c384a, roughness: 0.9 });
+    const darkIronMat = new THREE.MeshStandardMaterial({ color: 0x262632, metalness: 0.85, roughness: 0.35 });
     const soulFlameMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff });
 
     // 1. Cemetery Ground (Extending from z: -23.5 to z: -48)
     const cemeteryGeo = new THREE.PlaneGeometry(16, 26);
-    const cemeteryMat = new THREE.MeshStandardMaterial({ color: 0x0c0b11, roughness: 0.9 });
+    const cemeteryMat = new THREE.MeshStandardMaterial({ color: 0x252232, roughness: 0.88 });
     const cemeteryGround = new THREE.Mesh(cemeteryGeo, cemeteryMat);
     cemeteryGround.rotation.x = -Math.PI / 2;
     cemeteryGround.position.set(0, 0.01, -36);
@@ -1953,9 +1970,9 @@ export class Oakhaven3DExperience {
   private createCryptInterior(): void {
     this.cryptInteriorGroup = new THREE.Group();
     // Crypt spans from z: -68 to z: -114 (46 meters long), x: -6.5 to +6.5 (13 meters wide)
-    const cryptStoneMat = new THREE.MeshStandardMaterial({ color: 0x14121a, roughness: 0.95 });
-    const wallStoneMat = new THREE.MeshStandardMaterial({ color: 0x1a1822, roughness: 0.9 });
-    const archMat = new THREE.MeshStandardMaterial({ color: 0x22202a, roughness: 0.85 });
+    const cryptStoneMat = new THREE.MeshStandardMaterial({ color: 0x2c2838, roughness: 0.9 });
+    const wallStoneMat = new THREE.MeshStandardMaterial({ color: 0x363246, roughness: 0.88 });
+    const archMat = new THREE.MeshStandardMaterial({ color: 0x443e56, roughness: 0.82 });
     const darkIronMat = new THREE.MeshStandardMaterial({ color: 0x181820, metalness: 0.85, roughness: 0.35 });
     const bronzeGrateMat = new THREE.MeshStandardMaterial({ color: 0x3d2812, metalness: 0.7, roughness: 0.5 });
     const ironSpikeMat = new THREE.MeshStandardMaterial({ color: 0x2b2b33, metalness: 0.9, roughness: 0.25 });
@@ -2307,8 +2324,8 @@ export class Oakhaven3DExperience {
     // 1. Dark Mossy Soil Ground (z: -125 to -172, x: -7.5 to 7.5)
     const forestGroundGeo = new THREE.PlaneGeometry(16, 52, 16, 16);
     const forestGroundMat = new THREE.MeshStandardMaterial({
-      color: 0x131a14, // dark mossy earthy green/black
-      roughness: 0.92,
+      color: 0x243428, // illuminated mossy forest soil
+      roughness: 0.88,
       metalness: 0.05
     });
     const forestGround = new THREE.Mesh(forestGroundGeo, forestGroundMat);
@@ -4536,7 +4553,7 @@ export class Oakhaven3DExperience {
       <div style="display: flex; justify-content: space-between; align-items: flex-start;">
         <!-- Left: Active Hero 3D Combat HUD -->
         <div style="display: flex; gap: 8px; background: rgba(14, 9, 23, 0.94); border: 1.2px solid #d4af37; border-radius: 4px; padding: 5px 8px; min-width: 215px; box-shadow: 0 4px 15px rgba(0,0,0,0.85); align-items: center;">
-          <img id="p3d-hero-portrait" src="/assets/concepts/concept_thomas.png" alt="Retrato Héroe" style="width: 36px; height: 36px; border: 1.2px solid #d4af37; border-radius: 4px; object-fit: cover; object-position: top center; background: #000; flex-shrink: 0;" />
+          <img id="p3d-hero-portrait" src="/assets/characters/portrait_thomas.png" alt="Retrato Héroe" style="width: 36px; height: 36px; border: 1.2px solid #d4af37; border-radius: 4px; object-fit: cover; object-position: center; background: #000; flex-shrink: 0; image-rendering: pixelated;" />
           <div style="flex: 1;">
             <div id="p3d-hero-title" style="font-size: 8px; font-weight: bold; letter-spacing: 0.6px; margin-bottom: 3px; color: #ffd700;">
               ✦ THOMAS — OAKHAVEN 3D ✦
@@ -4565,10 +4582,18 @@ export class Oakhaven3DExperience {
 
         <!-- Right: Actions & Return Button -->
         <div style="pointer-events: auto; display: flex; flex-direction: column; gap: 4px; align-items: flex-end;">
-          <button id="btn-return-2d" style="background: #2a1440; color: #ffd700; border: 1.2px solid #d4af37; padding: 4px 9px; border-radius: 4px; font-family: 'Cinzel', serif; font-size: 8px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.6); transition: all 0.2s;">
-            ⮌ VOLVER AL MODO 2D
-          </button>
           <div style="display: flex; gap: 4px;">
+            <button id="btn-play-2d-direct" style="background: #143822; color: #a3ffc7; border: 1.2px solid #2ecc71; padding: 4px 9px; border-radius: 4px; font-family: 'Cinzel', serif; font-size: 8px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.6); transition: all 0.2s;">
+              🎮 JUGAR MODO 2D
+            </button>
+            <button id="btn-return-2d" style="background: #2a1440; color: #ffd700; border: 1.2px solid #d4af37; padding: 4px 9px; border-radius: 4px; font-family: 'Cinzel', serif; font-size: 8px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.6); transition: all 0.2s;">
+              ⮌ MENÚ 2D
+            </button>
+          </div>
+          <div style="display: flex; gap: 4px;">
+            <button id="btn-toggle-designs" style="background: #38184c; color: #f3c6ff; border: 1.2px solid #cc66ff; padding: 3px 8px; border-radius: 4px; font-family: monospace; font-size: 7.5px; cursor: pointer; font-weight: bold;">
+              🎨 [V] DISEÑOS 3D (22 LÁMINAS)
+            </button>
             <button id="btn-toggle-inventory" style="background: #3b2812; color: #ffd7aa; border: 1px solid #d49a37; padding: 3px 7px; border-radius: 4px; font-family: monospace; font-size: 7.5px; cursor: pointer;">
               🎒 [I] INVENTARIO
             </button>
@@ -4844,11 +4869,32 @@ export class Oakhaven3DExperience {
         </div>
       </div>
 
+      <!-- Official 3D Visual Pack & 22 Turnaround Concept Sheets Modal -->
+      <div id="p3d-designs-modal" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(14, 9, 26, 0.98); border: 2px solid #cc66ff; border-radius: 6px; padding: 14px 18px; max-width: 720px; width: 95%; box-shadow: 0 14px 55px rgba(0,0,0,0.98); display: none; z-index: 135; pointer-events: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1.5px solid #9933cc; padding-bottom: 6px; margin-bottom: 8px;">
+          <div>
+            <div style="font-size: 10.5px; font-weight: bold; color: #f3c6ff; letter-spacing: 0.8px;">
+              🎨 PAQUETE DE DISEÑOS OFICIALES — 22 LÁMINAS 3D & 87 SPRITES INTEGRADOS 🎨
+            </div>
+            <div style="font-family: monospace; font-size: 7.5px; color: #a3ffc7; margin-top: 2px;">
+              Sprites animados, retratos, fondos panorámicos y láminas de referencia 3D activos en escena
+            </div>
+          </div>
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <button id="btn-toggle-visual-style" style="background: #143822; color: #a3ffc7; border: 1px solid #2ecc71; border-radius: 3px; padding: 3px 8px; font-family: monospace; font-size: 7.5px; cursor: pointer; font-weight: bold;">✨ SPRITES 3D: ACTIVOS</button>
+            <button id="p3d-designs-close" style="background: #2a1440; color: #ffaaaa; border: 1px solid #7a2222; border-radius: 3px; padding: 2px 8px; font-size: 8px; cursor: pointer; font-weight: bold;">[X] CERRAR</button>
+          </div>
+        </div>
+        <div id="p3d-designs-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-height: 290px; overflow-y: auto; padding-right: 4px;">
+          <!-- Dynamically filled by renderDesignsModal() -->
+        </div>
+      </div>
+
       <!-- Dialogue Toast (Bottom Center) -->
       <div id="p3d-dialogue-toast-container" style="position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 9px; background: rgba(14, 9, 23, 0.96); border: 1.2px solid #d4af37; border-radius: 4px; padding: 4px 12px; max-width: 560px; width: 85%; box-shadow: 0 6px 25px rgba(0,0,0,0.9);">
-        <img id="p3d-dialogue-portrait" src="/assets/concepts/concept_shalem.png" alt="Retrato Hablante" style="width: 32px; height: 32px; border: 1.2px solid #d4af37; border-radius: 4px; object-fit: cover; object-position: top center; flex-shrink: 0;" />
+        <img id="p3d-dialogue-portrait" src="/assets/characters/portrait_shalem.png" alt="Retrato Hablante" style="width: 32px; height: 32px; border: 1.2px solid #d4af37; border-radius: 4px; object-fit: cover; object-position: center; flex-shrink: 0; image-rendering: pixelated;" />
         <div id="p3d-dialogue-toast" style="font-size: 8px; color: #e6dcfa; line-height: 1.35; flex: 1;">
-          <span style="color: #ffd700; font-weight: bold;">Shalem:</span> «¡Bienvenido a Oakhaven! Pulsa <span style="color:#ffd7aa;">[I]</span> para abrir el inventario o <span style="color:#a3ffc7;">[Q]</span> para usar un bálsamo curativo rápido.»
+          <span style="color: #ffd700; font-weight: bold;">Shalem:</span> «¡Bienvenido a Oakhaven! Pulsa <span style="color:#f3c6ff;">[V]</span> para inspeccionar las 22 láminas 3D, <span style="color:#ffd7aa;">[I]</span> para el inventario o <span style="color:#a3ffc7;">[Q]</span> para usar un bálsamo.»
         </div>
       </div>
 
@@ -4871,8 +4917,42 @@ export class Oakhaven3DExperience {
     this.container.appendChild(this.uiOverlay);
 
     // Button interactions
+    const btnPlay2dDirect = this.uiOverlay.querySelector('#btn-play-2d-direct') as HTMLButtonElement | null;
+    if (btnPlay2dDirect) {
+      btnPlay2dDirect.addEventListener('click', () => {
+        if ((window as any).exit3DPrototype) {
+          (window as any).exit3DPrototype(true);
+        } else {
+          this.exit();
+        }
+      });
+    }
+
     const btnReturn = this.uiOverlay.querySelector('#btn-return-2d') as HTMLButtonElement;
     btnReturn.addEventListener('click', () => this.exit());
+
+    this.designsModalEl = this.uiOverlay.querySelector('#p3d-designs-modal') as HTMLDivElement;
+    const btnToggleDesigns = this.uiOverlay.querySelector('#btn-toggle-designs') as HTMLButtonElement | null;
+    if (btnToggleDesigns) {
+      btnToggleDesigns.addEventListener('click', () => this.toggleDesignsModal());
+    }
+    const btnDesignsClose = this.uiOverlay.querySelector('#p3d-designs-close') as HTMLButtonElement | null;
+    if (btnDesignsClose) {
+      btnDesignsClose.addEventListener('click', () => this.toggleDesignsModal());
+    }
+    const btnToggleVisualStyle = this.uiOverlay.querySelector('#btn-toggle-visual-style') as HTMLButtonElement | null;
+    if (btnToggleVisualStyle) {
+      btnToggleVisualStyle.addEventListener('click', () => {
+        const active = this.visualDesigns.toggleVisualStyle();
+        btnToggleVisualStyle.innerText = active ? '✨ SPRITES 3D: ACTIVOS' : '🧊 GEOMETRÍA 3D: ACTIVA';
+        btnToggleVisualStyle.style.background = active ? '#143822' : '#2a1440';
+        this.spawnFloatingText(
+          this.playerGroup.position,
+          active ? '✨ Diseños Visuales Oficiales Activados' : '🧊 Geometría 3D Procedural Activada',
+          '#f3c6ff'
+        );
+      });
+    }
 
     const btnHero = this.uiOverlay.querySelector('#btn-toggle-hero') as HTMLButtonElement;
     if (btnHero) {
@@ -5118,6 +5198,7 @@ export class Oakhaven3DExperience {
   // =========================================================================
   public getInputContext(): InputContext {
     if (this.isPlayerDefeated) return 'defeated';
+    if (this.isDesignsModalOpen) return 'designs';
     if (this.isCompendiumOpen) return 'compendium';
     if (this.isDialogueOpen) return 'dialogue';
     if (this.isInventoryOpen) return 'inventory';
@@ -5239,6 +5320,14 @@ export class Oakhaven3DExperience {
       return;
     }
 
+    // --- CONTEXT: 3D DESIGNS GALLERY MODAL ---
+    if (context === 'designs') {
+      if (!e.repeat && (e.key === 'Escape' || key === 'v')) {
+        this.toggleDesignsModal();
+      }
+      return;
+    }
+
     // --- CONTEXT: DEFEATED ---
     if (context === 'defeated') {
       return;
@@ -5332,6 +5421,10 @@ export class Oakhaven3DExperience {
     }
     if (key === 'n' && !e.repeat) {
       this.toggleCompendiumModal();
+      return;
+    }
+    if (key === 'v' && !e.repeat) {
+      this.toggleDesignsModal();
       return;
     }
 
@@ -5487,11 +5580,24 @@ export class Oakhaven3DExperience {
 
     const heroPortrait = this.uiOverlay?.querySelector('#p3d-hero-portrait') as HTMLImageElement | null;
     if (heroPortrait) {
-      heroPortrait.src = isKhaterine ? '/assets/concepts/concept_khaterine.png' : '/assets/concepts/concept_thomas.png';
+      heroPortrait.src = isKhaterine ? '/assets/characters/portrait_khaterine.png' : '/assets/characters/portrait_thomas.png';
       heroPortrait.style.borderColor = isKhaterine ? '#8e44ad' : '#d4af37';
     }
 
     this.updateHUD();
+  }
+
+  private normalizePortraitUrl(url: string): string {
+    const map: Record<string, string> = {
+      '/assets/concepts/concept_thomas.png': '/assets/characters/portrait_thomas.png',
+      '/assets/concepts/concept_khaterine.png': '/assets/characters/portrait_khaterine.png',
+      '/assets/concepts/concept_shalem.png': '/assets/characters/portrait_shalem.png',
+      '/assets/concepts/concept_elowen.png': '/assets/characters/portrait_elowen.png',
+      '/assets/concepts/concept_cedric.png': '/assets/characters/portrait_cedric.png',
+      '/assets/concepts/concept_morwenna.png': '/assets/characters/portrait_morwenna.png',
+      '/assets/concepts/concept_morwenna_phase2.png': '/assets/characters/portrait_morwenna.png'
+    };
+    return map[url] || url;
   }
 
   public setDialogueToast(speaker: string, text: string, portrait: string, borderColor = '#d4af37'): void {
@@ -5505,7 +5611,7 @@ export class Oakhaven3DExperience {
       container.style.borderColor = borderColor;
     }
     if (img) {
-      img.src = portrait;
+      img.src = this.normalizePortraitUrl(portrait);
       img.style.borderColor = borderColor;
     }
   }
@@ -8642,6 +8748,17 @@ export class Oakhaven3DExperience {
     this.checkShalemProximity();
     this.updateBurnEffects(delta);
     this.updateScreenPostFx(delta);
+    this.updateOfficial3DVisualStates();
+    this.visualDesigns.update(delta, this.camera);
+
+    // Keep player ambient illumination light following the active hero across all 7 3D zones
+    if (this.playerAmbientFollowLight) {
+      this.playerAmbientFollowLight.position.set(
+        this.playerGroup.position.x,
+        this.playerGroup.position.y + 4.8,
+        this.playerGroup.position.z + 1.5
+      );
+    }
 
     // Swing open cemetery gates smoothly if unlocked
     if (this.cemeteryGateOpen && this.cemeteryGateLeft && this.cemeteryGateRight) {
@@ -10742,6 +10859,563 @@ export class Oakhaven3DExperience {
     }
   }
 
+  // =========================================================================
+  // OFFICIAL VISUAL PACK INTEGRATION IN 3D (87 SPRITE SHEETS & 22 3D SHEETS)
+  // =========================================================================
+  private setupOfficial3DVisualDesigns(): void {
+    // 1. Create illuminated panoramic horizon art vistas across the 3D zones
+    this.visualDesigns.createPanoramicVistas(this.scene);
+
+    // Tag all warning meshes so hideProceduralChildren keeps telegraphed windup indicators intact
+    [
+      this.enemyWarningMesh,
+      this.cultistWarningMesh,
+      this.zealotWarningMesh,
+      this.skeletonWarningMesh,
+      this.morwennaWarningMesh,
+      this.inquisitorWarningMesh,
+      this.rootProwlerWarningMesh,
+      this.crucibleWarningMesh,
+      this.vaneWarningMesh,
+      this.malphasWarningMesh,
+      this.astarothWarningMesh
+    ].forEach(w => {
+      if (w) w.name = 'WarningMesh';
+    });
+
+    // 2. Attach animated official sprite sheets to Thomas (Playable Hero)
+    if (this.thomasModelGroup) {
+      this.visualDesigns.attachAnimatedBillboard(
+        'hero_thomas',
+        this.thomasModelGroup,
+        1.9,
+        1.9,
+        1.05,
+        'idle',
+        {
+          idle: { url: '/assets/characters/thomas_idle.png', frames: 6, fps: 8, loop: true },
+          walk: { url: '/assets/characters/thomas_walk.png', frames: 8, fps: 12, loop: true },
+          run: { url: '/assets/characters/thomas_run.png', frames: 8, fps: 14, loop: true },
+          slash_light: { url: '/assets/characters/thomas_slash_light.png', frames: 6, fps: 16, loop: false },
+          slash_heavy: { url: '/assets/characters/thomas_slash_heavy.png', frames: 8, fps: 14, loop: false },
+          guard: { url: '/assets/characters/thomas_guard.png', frames: 4, fps: 8, loop: true },
+          parry: { url: '/assets/characters/thomas_parry.png', frames: 5, fps: 16, loop: false },
+          dodge: { url: '/assets/characters/thomas_dodge.png', frames: 6, fps: 16, loop: false },
+          cast_heal: { url: '/assets/characters/thomas_cast_heal.png', frames: 6, fps: 10, loop: false },
+          hurt: { url: '/assets/characters/thomas_hurt.png', frames: 4, fps: 12, loop: false },
+          death: { url: '/assets/characters/thomas_death.png', frames: 6, fps: 8, loop: false },
+          unarmed_idle: { url: '/assets/characters/thomas_unarmed_idle.png', frames: 6, fps: 8, loop: true },
+          unarmed_walk: { url: '/assets/characters/thomas_unarmed_walk.png', frames: 8, fps: 12, loop: true },
+          unarmed_punch: { url: '/assets/characters/thomas_unarmed_punch.png', frames: 5, fps: 16, loop: false },
+          throw_sword: { url: '/assets/characters/thomas_throw_sword.png', frames: 6, fps: 14, loop: false }
+        },
+        true
+      );
+    }
+
+    // 3. Attach animated official sprite sheets to Khaterine (Playable Hero)
+    if (this.khaterineModelGroup) {
+      this.visualDesigns.attachAnimatedBillboard(
+        'hero_khaterine',
+        this.khaterineModelGroup,
+        1.9,
+        1.9,
+        1.05,
+        'idle',
+        {
+          idle: { url: '/assets/characters/khaterine_idle.png', frames: 6, fps: 8, loop: true },
+          walk: { url: '/assets/characters/khaterine_walk.png', frames: 8, fps: 12, loop: true },
+          run: { url: '/assets/characters/khaterine_run.png', frames: 8, fps: 14, loop: true },
+          shoot_light: { url: '/assets/characters/khaterine_shoot_light.png', frames: 6, fps: 16, loop: false },
+          shoot_heavy: { url: '/assets/characters/khaterine_shoot_heavy.png', frames: 8, fps: 14, loop: false },
+          dodge: { url: '/assets/characters/khaterine_dodge.png', frames: 6, fps: 16, loop: false },
+          ward: { url: '/assets/characters/khaterine_abyssal_ward.png', frames: 6, fps: 10, loop: true },
+          cast_heal: { url: '/assets/characters/khaterine_cast_heal.png', frames: 6, fps: 10, loop: false },
+          hurt: { url: '/assets/characters/khaterine_hurt.png', frames: 4, fps: 12, loop: false },
+          death: { url: '/assets/characters/khaterine_death.png', frames: 6, fps: 8, loop: false }
+        },
+        true
+      );
+    }
+
+    // 4. Attach animated sprites to NPCs (Thomas NPC, Khaterine NPC, Shalem, Elowen, Cedric)
+    if (this.thomasNpcGroup) {
+      this.visualDesigns.attachAnimatedBillboard(
+        'npc_thomas',
+        this.thomasNpcGroup,
+        1.85,
+        1.85,
+        1.05,
+        'idle',
+        {
+          idle: { url: '/assets/characters/thomas_idle.png', frames: 6, fps: 8, loop: true }
+        },
+        true
+      );
+    }
+
+    if (this.khaterineGroup) {
+      this.visualDesigns.attachAnimatedBillboard(
+        'npc_khaterine',
+        this.khaterineGroup,
+        1.85,
+        1.85,
+        1.05,
+        'idle',
+        {
+          idle: { url: '/assets/characters/khaterine_idle.png', frames: 6, fps: 8, loop: true }
+        },
+        true
+      );
+    }
+
+    if (this.shalemGroup) {
+      this.visualDesigns.attachAnimatedBillboard(
+        'npc_shalem',
+        this.shalemGroup,
+        1.05,
+        1.05,
+        1.4,
+        'sit_idle',
+        {
+          sit_idle: { url: '/assets/characters/shalem_sit_idle.png', frames: 6, fps: 6, loop: true },
+          walk: { url: '/assets/characters/shalem_walk.png', frames: 6, fps: 10, loop: true },
+          jump: { url: '/assets/characters/shalem_jump.png', frames: 4, fps: 10, loop: false },
+          alert: { url: '/assets/characters/shalem_alert_meow.png', frames: 4, fps: 8, loop: true }
+        },
+        false
+      );
+    }
+
+    if (this.elowenGroup) {
+      this.visualDesigns.attachAnimatedBillboard(
+        'npc_elowen',
+        this.elowenGroup,
+        1.65,
+        1.65,
+        0.95,
+        'idle',
+        {
+          idle: { url: '/assets/characters/elowen_idle.png', frames: 4, fps: 6, loop: true },
+          brew: { url: '/assets/characters/elowen_brew.png', frames: 6, fps: 8, loop: true },
+          give: { url: '/assets/characters/elowen_give.png', frames: 4, fps: 8, loop: false }
+        },
+        true
+      );
+    }
+
+    if (this.cedricGroup) {
+      this.visualDesigns.attachAnimatedBillboard(
+        'npc_cedric',
+        this.cedricGroup,
+        1.65,
+        1.65,
+        0.95,
+        'idle',
+        {
+          idle: { url: '/assets/characters/cedric_idle.png', frames: 4, fps: 6, loop: true },
+          bless: { url: '/assets/characters/cedric_bless.png', frames: 6, fps: 8, loop: true }
+        },
+        true
+      );
+    }
+
+    // 5. Attach animated sprites to Enemies (Hound, Cultist, Zealot, Skeleton, Ambush Skeleton)
+    if (this.enemyGroup) {
+      this.visualDesigns.attachAnimatedBillboard(
+        'enemy_hound',
+        this.enemyGroup,
+        1.85,
+        1.4,
+        0.8,
+        'patrol',
+        {
+          patrol: { url: '/assets/enemies/hound_patrol.png', frames: 6, fps: 10, loop: true },
+          alert: { url: '/assets/enemies/hound_alert.png', frames: 4, fps: 10, loop: false },
+          run: { url: '/assets/enemies/hound_run.png', frames: 6, fps: 14, loop: true },
+          pounce: { url: '/assets/enemies/hound_pounce.png', frames: 5, fps: 14, loop: false },
+          stun: { url: '/assets/enemies/hound_stun.png', frames: 4, fps: 8, loop: true },
+          death: { url: '/assets/enemies/hound_death.png', frames: 5, fps: 10, loop: false }
+        },
+        true
+      );
+    }
+
+    if (this.cultistGroup) {
+      this.visualDesigns.attachAnimatedBillboard(
+        'enemy_cultist',
+        this.cultistGroup,
+        1.7,
+        1.7,
+        0.95,
+        'patrol',
+        {
+          patrol: { url: '/assets/enemies/cultist_patrol.png', frames: 6, fps: 8, loop: true },
+          alert: { url: '/assets/enemies/cultist_alert.png', frames: 4, fps: 8, loop: false },
+          swing: { url: '/assets/enemies/cultist_swing.png', frames: 6, fps: 12, loop: false },
+          stun: { url: '/assets/enemies/cultist_stun.png', frames: 4, fps: 8, loop: true },
+          death: { url: '/assets/enemies/cultist_death.png', frames: 5, fps: 10, loop: false }
+        },
+        true
+      );
+    }
+
+    if (this.zealotGroup) {
+      this.visualDesigns.attachAnimatedBillboard(
+        'enemy_zealot',
+        this.zealotGroup,
+        1.95,
+        1.95,
+        1.05,
+        'patrol',
+        {
+          patrol: { url: '/assets/enemies/zealot_patrol.png', frames: 6, fps: 8, loop: true },
+          windup: { url: '/assets/enemies/zealot_windup.png', frames: 5, fps: 10, loop: true },
+          whip: { url: '/assets/enemies/zealot_whip_slam.png', frames: 6, fps: 14, loop: false },
+          stun: { url: '/assets/enemies/zealot_stun.png', frames: 4, fps: 8, loop: true },
+          death: { url: '/assets/enemies/zealot_death.png', frames: 6, fps: 10, loop: false }
+        },
+        true
+      );
+    }
+
+    if (this.skeletonGroup) {
+      this.visualDesigns.attachAnimatedBillboard(
+        'enemy_skeleton',
+        this.skeletonGroup,
+        2.0,
+        2.0,
+        1.08,
+        'patrol',
+        {
+          patrol: { url: '/assets/enemies/skeleton_patrol.png', frames: 6, fps: 8, loop: true },
+          windup: { url: '/assets/enemies/skeleton_windup.png', frames: 5, fps: 10, loop: true },
+          cleave: { url: '/assets/enemies/skeleton_cleave.png', frames: 6, fps: 14, loop: false },
+          stun: { url: '/assets/enemies/skeleton_stun.png', frames: 4, fps: 8, loop: true },
+          death: { url: '/assets/enemies/skeleton_collapse.png', frames: 6, fps: 10, loop: false }
+        },
+        true
+      );
+    }
+
+    if (this.cryptAmbushSkeletonGroup) {
+      this.visualDesigns.attachAnimatedBillboard(
+        'enemy_ambush_skeleton',
+        this.cryptAmbushSkeletonGroup,
+        1.9,
+        1.9,
+        1.0,
+        'patrol',
+        {
+          patrol: { url: '/assets/enemies/skeleton_patrol.png', frames: 6, fps: 8, loop: true },
+          cleave: { url: '/assets/enemies/skeleton_cleave.png', frames: 6, fps: 14, loop: false },
+          death: { url: '/assets/enemies/skeleton_collapse.png', frames: 6, fps: 10, loop: false }
+        },
+        true
+      );
+    }
+
+    // 6. Attach animated sprites to Bosses across Acts I - V
+    if (this.morwennaGroup) {
+      this.visualDesigns.attachAnimatedBillboard(
+        'boss_morwenna',
+        this.morwennaGroup,
+        2.8,
+        2.8,
+        1.45,
+        'p1_idle',
+        {
+          p1_idle: { url: '/assets/enemies/morwenna_levitate_idle.png', frames: 6, fps: 8, loop: true },
+          p1_cast: { url: '/assets/enemies/morwenna_crucible_cast.png', frames: 6, fps: 12, loop: false },
+          p1_stun: { url: '/assets/enemies/morwenna_p1_stun.png', frames: 4, fps: 8, loop: true },
+          transform: { url: '/assets/enemies/morwenna_phase_transform.png', frames: 8, fps: 10, loop: false },
+          p2_idle: { url: '/assets/enemies/morwenna_p2_idle.png', frames: 6, fps: 10, loop: true },
+          p2_whirlwind: { url: '/assets/enemies/morwenna_p2_whirlwind.png', frames: 8, fps: 16, loop: true },
+          p2_lunge: { url: '/assets/enemies/morwenna_p2_lunge.png', frames: 6, fps: 14, loop: false },
+          p2_geyser: { url: '/assets/enemies/morwenna_p2_geyser_summon.png', frames: 6, fps: 12, loop: false },
+          p2_stun: { url: '/assets/enemies/morwenna_p2_stun.png', frames: 4, fps: 8, loop: true },
+          p2_death: { url: '/assets/enemies/morwenna_p2_death.png', frames: 8, fps: 10, loop: false }
+        },
+        true
+      );
+    }
+
+    if (this.inquisitorGroup) {
+      this.visualDesigns.attachAnimatedBillboard(
+        'boss_inquisitor',
+        this.inquisitorGroup,
+        2.5,
+        2.5,
+        1.3,
+        'patrol',
+        {
+          patrol: { url: '/assets/enemies/zealot_patrol.png', frames: 6, fps: 8, loop: true },
+          windup: { url: '/assets/enemies/zealot_windup.png', frames: 5, fps: 10, loop: true },
+          whip: { url: '/assets/enemies/zealot_whip_slam.png', frames: 6, fps: 14, loop: false },
+          stun: { url: '/assets/enemies/zealot_stun.png', frames: 4, fps: 8, loop: true },
+          death: { url: '/assets/enemies/zealot_death.png', frames: 6, fps: 10, loop: false }
+        },
+        true
+      );
+    }
+
+    if (this.rootProwlerGroup) {
+      this.visualDesigns.attachAnimatedBillboard(
+        'boss_root_prowler',
+        this.rootProwlerGroup,
+        2.4,
+        1.8,
+        0.95,
+        'patrol',
+        {
+          patrol: { url: '/assets/enemies/hound_patrol.png', frames: 6, fps: 10, loop: true },
+          alert: { url: '/assets/enemies/hound_alert.png', frames: 4, fps: 10, loop: false },
+          run: { url: '/assets/enemies/hound_run.png', frames: 6, fps: 14, loop: true },
+          pounce: { url: '/assets/enemies/hound_pounce.png', frames: 5, fps: 14, loop: false },
+          stun: { url: '/assets/enemies/hound_stun.png', frames: 4, fps: 8, loop: true },
+          death: { url: '/assets/enemies/hound_death.png', frames: 5, fps: 10, loop: false }
+        },
+        true
+      );
+    }
+
+    if (this.crucibleGuardianGroup) {
+      this.visualDesigns.attachAnimatedBillboard(
+        'boss_crucible',
+        this.crucibleGuardianGroup,
+        2.8,
+        2.8,
+        1.45,
+        'idle',
+        {
+          idle: { url: '/assets/enemies/zealot_patrol.png', frames: 6, fps: 8, loop: true },
+          attack: { url: '/assets/enemies/zealot_whip_slam.png', frames: 6, fps: 14, loop: false },
+          stun: { url: '/assets/enemies/zealot_stun.png', frames: 4, fps: 8, loop: true },
+          death: { url: '/assets/enemies/zealot_death.png', frames: 6, fps: 10, loop: false }
+        },
+        true
+      );
+    }
+
+    if (this.captainVaneGroup) {
+      this.visualDesigns.attachAnimatedBillboard(
+        'boss_vane',
+        this.captainVaneGroup,
+        2.65,
+        2.65,
+        1.35,
+        'idle',
+        {
+          idle: { url: '/assets/enemies/skeleton_patrol.png', frames: 6, fps: 8, loop: true },
+          attack: { url: '/assets/enemies/skeleton_cleave.png', frames: 6, fps: 14, loop: false },
+          stun: { url: '/assets/enemies/skeleton_stun.png', frames: 4, fps: 8, loop: true },
+          death: { url: '/assets/enemies/skeleton_collapse.png', frames: 6, fps: 10, loop: false }
+        },
+        true
+      );
+    }
+
+    if (this.rexMalphasGroup) {
+      this.visualDesigns.attachAnimatedBillboard(
+        'boss_malphas',
+        this.rexMalphasGroup,
+        2.8,
+        2.8,
+        1.45,
+        'idle',
+        {
+          idle: { url: '/assets/enemies/morwenna_levitate_idle.png', frames: 6, fps: 8, loop: true },
+          attack: { url: '/assets/enemies/morwenna_p2_lunge.png', frames: 6, fps: 14, loop: false },
+          phase2: { url: '/assets/enemies/morwenna_p2_idle.png', frames: 6, fps: 10, loop: true },
+          stun: { url: '/assets/enemies/morwenna_p2_stun.png', frames: 4, fps: 8, loop: true },
+          death: { url: '/assets/enemies/morwenna_p2_death.png', frames: 8, fps: 10, loop: false }
+        },
+        true
+      );
+    }
+
+    if (this.astarothGroup) {
+      this.visualDesigns.attachAnimatedBillboard(
+        'boss_astaroth',
+        this.astarothGroup,
+        3.6,
+        3.6,
+        1.85,
+        'idle',
+        {
+          idle: { url: '/assets/enemies/morwenna_p2_idle.png', frames: 6, fps: 10, loop: true },
+          attack: { url: '/assets/enemies/morwenna_p2_whirlwind.png', frames: 8, fps: 16, loop: true },
+          stun: { url: '/assets/enemies/morwenna_p2_stun.png', frames: 4, fps: 8, loop: true },
+          death: { url: '/assets/enemies/morwenna_p2_death.png', frames: 8, fps: 10, loop: false }
+        },
+        false
+      );
+    }
+  }
+
+  private updateOfficial3DVisualStates(): void {
+    if (!this.visualDesigns.isEnabled) return;
+
+    // 1. Active Hero Clip Sync
+    const isMoving = this.playerVelocity.lengthSq() > 0.25;
+    if (this.activeHero === 'thomas') {
+      const armed = this.playerStats.isArmed;
+      let clip = armed ? 'idle' : 'unarmed_idle';
+      if (this.playerStats.isDodging) {
+        clip = 'dodge';
+      } else if (this.isPlayerAttacking) {
+        clip = armed ? (this.attackCooldown > 0.3 ? 'slash_heavy' : 'slash_light') : 'unarmed_punch';
+      } else if (this.playerStats.isGuarding) {
+        clip = 'guard';
+      } else if (isMoving) {
+        clip = armed ? 'run' : 'unarmed_walk';
+      }
+      this.visualDesigns.setClip('hero_thomas', clip);
+    } else {
+      let clip = 'idle';
+      if (this.playerStats.isDodging || this.isDaggerVortexActive) {
+        clip = 'dodge';
+      } else if (this.isPlayerAttacking) {
+        clip = this.attackCooldown > 0.35 ? 'shoot_heavy' : 'shoot_light';
+      } else if (this.playerStats.isGuarding) {
+        clip = 'ward';
+      } else if (isMoving) {
+        clip = 'run';
+      }
+      this.visualDesigns.setClip('hero_khaterine', clip);
+    }
+
+    // 2. Standard Enemies Clip Sync
+    const houndClip =
+      this.enemyState === 'DEAD' ? 'death' :
+      this.enemyState === 'STUNNED' ? 'stun' :
+      this.enemyState === 'ATTACK' || this.enemyState === 'WINDUP' ? 'pounce' :
+      this.enemyState === 'ALERT' ? 'alert' :
+      this.enemyState === 'CHASE' ? 'run' : 'patrol';
+    this.visualDesigns.setClip('enemy_hound', houndClip);
+
+    const cultistClip =
+      this.cultistState === 'DEAD' ? 'death' :
+      this.cultistState === 'STUNNED' ? 'stun' :
+      this.cultistState === 'ATTACK' || this.cultistState === 'WINDUP' ? 'swing' :
+      this.cultistState === 'ALERT' ? 'alert' : 'patrol';
+    this.visualDesigns.setClip('enemy_cultist', cultistClip);
+
+    const zealotClip =
+      this.zealotState === 'DEAD' ? 'death' :
+      this.zealotState === 'STUNNED' ? 'stun' :
+      this.zealotState === 'ATTACK' ? 'whip' :
+      this.zealotState === 'WINDUP' ? 'windup' : 'patrol';
+    this.visualDesigns.setClip('enemy_zealot', zealotClip);
+
+    const skelClip =
+      this.skeletonState === 'DEAD' ? 'death' :
+      this.skeletonState === 'STUNNED' ? 'stun' :
+      this.skeletonState === 'ATTACK' ? 'cleave' :
+      this.skeletonState === 'WINDUP' ? 'windup' : 'patrol';
+    this.visualDesigns.setClip('enemy_skeleton', skelClip);
+
+    // 3. Morwenna Boss Clip Sync
+    let morwennaClip = this.morwennaPhase === 2 ? 'p2_idle' : 'p1_idle';
+    if (this.morwennaState === 'DEAD') {
+      morwennaClip = 'p2_death';
+    } else if (this.morwennaState === 'PHASE2_TRANSITION') {
+      morwennaClip = 'transform';
+    } else if (this.morwennaState === 'STUNNED') {
+      morwennaClip = this.morwennaPhase === 2 ? 'p2_stun' : 'p1_stun';
+    } else if (this.morwennaState === 'WINDUP' || this.morwennaState === 'ATTACK') {
+      if (this.morwennaPhase === 1) {
+        morwennaClip = 'p1_cast';
+      } else if (this.morwennaAttackPattern === 'WHIRLWIND') {
+        morwennaClip = 'p2_whirlwind';
+      } else if (this.morwennaAttackPattern === 'FLAME_GEYSERS') {
+        morwennaClip = 'p2_geyser';
+      } else {
+        morwennaClip = 'p2_lunge';
+      }
+    }
+    this.visualDesigns.setClip('boss_morwenna', morwennaClip);
+
+    // 4. Other Bosses Clip Sync
+    const inqClip =
+      this.inquisitorEncounter.isDefeated ? 'death' :
+      this.inquisitorEncounter.state === 'RECOVERY' ? 'stun' :
+      this.inquisitorEncounter.state === 'SLAM_TELEGRAPH' ? 'windup' :
+      this.inquisitorEncounter.state === 'MELEE_ATTACK' || this.inquisitorEncounter.state === 'SLAM_IMPACT' ? 'whip' : 'patrol';
+    this.visualDesigns.setClip('boss_inquisitor', inqClip);
+
+    const prowlerClip =
+      this.rootProwlerEncounter.isDefeated ? 'death' :
+      this.rootProwlerEncounter.state === 'STUNNED' ? 'stun' :
+      this.rootProwlerEncounter.state === 'ATTACK' || this.rootProwlerEncounter.state === 'WINDUP' ? 'pounce' :
+      this.rootProwlerEncounter.state === 'ALERT' ? 'alert' :
+      this.rootProwlerEncounter.state === 'CHASE' ? 'run' : 'patrol';
+    this.visualDesigns.setClip('boss_root_prowler', prowlerClip);
+
+    const crucibleClip =
+      this.crucibleGuardianEncounter.isDefeated ? 'death' :
+      this.crucibleGuardianEncounter.state === 'STUNNED' ? 'stun' :
+      this.crucibleGuardianEncounter.state === 'HAMMER_SLAM' || this.crucibleGuardianEncounter.state === 'SLAG_BURST' ? 'attack' : 'idle';
+    this.visualDesigns.setClip('boss_crucible', crucibleClip);
+
+    const vaneClip =
+      this.captainVaneEncounter.isDefeated ? 'death' :
+      this.captainVaneEncounter.state === 'STUNNED' ? 'stun' :
+      this.captainVaneEncounter.state === 'BASH' || this.captainVaneEncounter.state === 'GREAT_SLASH' ? 'attack' : 'idle';
+    this.visualDesigns.setClip('boss_vane', vaneClip);
+
+    const malphasClip =
+      this.rexMalphasEncounter.isDefeated ? 'death' :
+      this.rexMalphasEncounter.state === 'STUNNED' ? 'stun' :
+      this.rexMalphasEncounter.state === 'SOLAR_COMBO' || this.rexMalphasEncounter.state === 'LEY_DEL_DESEO' ? 'attack' :
+      this.rexMalphasEncounter.phase === 2 ? 'phase2' : 'idle';
+    this.visualDesigns.setClip('boss_malphas', malphasClip);
+
+    const astarothClip =
+      this.astarothEncounter.isDefeated ? 'death' :
+      this.astarothEncounter.state === 'STUNNED' ? 'stun' :
+      this.astarothEncounter.state === 'METEOR_STORM' || this.astarothEncounter.state === 'BLACK_SUN_BURST' ? 'attack' : 'idle';
+    this.visualDesigns.setClip('boss_astaroth', astarothClip);
+  }
+
+  public toggleDesignsModal(): void {
+    if (!this.designsModalEl) return;
+    this.isDesignsModalOpen = !this.isDesignsModalOpen;
+    if (this.isDesignsModalOpen) {
+      this.releaseAllInputs();
+      this.designsModalEl.style.display = 'block';
+      this.renderDesignsModal();
+      this.audio.playSfx('menu_select');
+    } else {
+      this.designsModalEl.style.display = 'none';
+      this.audio.playSfx('menu_select');
+    }
+  }
+
+  private renderDesignsModal(): void {
+    if (!this.designsModalEl) return;
+    const grid = this.designsModalEl.querySelector('#p3d-designs-grid') as HTMLDivElement | null;
+    if (!grid || grid.children.length > 0) return;
+
+    VISUAL_PACK_3D_CONCEPTS.forEach(concept => {
+      const card = document.createElement('div');
+      card.style.cssText = `
+        background: rgba(24, 15, 38, 0.94);
+        border: 1px solid #9944cc;
+        border-radius: 5px;
+        padding: 6px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      `;
+      card.innerHTML = `
+        <img src="${concept.url}" alt="${concept.title}" style="width: 100%; height: 105px; object-fit: contain; background: #0d0914; border-radius: 3px; border: 1px solid #4a2c66;" />
+        <div style="font-size: 7.5px; font-weight: bold; color: #ffd700; text-align: center;">${concept.title}</div>
+      `;
+      grid.appendChild(card);
+    });
+  }
+
   public exit(): void {
     this.destroy();
     if (this.onExitCallback) {
@@ -10754,6 +11428,8 @@ export class Oakhaven3DExperience {
     if (this.animationFrameId) {
       cancelAnimationFrame(this.animationFrameId);
     }
+
+    this.visualDesigns.dispose();
 
     this.releaseAllInputs();
 

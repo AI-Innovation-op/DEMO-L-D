@@ -15,6 +15,7 @@ import { Weapon } from '../../domain/weapon/Weapon';
 import { SessionStateStore } from '../../domain/save/SessionStateStore';
 import { EventBus } from '../../domain/shared/DomainEvent';
 import { FinisherStyle, FinisherTriggeredEvent } from '../../domain/combat/CombatTypes';
+import { registerVisualPackAnimations } from '../assets/VisualPackCatalog';
 
 export class GameScene extends Phaser.Scene {
   // Dual Characters (Thomas & Khaterine)
@@ -32,7 +33,7 @@ export class GameScene extends Phaser.Scene {
   private playerShadow!: Phaser.GameObjects.Ellipse;
   private allySprite!: Phaser.GameObjects.Sprite;
   private allyShadow!: Phaser.GameObjects.Ellipse;
-  private shalemSprite!: Phaser.GameObjects.Image;
+  private shalemSprite!: Phaser.GameObjects.Sprite;
   private shalemShadow!: Phaser.GameObjects.Ellipse;
 
   // Particle Systems
@@ -40,25 +41,26 @@ export class GameScene extends Phaser.Scene {
 
   // Active Entities
   private enemies: Enemy[] = [];
-  private enemySprites: Map<string, Phaser.GameObjects.Image> = new Map();
+  private enemySprites: Map<string, Phaser.GameObjects.Sprite> = new Map();
   private enemyShadows: Map<string, Phaser.GameObjects.Ellipse> = new Map();
   private droppedWeaponSprites: Map<string, Phaser.GameObjects.Container> = new Map();
+  private scenarioProps: Phaser.GameObjects.GameObject[] = [];
 
   // Boss
   private currentBoss?: Boss;
-  private bossSprite?: Phaser.GameObjects.Image;
+  private bossSprite?: Phaser.GameObjects.Sprite;
   private bossShadow?: Phaser.GameObjects.Ellipse;
   private bossMarker?: Phaser.GameObjects.Text;
   private bossMarkerTween?: Phaser.Tweens.Tween;
 
   // NPC: Elowen de Oakhaven
-  private elowenSprite?: Phaser.GameObjects.Image;
+  private elowenSprite?: Phaser.GameObjects.Sprite;
   private elowenShadow?: Phaser.GameObjects.Ellipse;
   private elowenBadge?: Phaser.GameObjects.Text;
   private hasTalkedToElowen: boolean = false;
 
   // NPC: Padre Cedric
-  private cedricSprite?: Phaser.GameObjects.Image;
+  private cedricSprite?: Phaser.GameObjects.Sprite;
   private cedricShadow?: Phaser.GameObjects.Ellipse;
   private hasTalkedToCedric: boolean = false;
   private hasRosarioCedric: boolean = false;
@@ -166,7 +168,7 @@ export class GameScene extends Phaser.Scene {
   private tutorialBannerText?: Phaser.GameObjects.Text;
   private tutorialSkipPrompt?: Phaser.GameObjects.Text;
   private tutorialHits: number = 0;
-  private shouldPlayOakhavenTraining: boolean = true;
+  private shouldPlayOakhavenTraining: boolean = false;
   private keyEsc!: Phaser.Input.Keyboard.Key;
 
   constructor() {
@@ -276,15 +278,8 @@ export class GameScene extends Phaser.Scene {
     // 4.1 Atmospheric Vignette
     this.add.image(320, 180, 'fx_vignette').setDisplaySize(640, 360).setDepth(350).setAlpha(0.6);
 
-    // 4.2 Walking Animations
-    if (!this.anims.exists('thomas_walk_anim')) {
-      this.anims.create({
-        key: 'thomas_walk_anim',
-        frames: this.anims.generateFrameNumbers('thomas_walk', { start: 0, end: 3 }),
-        frameRate: 7,
-        repeat: -1
-      });
-    }
+    // 4.2 Register All Multi-Frame Animations from the Visual Pack
+    registerVisualPackAnimations(this);
 
     // 5. Player & Shadows (2.5D Depth Arena)
     const initX = 110;
@@ -293,14 +288,15 @@ export class GameScene extends Phaser.Scene {
 
     this.playerShadow = this.add.ellipse(initX, initY, 26, 8, 0x000000, 0.45).setDepth(initY - 1);
     const playerTex = this.player.id === 'thomas' ? 'thomas_idle' : 'khaterine_idle';
-    const playerOriginY = this.player.id === 'thomas' ? 0.9 : 1.0;
+    const playerOriginY = 0.9;
     this.playerSprite = this.normalizeSprite(
-      this.add.sprite(initX, initY, playerTex),
-      58,
-      72,
+      this.add.sprite(initX, initY, playerTex, 0),
+      64,
+      64,
       0.5,
       playerOriginY
     ).setDepth(initY);
+    this.playAnimSafe(this.playerSprite, playerTex);
 
     // 6. Ally Companion (Walking alongside in 2.5D)
     const allyInitX = 65;
@@ -308,26 +304,29 @@ export class GameScene extends Phaser.Scene {
     this.allyChar.position = new Vector2(allyInitX, allyInitY);
     this.allyShadow = this.add.ellipse(allyInitX, allyInitY, 24, 7, 0x000000, 0.4).setDepth(allyInitY - 1);
     const allyTex = this.allyChar.id === 'thomas' ? 'thomas_idle' : 'khaterine_idle';
-    const allyOriginY = this.allyChar.id === 'thomas' ? 0.9 : 1.0;
+    const allyOriginY = 0.9;
     this.allySprite = this.normalizeSprite(
-      this.add.sprite(allyInitX, allyInitY, allyTex),
-      58,
-      72,
+      this.add.sprite(allyInitX, allyInitY, allyTex, 0),
+      64,
+      64,
       0.5,
       allyOriginY
     ).setAlpha(0.92).setDepth(allyInitY);
+    this.playAnimSafe(this.allySprite, allyTex);
 
-    // 7. Shalem Sprite (Cat Companion in 2.5D)
+    // 7. Shalem Sprite (Animated Cat Companion in 2.5D)
     const catInitX = 85;
     const catInitY = 268;
     this.shalemShadow = this.add.ellipse(catInitX, catInitY, 20, 6, 0x000000, 0.45).setDepth(catInitY - 1);
+    const shalemKey = this.textures.exists('shalem_sit_idle') ? 'shalem_sit_idle' : 'shalem_cat';
     this.shalemSprite = this.normalizeSprite(
-      this.add.image(catInitX, catInitY, 'shalem_cat'),
-      40,
-      32,
+      this.add.sprite(catInitX, catInitY, shalemKey, 0),
+      36,
+      36,
       0.5,
-      1
+      0.92
     ).setDepth(catInitY);
+    this.playAnimSafe(this.shalemSprite, 'shalem_sit_idle');
 
     // 8. Floating Interaction Badge (Follows nearest interactable target)
     this.floatingPromptBadge = this.add.text(0, 0, '[E] HABLAR', {
@@ -572,8 +571,12 @@ export class GameScene extends Phaser.Scene {
         this.audio.playSfx('dodge');
         const dashDir = this.player.facingDirection;
 
+        // Play Dodge animation from Visual Pack
+        const dodgeAnim = this.player.id === 'thomas' ? 'thomas_dodge' : 'khaterine_dodge';
+        this.playAnimSafe(this.playerSprite, dodgeAnim, true);
+
         // Spawn afterimage ghost
-        const ghost = this.add.image(this.playerSprite.x, this.playerSprite.y, this.playerSprite.texture.key)
+        const ghost = this.add.sprite(this.playerSprite.x, this.playerSprite.y, this.playerSprite.texture.key, this.playerSprite.frame?.name ?? 0)
           .setOrigin(0.5, this.playerSprite.originY)
           .setAlpha(0.6)
           .setScale(this.playerSprite.scaleX, this.playerSprite.scaleY)
@@ -598,6 +601,9 @@ export class GameScene extends Phaser.Scene {
           onComplete: () => {
             this.player.position = new Vector2(this.playerSprite.x, this.playerSprite.y);
             this.player.finishDodge();
+            const isDisarmed = this.player.disarmManager.isPlayerDisarmed();
+            const idleAnim = this.player.id === 'thomas' ? (isDisarmed ? 'thomas_unarmed_idle' : 'thomas_idle') : 'khaterine_idle';
+            this.playAnimSafe(this.playerSprite, idleAnim);
             if (this.isTutorialActive && this.tutorialStep === 4) {
               this.time.delayedCall(300, () => this.finishTrainingAndSpawnRealEnemies());
             }
@@ -610,12 +616,17 @@ export class GameScene extends Phaser.Scene {
     if (this.keyL.isDown) {
       if (Phaser.Input.Keyboard.JustDown(this.keyL)) {
         this.lastGuardPressTime = this.time.now;
+        const guardAnim = this.player.id === 'thomas' ? 'thomas_guard' : 'khaterine_ward';
+        this.playAnimSafe(this.playerSprite, guardAnim, true);
       }
       this.player.startBlock();
       this.playerSprite.setTint(0x77aaff);
     } else if (this.player.state === CharacterState.BLOCKING) {
       this.player.stopBlock();
       this.playerSprite.clearTint();
+      const isDisarmed = this.player.disarmManager.isPlayerDisarmed();
+      const idleAnim = this.player.id === 'thomas' ? (isDisarmed ? 'thomas_unarmed_idle' : 'thomas_idle') : 'khaterine_idle';
+      this.playAnimSafe(this.playerSprite, idleAnim);
     }
 
     // Light Attack [J]
@@ -654,7 +665,8 @@ export class GameScene extends Phaser.Scene {
 
     if ((moveX !== 0 || moveY !== 0) &&
         this.player.state !== CharacterState.BLOCKING &&
-        this.player.state !== CharacterState.ATTACKING) {
+        this.player.state !== CharacterState.ATTACKING &&
+        this.player.state !== CharacterState.DODGING) {
 
       const mag = Math.hypot(moveX, moveY);
       const normX = moveX / mag;
@@ -675,15 +687,12 @@ export class GameScene extends Phaser.Scene {
       }
       this.player.move(moveX, moveY);
 
-      // Play walk animation if player is Thomas and not disarmed
-      if (this.player.id === 'thomas' && !this.player.disarmManager.isPlayerDisarmed()) {
-        if (!this.playerSprite.anims.isPlaying || this.playerSprite.anims.currentAnim?.key !== 'thomas_walk_anim') {
-          this.playerSprite.play('thomas_walk_anim');
-        }
-      }
+      // Play run/walk animation for active hero
+      const moveAnim = this.player.id === 'thomas' ? 'thomas_run' : 'khaterine_run';
+      this.playAnimSafe(this.playerSprite, moveAnim);
 
-      // 2.5D Perspective Scaling (scale smoothly between 0.88 and 1.10)
-      const scale = 0.88 + ((nextY - 205) / 110) * 0.22;
+      // 2.5D Perspective Scaling (scale smoothly between 0.90 and 1.12)
+      const scale = 0.90 + ((nextY - 205) / 110) * 0.22;
       this.playerSprite.setScale(this.player.facingDirection > 0 ? scale : -scale, scale);
 
       // Depth sorting
@@ -691,17 +700,14 @@ export class GameScene extends Phaser.Scene {
       this.playerShadow.setPosition(nextX, nextY).setDepth(nextY - 1).setScale(scale);
     } else {
       this.player.move(0, 0);
-      if (this.player.id === 'thomas' &&
-          this.player.state !== CharacterState.ATTACKING &&
-          this.player.state !== CharacterState.DODGING) {
-        if (this.playerSprite.anims.isPlaying) {
-          this.playerSprite.stop();
-        }
+      if (this.player.state !== CharacterState.ATTACKING &&
+          this.player.state !== CharacterState.DODGING &&
+          this.player.state !== CharacterState.BLOCKING) {
         const isDisarmed = this.player.disarmManager.isPlayerDisarmed();
-        const idleTex = isDisarmed ? 'thomas_disarmed' : 'thomas_idle';
-        if (this.playerSprite.texture.key !== idleTex) {
-          this.playerSprite.setTexture(idleTex);
-        }
+        const idleAnim = this.player.id === 'thomas'
+          ? (isDisarmed ? 'thomas_unarmed_idle' : 'thomas_idle')
+          : 'khaterine_idle';
+        this.playAnimSafe(this.playerSprite, idleAnim);
       }
     }
   }
@@ -731,18 +737,20 @@ export class GameScene extends Phaser.Scene {
     this.player.position = new Vector2(this.playerSprite.x, this.playerSprite.y);
     this.allyChar.position = new Vector2(this.allySprite.x, this.allySprite.y);
 
-    // Swap textures and origins
-    const playerTex = this.player.id === 'thomas' ? 'thomas_idle' : 'khaterine_idle';
-    const allyTex = this.allyChar.id === 'thomas' ? 'thomas_idle' : 'khaterine_idle';
+    // Swap textures and play idle animations
+    const isPlayerDisarmed = this.player.id === 'thomas' && this.player.disarmManager.isPlayerDisarmed();
+    const isAllyDisarmed = this.allyChar.id === 'thomas' && this.allyChar.disarmManager.isPlayerDisarmed();
+    const playerTex = this.player.id === 'thomas' ? (isPlayerDisarmed ? 'thomas_unarmed_idle' : 'thomas_idle') : 'khaterine_idle';
+    const allyTex = this.allyChar.id === 'thomas' ? (isAllyDisarmed ? 'thomas_unarmed_idle' : 'thomas_idle') : 'khaterine_idle';
 
-    this.playerSprite.setTexture(playerTex);
-    this.allySprite.setTexture(allyTex);
+    this.playAnimSafe(this.playerSprite, playerTex, true);
+    this.playAnimSafe(this.allySprite, allyTex, true);
 
-    this.normalizeSprite(this.playerSprite, 58, 72, 0.5, this.player.id === 'thomas' ? 0.9 : 1.0);
-    this.normalizeSprite(this.allySprite, 58, 72, 0.5, this.allyChar.id === 'thomas' ? 0.9 : 1.0);
+    this.normalizeSprite(this.playerSprite, 64, 64, 0.5, 0.9);
+    this.normalizeSprite(this.allySprite, 64, 64, 0.5, 0.9);
 
     this.triggerShalemBalloon(
-      `Shalem: «¡Ahora juegas como ${this.player.name}! ${this.player.id === 'khaterine' ? '¡Purifica las sombras con tus rezos!' : '¡Avanza con tu espada y tus puños!' }»`,
+      `Shalem: «¡Ahora juegas como ${this.player.name}! ${this.player.id === 'khaterine' ? '¡Purifica las sombras con tu arco abisal!' : '¡Avanza con tu espada y tus puños!' }»`,
       3500
     );
   }
@@ -1063,22 +1071,19 @@ export class GameScene extends Phaser.Scene {
   }
 
   private executeAttack(isHeavy: boolean): void {
-    if (this.playerSprite.anims.isPlaying) {
-      this.playerSprite.stop();
-    }
     const isDisarmed = this.player.disarmManager.isPlayerDisarmed();
 
-    // Khaterine: Ranged Abyssal Spellcasting
+    // Khaterine: Ranged Abyssal Spellcasting / Bow Shot
     if (this.player.id === 'khaterine' && !isDisarmed) {
       this.castKhaterineSpell(isHeavy);
       return;
     }
 
-    const attackTex = isDisarmed
-      ? 'thomas_disarmed'
-      : (this.player.id === 'thomas' ? 'thomas_attack' : 'khaterine_attack');
+    const attackAnim = isDisarmed
+      ? (isHeavy ? 'thomas_punch_heavy' : 'thomas_punch_light')
+      : (isHeavy ? 'thomas_slash_heavy' : 'thomas_slash_light');
 
-    this.playerSprite.setTexture(attackTex);
+    this.playAnimSafe(this.playerSprite, attackAnim, true);
     this.audio.playCombatHit(isHeavy);
 
     if (isHeavy) {
@@ -1101,32 +1106,23 @@ export class GameScene extends Phaser.Scene {
     });
     this.player.position = new Vector2(nextPlayerX, this.player.position.y);
 
-    // Visual Slash Arc Effect
+    // Visual Slash Arc Effect using Official VFX Sprite Sheets (fx_slash_gold / fx_slash_abyss)
     if (!isDisarmed) {
       const curWpn = this.player.disarmManager.getCurrentWeapon();
       const isAlbaGris = curWpn.id === 'alba_gris' || this.hasAlbaGrisAwakened;
 
-      const arcKey = isHeavy ? 'particle_slash_heavy' : 'particle_slash_arc';
-      const slash = this.add.image(playerX + facing * (isHeavy ? 30 : 25), playerY - 25, arcKey)
-        .setScale(facing > 0 ? (isHeavy ? 1.2 : 1) : (isHeavy ? -1.2 : -1), isHeavy ? 1.2 : 1)
-        .setAlpha(0.9)
-        .setDepth(playerY + 2);
+      const vfxKey = (isAlbaGris || isHeavy) ? 'fx_slash_gold' : 'fx_slash_abyss';
+      this.spawnAnimatedVfx(
+        playerX + facing * (isHeavy ? 32 : 26),
+        playerY - 26,
+        vfxKey,
+        isHeavy ? 1.25 : 1.0,
+        facing < 0
+      );
 
       if (isAlbaGris) {
-        slash.setTint(0xfffae0); // Sacred gold-white
         this.castAlbaGrisWave(playerX, playerY, facing, isHeavy);
-      } else if (this.player.id !== 'thomas') {
-        slash.setTint(0xba68c8); // Khaterine's abyssal magic purple
       }
-
-      this.tweens.add({
-        targets: slash,
-        alpha: 0,
-        scaleX: facing > 0 ? (isHeavy ? 1.6 : 1.35) : (isHeavy ? -1.6 : -1.35),
-        scaleY: isHeavy ? 1.6 : 1.35,
-        duration: isHeavy ? 240 : 180,
-        onComplete: () => slash.destroy()
-      });
     }
 
     const reachX = attackRange + (isHeavy ? 65 : 45);
@@ -1161,11 +1157,16 @@ export class GameScene extends Phaser.Scene {
           this.time.delayedCall(120, () => sprite.clearTint());
 
           if (res.targetKilled) {
+            const deathAnim = this.getEnemyAnimKey(enemy.id, 'death');
+            this.playAnimSafe(sprite, deathAnim, true);
+            this.spawnAnimatedVfx(enemy.position.x, enemy.position.y - 24, 'fx_bone_shatter', 1.0, false);
+
             this.tweens.add({
               targets: sprite,
               alpha: 0,
-              y: sprite.y - 15,
-              duration: 250,
+              y: sprite.y - 10,
+              delay: 260,
+              duration: 280,
               onComplete: () => {
                 sprite.destroy();
                 this.enemyShadows.get(enemy.id)?.destroy();
@@ -1183,7 +1184,9 @@ export class GameScene extends Phaser.Scene {
               this.storyProgress.addProgress(25);
             }
           } else {
-            // Fluid hit-reaction and knockback
+            // Play stagger animation & fluid knockback
+            const staggerAnim = this.getEnemyAnimKey(enemy.id, 'stagger');
+            this.playAnimSafe(sprite, staggerAnim, true);
             const knockDist = isHeavy ? 14 : 8;
             const knockX = Phaser.Math.Clamp(enemy.position.x + facing * knockDist, 35, 605);
             enemy.position = new Vector2(knockX, enemy.position.y);
@@ -1240,10 +1243,18 @@ export class GameScene extends Phaser.Scene {
           this.cameras.main.shake(220, 0.02);
           this.spawnDamageNumber(this.currentBoss.position.x, this.currentBoss.position.y - 65, '¡ESCUDO ROTO!', true, '#ffd700');
           this.currentBoss.interruptAttack(1400);
+          if (this.currentBoss.id === 'madre_morwenna') {
+            this.playAnimSafe(this.bossSprite, 'morwenna_stunned', true);
+          }
           this.triggerShalemBalloon("Shalem: «¡Eso es, muchacho! ¡El escudo se hizo añicos! ¡Remátala!»", 3200);
         }
 
+        const prevPhase = this.currentBoss.phase;
         const res = CombatUseCases.executeAttackOnBoss(this.player, this.currentBoss, isHeavy, false);
+        if (this.currentBoss.id === 'madre_morwenna' && prevPhase === BossPhaseType.PHASE_1 && this.currentBoss.phase === BossPhaseType.PHASE_2) {
+          this.playAnimSafe(this.bossSprite, 'morwenna_phase2_shockwave', true);
+          this.spawnAnimatedVfx(this.currentBoss.position.x, this.currentBoss.position.y - 35, 'fx_pyre_explosion', 1.1, false);
+        }
 
         if (isHeavy) {
           this.triggerHitStop(75, this.bossSprite);
@@ -1271,19 +1282,20 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Reset texture after attack frame
-    this.time.delayedCall(isHeavy ? 260 : 170, () => {
-      const idleTex = isDisarmed
-        ? 'thomas_disarmed'
+    // Reset to idle animation after attack completes
+    this.time.delayedCall(isHeavy ? 340 : 230, () => {
+      const idleAnim = isDisarmed
+        ? 'thomas_unarmed_idle'
         : (this.player.id === 'thomas' ? 'thomas_idle' : 'khaterine_idle');
-      this.playerSprite.setTexture(idleTex);
+      this.playAnimSafe(this.playerSprite, idleAnim);
       this.player.finishAttack();
     });
   }
 
-  /** Khaterine casts a ranged Abyssal Energy Bolt with impact explosion. */
+  /** Khaterine shoots a ranged Abyssal Arrow / Energy Bolt using khaterine_shoot_light/heavy and fx_arrow_abyssal. */
   private castKhaterineSpell(isHeavy: boolean): void {
-    this.playerSprite.setTexture('khaterine_attack');
+    const shootAnim = isHeavy ? 'khaterine_shoot_heavy' : 'khaterine_shoot_light';
+    this.playAnimSafe(this.playerSprite, shootAnim, true);
     this.audio.playSfx('dodge');
 
     const px = this.playerSprite.x;
@@ -1301,11 +1313,12 @@ export class GameScene extends Phaser.Scene {
     });
     this.player.position = new Vector2(nextPlayerX, py);
 
-    // Abyssal Orb Projectile
-    const projectile = this.add.circle(px + facing * 20, py - 30, isHeavy ? 10 : 7, 0xba68c8, 0.95)
-      .setDepth(py + 2);
-    const innerCore = this.add.circle(px + facing * 20, py - 30, isHeavy ? 5 : 3, 0xffffff, 1)
+    // Official Animated Abyssal Arrow Projectile (fx_arrow_abyssal)
+    const projectile = this.add.sprite(px + facing * 22, py - 28, 'fx_arrow_abyssal', 0)
+      .setFlipX(facing < 0)
+      .setScale(isHeavy ? 1.2 : 0.95)
       .setDepth(py + 3);
+    this.playAnimSafe(projectile, 'fx_arrow_abyssal');
 
     const travelDist = isHeavy ? 320 : 250;
     const targetX = Phaser.Math.Clamp(px + facing * travelDist, 25, 615);
@@ -1315,7 +1328,7 @@ export class GameScene extends Phaser.Scene {
     let hasHit = false;
 
     this.tweens.add({
-      targets: [projectile, innerCore],
+      targets: [projectile],
       x: targetX,
       duration,
       ease: 'Linear',
@@ -1335,7 +1348,6 @@ export class GameScene extends Phaser.Scene {
             this.tutorialDummy.setTint(0xffffff);
             this.time.delayedCall(100, () => this.tutorialDummy?.clearTint());
             projectile.destroy();
-            innerCore.destroy();
             if (this.tutorialHits >= 2) {
               this.advanceTrainingStep(3);
             }
@@ -1351,7 +1363,6 @@ export class GameScene extends Phaser.Scene {
             hasHit = true;
             this.explodeAbyssalOrb(currentX, currentY, isHeavy, enemy);
             projectile.destroy();
-            innerCore.destroy();
             return;
           }
         }
@@ -1369,7 +1380,6 @@ export class GameScene extends Phaser.Scene {
             }
             this.explodeAbyssalOrb(currentX, currentY, isHeavy, undefined, true);
             projectile.destroy();
-            innerCore.destroy();
             return;
           }
         }
@@ -1377,14 +1387,13 @@ export class GameScene extends Phaser.Scene {
       onComplete: () => {
         if (!hasHit) {
           projectile.destroy();
-          innerCore.destroy();
         }
       }
     });
 
-    // Reset texture after casting frame
-    this.time.delayedCall(isHeavy ? 260 : 170, () => {
-      this.playerSprite.setTexture('khaterine_idle');
+    // Reset to khaterine_idle animation after casting
+    this.time.delayedCall(isHeavy ? 320 : 220, () => {
+      this.playAnimSafe(this.playerSprite, 'khaterine_idle');
       this.player.finishAttack();
     });
   }
@@ -1393,20 +1402,16 @@ export class GameScene extends Phaser.Scene {
     this.audio.playCombatHit(isHeavy);
     this.cameras.main.shake(isHeavy ? 160 : 90, isHeavy ? 0.012 : 0.006);
 
-    // Detonation Blast
-    const blast = this.add.circle(x, y, isHeavy ? 28 : 18, 0x8e24aa, 0.75).setDepth(y + 5);
-    this.tweens.add({
-      targets: blast,
-      scaleX: 1.8,
-      scaleY: 1.8,
-      alpha: 0,
-      duration: 180,
-      ease: 'Quad.easeOut',
-      onComplete: () => blast.destroy()
-    });
+    // Animated Abyssal Slash/Explosion VFX
+    this.spawnAnimatedVfx(x, y, 'fx_slash_abyss', isHeavy ? 1.25 : 0.95, false);
 
     if (isBoss && this.currentBoss && this.bossSprite) {
+      const prevPhase = this.currentBoss.phase;
       const res = CombatUseCases.executeAttackOnBoss(this.player, this.currentBoss, isHeavy, true);
+      if (this.currentBoss.id === 'madre_morwenna' && prevPhase === BossPhaseType.PHASE_1 && this.currentBoss.phase === BossPhaseType.PHASE_2) {
+        this.playAnimSafe(this.bossSprite, 'morwenna_phase2_shockwave', true);
+        this.spawnAnimatedVfx(this.currentBoss.position.x, this.currentBoss.position.y - 35, 'fx_pyre_explosion', 1.1, false);
+      }
       const damageCol = this.currentBoss.isFlameShieldActive ? '#ffaa44' : '#d477ff';
       const label = this.currentBoss.isFlameShieldActive ? `${res.damageDealt} [ESCUDO]` : res.damageDealt;
       this.spawnDamageNumber(this.currentBoss.position.x, this.currentBoss.position.y - 50, label, isHeavy, damageCol);
@@ -1424,10 +1429,13 @@ export class GameScene extends Phaser.Scene {
         this.time.delayedCall(120, () => sprite.clearTint());
 
         if (res.targetKilled || targetEnemy.health <= 0) {
+          const deathAnim = this.getEnemyAnimKey(targetEnemy.id, 'death');
+          this.playAnimSafe(sprite, deathAnim, true);
           this.tweens.add({
             targets: sprite,
             alpha: 0,
-            y: sprite.y - 15,
+            y: sprite.y - 10,
+            delay: 240,
             duration: 250,
             onComplete: () => {
               sprite.destroy();
@@ -1440,9 +1448,11 @@ export class GameScene extends Phaser.Scene {
             this.storyProgress.completeMilestone('act1_monks');
             this.storyProgress.completeMilestone('act1_beast');
             this.storyProgress.addProgress(25);
-            this.triggerShalemBalloon("Shalem: «¡El orbe abisal de Khaterine los ha pulverizado! ¡Avanza hacia la derecha!»", 5000);
+            this.triggerShalemBalloon("Shalem: «¡La flecha abisal de Khaterine los ha pulverizado! ¡Avanza hacia la derecha!»", 5000);
           }
         } else {
+          const staggerAnim = this.getEnemyAnimKey(targetEnemy.id, 'stagger');
+          this.playAnimSafe(sprite, staggerAnim, true);
           // Knockback
           const facing = this.player.facingDirection;
           const knockX = Phaser.Math.Clamp(targetEnemy.position.x + facing * (isHeavy ? 16 : 10), 35, 605);
@@ -1546,6 +1556,14 @@ export class GameScene extends Phaser.Scene {
     this.audio.playFinisherSound(false);
     this.triggerHitStop(110);
 
+    // Play Official Parry Animation & Spark VFX
+    if (this.player.id === 'thomas') {
+      this.playAnimSafe(this.playerSprite, 'thomas_parry', true);
+    } else {
+      this.playAnimSafe(this.playerSprite, 'khaterine_ward', true);
+    }
+    this.spawnAnimatedVfx(this.playerSprite.x + this.player.facingDirection * 18, this.playerSprite.y - 26, 'fx_parry_spark', 1.15, false);
+
     // Screen Flash & Camera Shake
     this.cameras.main.flash(200, 255, 240, 160);
     this.cameras.main.shake(140, 0.015);
@@ -1589,6 +1607,9 @@ export class GameScene extends Phaser.Scene {
       this.currentBoss.posture = Math.max(0, this.currentBoss.posture - 45);
       if (this.currentBoss.posture === 0) {
         this.currentBoss.interruptAttack(2000);
+        if (this.currentBoss.id === 'madre_morwenna') {
+          this.playAnimSafe(this.bossSprite, 'morwenna_stunned', true);
+        }
       }
       this.currentBoss.health = Math.max(0, this.currentBoss.health - counterDamage);
       this.spawnDamageNumber(sourceX, sourceY - 45, counterDamage, true, '#ffd700');
@@ -1606,6 +1627,8 @@ export class GameScene extends Phaser.Scene {
       this.spawnDamageNumber(sourceX, sourceY - 45, counterDamage, true, '#ffd700');
       const sprite = this.enemySprites.get(enemy.id);
       if (sprite) {
+        const staggerAnim = this.getEnemyAnimKey(enemy.id, 'stagger');
+        this.playAnimSafe(sprite, staggerAnim, true);
         sprite.setTint(0xffeedd);
         this.time.delayedCall(160, () => sprite.clearTint());
         const knockX = Phaser.Math.Clamp(enemy.position.x + facing * 25, 35, 605);
@@ -1634,38 +1657,15 @@ export class GameScene extends Phaser.Scene {
     this.hitStopTargetSprite = undefined;
   }
 
-  private spawnFinisherSlash(x: number, y: number, angleDeg: number, tintColor: number, scaleMultiplier: number = 1.3): void {
-    const slash = this.add.image(x, y, 'particle_slash_heavy')
-      .setAngle(angleDeg)
-      .setScale(scaleMultiplier)
-      .setTint(tintColor)
-      .setAlpha(0.95)
-      .setDepth(y + 20);
-
-    this.tweens.add({
-      targets: slash,
-      scaleX: scaleMultiplier * 1.5,
-      scaleY: scaleMultiplier * 1.5,
-      alpha: 0,
-      duration: 220,
-      ease: 'Quad.easeOut',
-      onComplete: () => slash.destroy()
-    });
+  private spawnFinisherSlash(x: number, y: number, _angleDeg: number, _tintColor: number, scaleMultiplier: number = 1.3): void {
+    this.spawnAnimatedVfx(x, y, scaleMultiplier >= 1.5 ? 'fx_slash_gold' : 'fx_slash_abyss', scaleMultiplier, false);
   }
 
   private spawnAshExplosion(x: number, y: number): void {
-    const ring = this.add.circle(x, y, 8, 0xffd700, 0.85).setDepth(y + 10);
-    this.tweens.add({
-      targets: ring,
-      radius: 65,
-      alpha: 0,
-      duration: 320,
-      ease: 'Quad.easeOut',
-      onComplete: () => ring.destroy()
-    });
+    this.spawnAnimatedVfx(x, y, 'fx_pyre_explosion', 1.15, false);
 
-    for (let i = 0; i < 14; i++) {
-      const angle = (i / 14) * Math.PI * 2 + (Math.random() * 0.4 - 0.2);
+    for (let i = 0; i < 10; i++) {
+      const angle = (i / 10) * Math.PI * 2 + (Math.random() * 0.4 - 0.2);
       const speed = Phaser.Math.Between(45, 110);
       const isGold = Math.random() > 0.45;
       const col = isGold ? 0xffd700 : 0x241133;
@@ -1700,12 +1700,13 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // 1. Lock player state and face target
+    // 1. Lock player state and face target + play Finisher animation
     this.player.state = CharacterState.ATTACKING;
     this.player.move(0, 0);
     const facing = targetSprite.x >= this.playerSprite.x ? 1 : -1;
     this.player.facingDirection = facing;
     this.playerSprite.setScale(facing * Math.abs(this.playerSprite.scaleX), this.playerSprite.scaleY);
+    this.playAnimSafe(this.playerSprite, this.player.id === 'thomas' ? 'thomas_finisher' : 'khaterine_shoot_heavy', true);
 
     // 2. Play Finisher Audio
     this.audio.playFinisherSound(true);
@@ -1852,7 +1853,7 @@ export class GameScene extends Phaser.Scene {
     maxW: number,
     maxH: number,
     originX = 0.5,
-    originY = 1.0
+    originY = 0.9
   ): T {
     sprite.setOrigin(originX, originY);
     const nativeW = sprite.width;
@@ -1862,6 +1863,87 @@ export class GameScene extends Phaser.Scene {
       sprite.setScale(scale);
     }
     return sprite;
+  }
+
+  private playAnimSafe(sprite: Phaser.GameObjects.Sprite | undefined, animKey: string, forceRestart: boolean = false): void {
+    if (!sprite || !sprite.active) return;
+    if (this.anims.exists(animKey)) {
+      if (forceRestart || !sprite.anims.isPlaying || sprite.anims.currentAnim?.key !== animKey) {
+        sprite.play(animKey, !forceRestart);
+      }
+    } else if (this.textures.exists(animKey)) {
+      sprite.setTexture(animKey);
+    }
+  }
+
+  private spawnAnimatedVfx(
+    x: number,
+    y: number,
+    vfxKey: string,
+    scale: number = 1.0,
+    flipX: boolean = false
+  ): void {
+    if (!this.textures.exists(vfxKey)) return;
+    const fx = this.add.sprite(x, y, vfxKey, 0)
+      .setScale(scale)
+      .setFlipX(flipX)
+      .setDepth(y + 15);
+    if (this.anims.exists(vfxKey)) {
+      fx.play(vfxKey);
+      fx.once('animationcomplete', () => fx.destroy());
+      this.time.delayedCall(650, () => {
+        if (fx.active) fx.destroy();
+      });
+    } else {
+      this.tweens.add({
+        targets: fx,
+        alpha: 0,
+        scale: scale * 1.3,
+        duration: 240,
+        onComplete: () => fx.destroy()
+      });
+    }
+  }
+
+  private getEnemyAnimKey(enemyId: string, action: 'patrol' | 'windup' | 'attack' | 'stagger' | 'death'): string {
+    if (enemyId.startsWith('ash')) {
+      const map = {
+        patrol: 'hound_patrol',
+        windup: 'hound_windup',
+        attack: 'hound_bite',
+        stagger: 'hound_stagger',
+        death: 'hound_death'
+      };
+      return map[action];
+    }
+    if (enemyId.startsWith('monk') || enemyId.startsWith('corista')) {
+      const map = {
+        patrol: 'cultist_patrol',
+        windup: 'cultist_alert',
+        attack: 'cultist_swing',
+        stagger: 'cultist_stagger',
+        death: 'cultist_death'
+      };
+      return map[action];
+    }
+    if (enemyId.startsWith('zealot') || enemyId.startsWith('guard')) {
+      const map = {
+        patrol: 'zealot_patrol',
+        windup: 'zealot_alert',
+        attack: 'zealot_chain_whip',
+        stagger: 'zealot_alert',
+        death: 'zealot_death'
+      };
+      return map[action];
+    }
+    const map = {
+      patrol: 'skeleton_patrol',
+      windup: 'skeleton_alert',
+      attack: 'skeleton_claymore_slash',
+      stagger: 'skeleton_parried',
+      death: 'skeleton_finisher_shatter'
+    };
+    return map[action];
   }
 
   private spawnDamageNumber(x: number, y: number, amount: number | string, isCritical: boolean, customColor?: string): void {
@@ -1904,11 +1986,16 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.bossSprite) {
+      if (this.currentBoss.id === 'madre_morwenna') {
+        this.playAnimSafe(this.bossSprite, 'morwenna_purified', true);
+      }
+      this.spawnAnimatedVfx(this.bossSprite.x, this.bossSprite.y - 30, 'fx_pyre_explosion', 1.25, false);
       this.tweens.add({
         targets: this.bossSprite,
         alpha: 0,
-        y: this.bossSprite.y + 25,
-        duration: 900,
+        y: this.bossSprite.y + 15,
+        delay: 350,
+        duration: 750,
         onComplete: () => {
           this.bossSprite?.destroy();
           this.bossSprite = undefined;
@@ -2564,7 +2651,14 @@ export class GameScene extends Phaser.Scene {
     this.audio.playWeaponThrowSound();
     this.audio.playDisarmSound();
 
-    this.playerSprite.setTexture('thomas_disarmed');
+    if (this.player.id === 'thomas') {
+      this.playAnimSafe(this.playerSprite, 'thomas_throw_sword', true);
+      this.time.delayedCall(320, () => {
+        if (this.player.id === 'thomas' && this.player.disarmManager.isPlayerDisarmed()) {
+          this.playAnimSafe(this.playerSprite, 'thomas_unarmed_idle');
+        }
+      });
+    }
 
     const thrownX = this.playerSprite.x;
     const thrownY = this.playerSprite.y - 15;
@@ -2590,6 +2684,7 @@ export class GameScene extends Phaser.Scene {
 
             const sprite = this.enemySprites.get(enemy.id);
             if (sprite) {
+              this.playAnimSafe(sprite, this.getEnemyAnimKey(enemy.id, 'stagger'), true);
               sprite.setTint(0xffff55);
               this.time.delayedCall(400, () => sprite.clearTint());
             }
@@ -2605,8 +2700,8 @@ export class GameScene extends Phaser.Scene {
     const pickedUp = CombatUseCases.pickupNearbyWeapon(this.player);
     if (pickedUp) {
       this.audio.playSfx('dodge');
-      const idleTex = this.player.id === 'thomas' ? 'thomas_idle' : 'khaterine_idle';
-      this.playerSprite.setTexture(idleTex);
+      const idleAnim = this.player.id === 'thomas' ? 'thomas_idle' : 'khaterine_idle';
+      this.playAnimSafe(this.playerSprite, idleAnim, true);
       this.triggerShalemBalloon("Shalem asiente: «¡Espada recuperada! Ahora demuestra lo que puedes hacer.»");
     } else {
       this.triggerShalemBalloon("Shalem mira alrededor: «No hay armas en el suelo cerca de ti. Acércate más a una.»");
@@ -2628,27 +2723,28 @@ export class GameScene extends Phaser.Scene {
     this.allySprite.setDepth(this.allySprite.y);
     this.allyShadow.setPosition(this.allySprite.x, this.allySprite.y).setDepth(this.allySprite.y - 1);
 
-    if (this.allyChar.id === 'thomas') {
-      if (allyDist > 3.0) {
-        if (!this.allySprite.anims.isPlaying || this.allySprite.anims.currentAnim?.key !== 'thomas_walk_anim') {
-          this.allySprite.play('thomas_walk_anim');
-        }
-      } else {
-        if (this.allySprite.anims.isPlaying) {
-          this.allySprite.stop();
-          this.allySprite.setTexture('thomas_idle');
-        }
-      }
+    const allyWalkAnim = this.allyChar.id === 'thomas' ? 'thomas_walk' : 'khaterine_walk';
+    const allyIdleAnim = this.allyChar.id === 'thomas' ? 'thomas_idle' : 'khaterine_idle';
+    if (allyDist > 3.0) {
+      this.playAnimSafe(this.allySprite, allyWalkAnim);
+    } else {
+      this.playAnimSafe(this.allySprite, allyIdleAnim);
     }
 
     // Shalem Cat follows smoothly in 2.5D
     const catTargetX = px - 22 * facing;
     const catTargetY = py + 6;
+    const catDist = Math.hypot(catTargetX - this.shalemSprite.x, catTargetY - this.shalemSprite.y);
     this.shalemSprite.x = Phaser.Math.Linear(this.shalemSprite.x, catTargetX, 0.1);
     this.shalemSprite.y = Phaser.Math.Linear(this.shalemSprite.y, catTargetY, 0.1);
     this.shalemSprite.setFlipX(facing < 0);
     this.shalemSprite.setDepth(this.shalemSprite.y);
     this.shalemShadow.setPosition(this.shalemSprite.x, this.shalemSprite.y).setDepth(this.shalemSprite.y - 1);
+    if (catDist > 2.5) {
+      this.playAnimSafe(this.shalemSprite, 'shalem_walk');
+    } else {
+      this.playAnimSafe(this.shalemSprite, 'shalem_sit_idle');
+    }
 
     // Balloon timer
     if (this.shalemBalloonTimer > 0) {
@@ -2727,6 +2823,7 @@ export class GameScene extends Phaser.Scene {
       // Handle Telegraphed Strike completion
       if (shouldStrike) {
         this.clearEnemyWarning(enemy.id);
+        this.playAnimSafe(sprite, this.getEnemyAnimKey(enemy.id, 'attack'), true);
 
         if (dist <= 48) {
           // Check for Perfect Parry!
@@ -2751,6 +2848,7 @@ export class GameScene extends Phaser.Scene {
 
           if (hitRes.damageToHealth > 0) {
             this.audio.playCombatHit(false);
+            this.playAnimSafe(this.playerSprite, this.player.id === 'thomas' ? 'thomas_hurt' : 'khaterine_hurt', true);
             this.playerSprite.setTint(0xff5555);
             this.time.delayedCall(120, () => this.playerSprite.clearTint());
             this.spawnDamageNumber(this.playerSprite.x, this.playerSprite.y - 45, hitRes.damageToHealth, false, '#ff4444');
@@ -2795,6 +2893,7 @@ export class GameScene extends Phaser.Scene {
 
         enemy.position = new Vector2(newX, newY);
         sprite.setPosition(newX, newY).setDepth(newY);
+        this.playAnimSafe(sprite, this.getEnemyAnimKey(enemy.id, 'patrol'));
         if (shadow) shadow.setPosition(newX, newY).setDepth(newY - 1);
       } else if (dist <= 38 && enemy.attackCooldown <= 0 && (enemy.state === 'IDLE' || enemy.state === 'MOVING')) {
         // Start Telegraphed Attack Wind-up (Pilar 1: 450ms reaction window!)
@@ -2802,13 +2901,7 @@ export class GameScene extends Phaser.Scene {
         sprite.setTint(0xff2222);
         this.audio.playSfx('warning');
         this.showEnemyWarning(enemy.id, sprite.x, sprite.y - 42);
-
-        if (enemy.id.startsWith('ash')) {
-          sprite.setTexture('ash_prowler_attack');
-          this.time.delayedCall(450, () => {
-            if (enemy.isAlive()) sprite.setTexture('ash_prowler');
-          });
-        }
+        this.playAnimSafe(sprite, this.getEnemyAnimKey(enemy.id, 'windup'), true);
       }
     }
 
@@ -2887,6 +2980,10 @@ export class GameScene extends Phaser.Scene {
     // Handle Telegraphed Boss Strike completion
     if (shouldStrike) {
       this.clearBossWarning();
+      if (this.currentBoss.id === 'madre_morwenna') {
+        const strikeAnim = this.currentBoss.phase === BossPhaseType.PHASE_2 ? 'morwenna_phase2_whirlwind' : 'morwenna_swing_crucible';
+        this.playAnimSafe(this.bossSprite, strikeAnim, true);
+      }
 
       if (dist < 85) {
         // Check for Perfect Parry against Boss!
@@ -2915,6 +3012,7 @@ export class GameScene extends Phaser.Scene {
 
         if (hitRes.damageToHealth > 0) {
           this.audio.playCombatHit(true);
+          this.playAnimSafe(this.playerSprite, this.player.id === 'thomas' ? 'thomas_hurt' : 'khaterine_hurt', true);
           this.playerSprite.setTint(0xff4444);
           this.time.delayedCall(140, () => this.playerSprite.clearTint());
           this.cameras.main.shake(250, 0.015);
@@ -2949,6 +3047,12 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    // Keep Morwenna idle animation active according to phase
+    if (this.currentBoss.id === 'madre_morwenna') {
+      const idleAnim = this.currentBoss.phase === BossPhaseType.PHASE_2 ? 'morwenna_phase2_idle' : 'morwenna_levitate_idle';
+      this.playAnimSafe(this.bossSprite, idleAnim);
+    }
+
     // When minions are defeated or boss engages: advance in 2.5D!
     if ((aliveEnemies === 0 || this.currentBoss.phase === BossPhaseType.PHASE_2) && dist > 65) {
       const speedX = (this.currentBoss.phase === BossPhaseType.PHASE_2 ? 55 : 40) * (delta / 1000);
@@ -2958,7 +3062,7 @@ export class GameScene extends Phaser.Scene {
       this.bossSprite.y += (dy / dist) * speedY;
       this.currentBoss.position = new Vector2(this.bossSprite.x, this.bossSprite.y);
 
-      this.bossSprite.setFlipX(dx > 0);
+      this.bossSprite.setFlipX(dx < 0);
       this.bossSprite.setDepth(this.bossSprite.y);
       if (this.bossShadow) {
         this.bossShadow.setPosition(this.bossSprite.x, this.bossSprite.y).setDepth(this.bossSprite.y - 1);
@@ -2974,8 +3078,12 @@ export class GameScene extends Phaser.Scene {
         this.bossAttackTimer = 0;
         this.currentBoss.startWindup(580);
         this.bossSprite.setTint(0xff5500);
+        if (this.currentBoss.id === 'madre_morwenna') {
+          const castAnim = this.currentBoss.phase === BossPhaseType.PHASE_2 ? 'morwenna_phase2_lunge' : 'morwenna_cast_flame';
+          this.playAnimSafe(this.bossSprite, castAnim, true);
+        }
         this.audio.playSfx('warning');
-        this.showBossWarning('⚠️ ¡GOLPE DE BÁCULO! ⚠️', this.bossSprite.x, this.bossSprite.y - 70);
+        this.showBossWarning('⚠️ ¡GOLPE DE CRISOL! ⚠️', this.bossSprite.x, this.bossSprite.y - 70);
       }
     }
   }
@@ -3124,7 +3232,8 @@ export class GameScene extends Phaser.Scene {
         p.hasExploded = true;
         p.warningCircle.destroy();
 
-        const col = this.add.rectangle(p.x, p.y - 45, 32, 90, 0xff4400, 0.85).setDepth(p.y + 10);
+        this.spawnAnimatedVfx(p.x, p.y - 10, 'fx_flame_geyser_ground', 1.0, false);
+        this.spawnAnimatedVfx(p.x, p.y - 45, 'fx_flame_pillar', 1.0, false);
         this.audio.playCombatHit(true);
         this.cameras.main.shake(140, 0.01);
 
@@ -3135,14 +3244,6 @@ export class GameScene extends Phaser.Scene {
           this.playerSprite.setTint(0xff2200);
           this.time.delayedCall(120, () => this.playerSprite.clearTint());
         }
-
-        this.tweens.add({
-          targets: col,
-          scaleX: 0.1,
-          alpha: 0,
-          duration: 350,
-          onComplete: () => col.destroy()
-        });
 
         this.activeFlamePillars.splice(i, 1);
       }
@@ -3270,22 +3371,91 @@ export class GameScene extends Phaser.Scene {
   }
 
   private spawnAct1RealEnemies(): void {
-    const e1 = Enemy.createAshProwler('ash_1', new Vector2(380, 245));
-    const e2 = Enemy.createFanaticMonk('monk_1', new Vector2(460, 280));
-    this.enemies.push(e1, e2);
+    const e1 = Enemy.createAshProwler('ash_1', new Vector2(360, 248));
+    const e2 = Enemy.createFanaticMonk('monk_1', new Vector2(440, 280));
+    const e3 = Enemy.createFanaticMonk('zealot_1', new Vector2(485, 240));
+    this.enemies.push(e1, e2, e3);
 
-    const s1 = this.add.ellipse(380, 245, 26, 8, 0x000000, 0.45).setDepth(244);
-    const s2 = this.add.ellipse(460, 280, 24, 7, 0x000000, 0.45).setDepth(279);
+    const s1 = this.add.ellipse(360, 248, 26, 8, 0x000000, 0.45).setDepth(247);
+    const s2 = this.add.ellipse(440, 280, 24, 7, 0x000000, 0.45).setDepth(279);
+    const s3 = this.add.ellipse(485, 240, 24, 7, 0x000000, 0.45).setDepth(239);
     this.enemyShadows.set(e1.id, s1);
     this.enemyShadows.set(e2.id, s2);
+    this.enemyShadows.set(e3.id, s3);
 
-    this.enemySprites.set(e1.id, this.normalizeSprite(this.add.image(e1.position.x, e1.position.y, 'ash_prowler'), 75, 48).setDepth(245));
-    this.enemySprites.set(e2.id, this.normalizeSprite(this.add.image(e2.position.x, e2.position.y, 'fanatic_monk'), 52, 70).setDepth(280));
+    const sp1 = this.normalizeSprite(this.add.sprite(e1.position.x, e1.position.y, 'hound_patrol', 0), 64, 48, 0.5, 0.9).setDepth(248);
+    this.playAnimSafe(sp1, 'hound_patrol');
+    this.enemySprites.set(e1.id, sp1);
+
+    const sp2 = this.normalizeSprite(this.add.sprite(e2.position.x, e2.position.y, 'cultist_patrol', 0), 48, 48, 0.5, 0.9).setDepth(280);
+    this.playAnimSafe(sp2, 'cultist_patrol');
+    this.enemySprites.set(e2.id, sp2);
+
+    const sp3 = this.normalizeSprite(this.add.sprite(e3.position.x, e3.position.y, 'zealot_patrol', 0), 64, 64, 0.5, 0.9).setDepth(240);
+    this.playAnimSafe(sp3, 'zealot_patrol');
+    this.enemySprites.set(e3.id, sp3);
 
     this.currentBoss = Boss.createMadreMorwenna();
-    this.bossShadow = this.add.ellipse(530, 260, 32, 9, 0x000000, 0.5).setDepth(259);
-    this.bossSprite = this.normalizeSprite(this.add.image(530, 260, 'boss_morwenna'), 72, 86).setDepth(260);
-    this.createBossMarker('Madre Morwenna', 530, 260);
+    this.bossShadow = this.add.ellipse(540, 260, 34, 10, 0x000000, 0.55).setDepth(259);
+    this.bossSprite = this.normalizeSprite(this.add.sprite(540, 260, 'morwenna_levitate_idle', 0), 96, 96, 0.5, 0.9).setDepth(260);
+    this.playAnimSafe(this.bossSprite, 'morwenna_levitate_idle');
+    this.createBossMarker('Madre Morwenna', 540, 260);
+  }
+
+  private spawnScenarioProps(scenarioIndex: number): void {
+    this.scenarioProps.forEach(p => p.destroy());
+    this.scenarioProps = [];
+
+    const addProp = (key: string, x: number, y: number, maxW: number, maxH: number, animate: boolean = true) => {
+      if (!this.textures.exists(key)) return;
+      const spr = this.normalizeSprite(this.add.sprite(x, y, key, 0), maxW, maxH, 0.5, 0.95).setDepth(y - 2);
+      if (animate && this.anims.exists(key)) {
+        spr.play(key);
+      }
+      this.scenarioProps.push(spr);
+    };
+
+    if (scenarioIndex === 1) {
+      // Act I: Oakhaven Village Props from Visual Pack
+      addProp('prop_sanctuary_cross', 125, 222, 48, 80, true);
+      addProp('prop_sanctuary_altar', 188, 224, 64, 48, true);
+      addProp('prop_street_lamp', 85, 212, 32, 96, true);
+      addProp('prop_street_lamp', 310, 212, 32, 96, true);
+      addProp('prop_barrel', 235, 224, 32, 48, false);
+      addProp('prop_parish_crate', 258, 225, 32, 32, false);
+      addProp('prop_great_pyre', 555, 232, 96, 96, true);
+      addProp('prop_cemetery_gate', 610, 222, 64, 96, false);
+    } else if (scenarioIndex === 2) {
+      // Act II: Belltower & Cemetery Crypt Entrance Props
+      addProp('prop_mausoleum_facade', 565, 215, 96, 128, true);
+      addProp('prop_celtic_gravestone', 140, 222, 32, 48, false);
+      addProp('prop_celtic_gravestone', 320, 220, 32, 48, false);
+      addProp('prop_monumental_sarcophagus', 280, 225, 64, 64, false);
+      addProp('prop_soul_brazier', 195, 224, 32, 48, true);
+      addProp('prop_soul_brazier', 485, 224, 32, 48, true);
+      addProp('prop_barrel', 90, 232, 32, 48, false);
+    } else if (scenarioIndex === 3) {
+      // Act III: Great Stone Bridge Props
+      addProp('prop_street_lamp', 110, 212, 32, 96, true);
+      addProp('prop_street_lamp', 290, 212, 32, 96, true);
+      addProp('prop_street_lamp', 470, 212, 32, 96, true);
+      addProp('prop_cemetery_gate', 595, 222, 64, 96, false);
+      addProp('prop_parish_crate', 145, 245, 32, 32, false);
+      addProp('prop_barrel', 168, 246, 32, 48, false);
+    } else if (scenarioIndex === 4) {
+      // Act IV: Londinium Citadel Props
+      addProp('prop_sanctuary_altar', 310, 222, 64, 48, true);
+      addProp('prop_soul_brazier', 240, 224, 32, 48, true);
+      addProp('prop_soul_brazier', 380, 224, 32, 48, true);
+      addProp('prop_mausoleum_facade', 575, 215, 96, 128, true);
+    } else {
+      // Act V: Inverted Cathedral Props
+      addProp('prop_sanctuary_cross', 150, 235, 48, 80, true);
+      addProp('prop_sanctuary_altar', 200, 238, 64, 48, true);
+      addProp('prop_soul_brazier', 270, 225, 32, 48, true);
+      addProp('prop_soul_brazier', 450, 225, 32, 48, true);
+      addProp('prop_great_pyre', 540, 235, 96, 96, true);
+    }
   }
 
   private createBossMarker(bossName: string, x: number, y: number): void {
@@ -3413,6 +3583,9 @@ export class GameScene extends Phaser.Scene {
     this.lastGuardPressTime = 0;
     this.hasAlbaGrisAwakened = false;
 
+    // Populate official visual pack props for this scenario
+    this.spawnScenarioProps(scenarioIndex);
+
     const introLines = this.dialogues.getScenarioIntro(this.currentScenario);
 
     if (scenarioIndex === 1) {
@@ -3422,31 +3595,15 @@ export class GameScene extends Phaser.Scene {
       this.emberParticles.setPosition(280, 255);
       this.emberParticles.start();
 
-      // Spawn Elowen NPC near the garden fence
+      // Spawn Elowen NPC near the garden fence (Animated 48x48 elowen_idle sprite sheet)
       this.elowenShadow = this.add.ellipse(270, 225, 24, 7, 0x000000, 0.45).setDepth(224);
-      this.elowenSprite = this.normalizeSprite(this.add.image(270, 225, 'elowen_npc'), 48, 68).setDepth(225);
+      this.elowenSprite = this.normalizeSprite(this.add.sprite(270, 225, 'elowen_idle', 0), 54, 54, 0.5, 0.9).setDepth(225);
+      this.playAnimSafe(this.elowenSprite, 'elowen_idle');
 
-      this.tweens.add({
-        targets: this.elowenSprite,
-        scaleY: 1.025,
-        duration: 1200,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut'
-      });
-
-      // Spawn Padre Cedric NPC holding torch
+      // Spawn Padre Cedric NPC holding lantern (Animated 48x48 cedric_idle sprite sheet)
       this.cedricShadow = this.add.ellipse(160, 225, 24, 7, 0x000000, 0.45).setDepth(224);
-      this.cedricSprite = this.normalizeSprite(this.add.image(160, 225, 'padre_cedric'), 48, 68).setDepth(225);
-
-      this.tweens.add({
-        targets: this.cedricSprite,
-        scaleY: 1.02,
-        duration: 1300,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut'
-      });
+      this.cedricSprite = this.normalizeSprite(this.add.sprite(160, 225, 'cedric_idle', 0), 54, 54, 0.5, 0.9).setDepth(225);
+      this.playAnimSafe(this.cedricSprite, 'cedric_idle');
 
       if (this.shouldPlayOakhavenTraining) {
         this.startOakhavenTraining();
@@ -3461,20 +3618,12 @@ export class GameScene extends Phaser.Scene {
       this.audio.playBgm('bgm_oakhaven_night');
       this.emberParticles.stop();
 
-      // Spawn Elowen NPC in Belltower cell (using canonical pixel art sprite 27x72)
+      // Spawn Elowen NPC in Belltower cell
       this.elowenShadow = this.add.ellipse(220, 225, 24, 7, 0x000000, 0.45).setDepth(224);
-      this.elowenSprite = this.normalizeSprite(this.add.image(220, 225, 'elowen_npc'), 48, 68).setDepth(225);
+      this.elowenSprite = this.normalizeSprite(this.add.sprite(220, 225, 'elowen_idle', 0), 54, 54, 0.5, 0.9).setDepth(225);
+      this.playAnimSafe(this.elowenSprite, 'elowen_pray');
 
-      this.tweens.add({
-        targets: this.elowenSprite,
-        scaleY: 1.02,
-        duration: 1400,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut'
-      });
-
-      // Spawn Inquisitor Torre & Sulphur Prowler
+      // Spawn Inquisitor Torre (Cultist) & Sulphur Prowler (Hound)
       const e1 = Enemy.createInquisitorTorre('corista_1', new Vector2(390, 255));
       const e2 = Enemy.createAshProwler('ash_2', new Vector2(460, 280));
       this.enemies.push(e1, e2);
@@ -3484,15 +3633,20 @@ export class GameScene extends Phaser.Scene {
       this.enemyShadows.set(e1.id, s1);
       this.enemyShadows.set(e2.id, s2);
 
-      this.enemySprites.set(e1.id, this.normalizeSprite(this.add.image(e1.position.x, e1.position.y, 'inquisitor_torre'), 52, 70).setDepth(255));
-      this.enemySprites.set(e2.id, this.normalizeSprite(this.add.image(e2.position.x, e2.position.y, 'ash_prowler'), 75, 48).setDepth(280));
+      const sp1 = this.normalizeSprite(this.add.sprite(e1.position.x, e1.position.y, 'cultist_patrol', 0), 52, 52, 0.5, 0.9).setDepth(255);
+      this.playAnimSafe(sp1, 'cultist_patrol');
+      this.enemySprites.set(e1.id, sp1);
 
-      // Boss Guardián del Crisol (pixel art scaled for battlefield balance)
+      const sp2 = this.normalizeSprite(this.add.sprite(e2.position.x, e2.position.y, 'hound_patrol', 0), 64, 48, 0.5, 0.9).setDepth(280);
+      this.playAnimSafe(sp2, 'hound_patrol');
+      this.enemySprites.set(e2.id, sp2);
+
+      // Boss Guardián del Crisol (Animated Zealot Heavy Slam / Crucible Boss)
       this.currentBoss = Boss.createGuardianCrisol();
       this.bossShadow = this.add.ellipse(520, 260, 32, 9, 0x000000, 0.5).setDepth(259);
-      const bossTexKey = this.textures.exists('boss_guardian_crisol') ? 'boss_guardian_crisol' : 'boss_morwenna';
-      this.bossSprite = this.normalizeSprite(this.add.image(520, 260, bossTexKey), 72, 86).setDepth(260);
-      this.createBossMarker('Inquisidor Mayor (Crisol)', 520, 260);
+      this.bossSprite = this.normalizeSprite(this.add.sprite(520, 260, 'zealot_heavy_slam', 0), 82, 82, 0.5, 0.9).setDepth(260);
+      this.playAnimSafe(this.bossSprite, 'zealot_heavy_slam');
+      this.createBossMarker('Guardián del Crisol', 520, 260);
 
       const introText = introLines[0] ? `${introLines[0].speaker}: ${introLines[0].text}` : "Shalem: «Acto II: El Campanario y Granero»";
       this.triggerShalemBalloon(introText, 4500);
@@ -3504,18 +3658,10 @@ export class GameScene extends Phaser.Scene {
 
       // Spawn Elowen NPC escorting refugees
       this.elowenShadow = this.add.ellipse(170, 255, 24, 7, 0x000000, 0.45).setDepth(254);
-      this.elowenSprite = this.normalizeSprite(this.add.image(170, 255, 'elowen_npc'), 48, 68).setDepth(255);
+      this.elowenSprite = this.normalizeSprite(this.add.sprite(170, 255, 'elowen_idle', 0), 54, 54, 0.5, 0.9).setDepth(255);
+      this.playAnimSafe(this.elowenSprite, 'elowen_idle');
 
-      this.tweens.add({
-        targets: this.elowenSprite,
-        scaleY: 1.02,
-        duration: 1300,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut'
-      });
-
-      // Spawn Golden Guard & Shield Knight
+      // Spawn Golden Guard (Zealot) & Shield Knight (Penitent Skeleton)
       const g1 = Enemy.createGoldenGuard('guard_bridge_1', new Vector2(380, 255));
       const k1 = Enemy.createShieldKnight('shield_knight_1', new Vector2(450, 280));
       this.enemies.push(g1, k1);
@@ -3525,13 +3671,18 @@ export class GameScene extends Phaser.Scene {
       this.enemyShadows.set(g1.id, s1);
       this.enemyShadows.set(k1.id, s2);
 
-      this.enemySprites.set(g1.id, this.normalizeSprite(this.add.image(g1.position.x, g1.position.y, 'golden_guard'), 54, 72).setDepth(255));
-      this.enemySprites.set(k1.id, this.normalizeSprite(this.add.image(k1.position.x, k1.position.y, 'shield_knight'), 56, 72).setDepth(280));
+      const sp1 = this.normalizeSprite(this.add.sprite(g1.position.x, g1.position.y, 'zealot_patrol', 0), 64, 64, 0.5, 0.9).setDepth(255);
+      this.playAnimSafe(sp1, 'zealot_patrol');
+      this.enemySprites.set(g1.id, sp1);
+
+      const sp2 = this.normalizeSprite(this.add.sprite(k1.position.x, k1.position.y, 'skeleton_patrol', 0), 64, 64, 0.5, 0.9).setDepth(280);
+      this.playAnimSafe(sp2, 'skeleton_patrol');
+      this.enemySprites.set(k1.id, sp2);
 
       // Boss Capitán Áureo Vane
       this.currentBoss = Boss.createCapitanAureo();
       this.bossShadow = this.add.ellipse(520, 260, 32, 9, 0x000000, 0.5).setDepth(259);
-      this.bossSprite = this.normalizeSprite(this.add.image(520, 260, 'boss_capitan_aureo'), 76, 88).setDepth(260);
+      this.bossSprite = this.normalizeSprite(this.add.sprite(520, 260, 'boss_capitan_aureo'), 76, 88, 0.5, 0.95).setDepth(260);
       this.createBossMarker('Capitán Áureo Vane', 520, 260);
 
       const introText = introLines[0] ? `${introLines[0].speaker}: ${introLines[0].text}` : "Shalem: «Acto III: El Gran Puente de Piedra»";
@@ -3547,12 +3698,14 @@ export class GameScene extends Phaser.Scene {
       this.enemies.push(g1);
       const s1 = this.add.ellipse(400, 255, 24, 7, 0x000000, 0.45).setDepth(254);
       this.enemyShadows.set(g1.id, s1);
-      this.enemySprites.set(g1.id, this.normalizeSprite(this.add.image(g1.position.x, g1.position.y, 'golden_guard'), 54, 72).setDepth(255));
+      const sp1 = this.normalizeSprite(this.add.sprite(g1.position.x, g1.position.y, 'zealot_patrol', 0), 64, 64, 0.5, 0.9).setDepth(255);
+      this.playAnimSafe(sp1, 'zealot_patrol');
+      this.enemySprites.set(g1.id, sp1);
 
       // Boss Rex Malphas
       this.currentBoss = Boss.createRexMalphas();
       this.bossShadow = this.add.ellipse(520, 260, 32, 9, 0x000000, 0.5).setDepth(259);
-      this.bossSprite = this.normalizeSprite(this.add.image(520, 260, 'boss_malphas'), 76, 88).setDepth(260);
+      this.bossSprite = this.normalizeSprite(this.add.sprite(520, 260, 'boss_malphas'), 76, 88, 0.5, 0.95).setDepth(260);
       this.createBossMarker('Rex Malphas', 520, 260);
 
       const introText = introLines[0] ? `${introLines[0].speaker}: ${introLines[0].text}` : "Shalem: «Acto IV: Londinium»";
@@ -3560,17 +3713,8 @@ export class GameScene extends Phaser.Scene {
 
       // Spawn Elowen NPC — imprisoned near the dungeon gate in Londinium
       this.elowenShadow = this.add.ellipse(185, 268, 22, 6, 0x000000, 0.4).setDepth(267);
-      this.elowenSprite = this.normalizeSprite(this.add.image(185, 268, 'elowen_npc'), 48, 68).setDepth(268).setTint(0x9988aa);
-
-      this.tweens.add({
-        targets: this.elowenSprite,
-        scaleY: 1.02,
-        alpha: 0.85,
-        duration: 1600,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut'
-      });
+      this.elowenSprite = this.normalizeSprite(this.add.sprite(185, 268, 'elowen_idle', 0), 54, 54, 0.5, 0.9).setDepth(268).setTint(0xc8b8e8);
+      this.playAnimSafe(this.elowenSprite, 'elowen_pray');
     } else {
       // Catedral Invertida — El Sol del Abismo (Caps XVIII-XX)
       this.bgImage.setTexture('bg_cathedral');
@@ -3578,17 +3722,19 @@ export class GameScene extends Phaser.Scene {
       this.emberParticles.setPosition(320, 180);
       this.emberParticles.start();
 
-      // Spawn Abyssal Shadow
+      // Spawn Abyssal Shadow / Penitent Guardian
       const sh1 = Enemy.createAbyssalShadow('shadow_1', new Vector2(390, 255));
       this.enemies.push(sh1);
       const s1 = this.add.ellipse(390, 255, 24, 7, 0x000000, 0.45).setDepth(254);
       this.enemyShadows.set(sh1.id, s1);
-      this.enemySprites.set(sh1.id, this.normalizeSprite(this.add.image(sh1.position.x, sh1.position.y, 'abyssal_shadow'), 54, 72).setDepth(255));
+      const sp1 = this.normalizeSprite(this.add.sprite(sh1.position.x, sh1.position.y, 'skeleton_patrol', 0), 64, 64, 0.5, 0.9).setDepth(255);
+      this.playAnimSafe(sp1, 'skeleton_patrol');
+      this.enemySprites.set(sh1.id, sp1);
 
       // Boss Astaroth (Entidad Primordial del Abismo)
       this.currentBoss = Boss.createAstaroth();
       this.bossShadow = this.add.ellipse(520, 260, 48, 12, 0x000000, 0.6).setDepth(259);
-      this.bossSprite = this.normalizeSprite(this.add.image(520, 260, 'boss_astaroth'), 96, 110).setDepth(260);
+      this.bossSprite = this.normalizeSprite(this.add.sprite(520, 260, 'boss_astaroth'), 96, 110, 0.5, 0.95).setDepth(260);
       this.createBossMarker('Astaroth', 520, 260);
 
       this.tweens.add({
@@ -3604,19 +3750,10 @@ export class GameScene extends Phaser.Scene {
       const introText = introLines[0] ? `${introLines[0].speaker}: ${introLines[0].text}` : "Shalem: «Acto V: La Catedral Invertida»";
       this.triggerShalemBalloon(introText, 4500);
 
-      // Spawn Elowen NPC — weakened, offering her Gota de Luz Divina to forge Alba Gris
+      // Spawn Elowen NPC — offering her Gota de Luz Divina to forge Alba Gris
       this.elowenShadow = this.add.ellipse(150, 265, 22, 6, 0x000000, 0.35).setDepth(264);
-      this.elowenSprite = this.normalizeSprite(this.add.image(150, 265, 'elowen_npc'), 48, 68).setDepth(265).setAlpha(0.9);
-
-      this.tweens.add({
-        targets: this.elowenSprite,
-        alpha: 0.6,
-        scaleY: 0.97,
-        duration: 2000,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut'
-      });
+      this.elowenSprite = this.normalizeSprite(this.add.sprite(150, 265, 'elowen_idle', 0), 54, 54, 0.5, 0.9).setDepth(265).setAlpha(0.95);
+      this.playAnimSafe(this.elowenSprite, 'elowen_speak');
     }
   }
 }

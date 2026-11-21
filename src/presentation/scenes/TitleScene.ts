@@ -95,9 +95,14 @@ export class TitleScene extends Phaser.Scene {
 
     if (this.shouldOpenCharacterSelect) {
       this.startPromptContainer.setVisible(false);
-      this.time.delayedCall(120, () => {
+      this.time.delayedCall(80, () => {
         this.openMenu();
         this.showCharacterSelectModal();
+      });
+    } else {
+      // Automatically open the main menu so buttons are immediately visible and playable
+      this.time.delayedCall(150, () => {
+        this.openMenu();
       });
     }
 
@@ -113,6 +118,8 @@ export class TitleScene extends Phaser.Scene {
         this.openMenu();
       } else if (!this.activeModalContainer) {
         this.menuButtons[this.currentMenuIndex]?.action();
+      } else {
+        this.startDirect2DGame(this.selectedCharacter);
       }
     });
 
@@ -121,6 +128,22 @@ export class TitleScene extends Phaser.Scene {
         this.openMenu();
       } else if (!this.activeModalContainer) {
         this.menuButtons[this.currentMenuIndex]?.action();
+      } else {
+        this.startDirect2DGame(this.selectedCharacter);
+      }
+    });
+
+    this.input.keyboard?.on('keydown-LEFT', () => {
+      if (this.activeModalContainer) {
+        this.selectedCharacter = 'thomas';
+        this.audio.playSfx('menu_select');
+      }
+    });
+
+    this.input.keyboard?.on('keydown-RIGHT', () => {
+      if (this.activeModalContainer) {
+        this.selectedCharacter = 'khaterine';
+        this.audio.playSfx('menu_select');
       }
     });
 
@@ -266,21 +289,10 @@ export class TitleScene extends Phaser.Scene {
     // Menu Interactive Items Configuration
     const items = [
       {
-        label: 'Nueva partida',
+        label: '⚔ Nueva partida (Modo 2D)',
         action: () => {
           this.audio.playSfx('menu_select');
-          this.cameras.main.fade(300, 0, 0, 0);
-          this.time.delayedCall(320, () => {
-            this.scene.start('LoadingScene', {
-              targetScene: 'TitleScene',
-              targetData: { openCharacterSelect: true },
-              imageKey: 'loading_concept_art',
-              chapterTitle: 'PRÓLOGO — EL REINO QUE OLVIDÓ LA LUZ',
-              storyText: '«Durante generaciones, Albion vivió sumido en una oscuridad perpetua bajo el dogma del Cáliz Solar. Nueve brujas sacrificadas en la Noche de la Luna Roja otorgaron libre albedrío al recién nacido Thomas, salvado del fuego por Khaterine mientras Elowen cargó involuntariamente con la sospecha del reino.»',
-              tipText: '«Shalem: Despierta, mortal. El reino de Albion aguarda tus elecciones...»',
-              minDurationMs: 2000
-            });
-          });
+          this.showCharacterSelectModal();
         }
       },
       {
@@ -414,14 +426,14 @@ export class TitleScene extends Phaser.Scene {
     // Card 1: Thomas
     const c1 = this.createCharCard(-105, 5, 'thomas', 'THOMAS', 'Monaguillo · Híbrido Oscuro', 'Combate con espada, ágil, lanza armas con [T] y pelea a puños.', 'thomas_idle');
     // Card 2: Khaterine
-    const c2 = this.createCharCard(105, 5, 'khaterine', 'KHATERINE', 'Hechicera del Abismo', 'Magia rúnica a distancia, poderosa y resistente.', 'khaterine_idle');
+    const c2 = this.createCharCard(105, 5, 'khaterine', 'KHATERINE', 'Hechicera del Abismo', 'Magia rúnica a distancia, arco del Sauce Negro y barrera.', 'khaterine_idle');
 
-    // Close & Quick Action buttons
-    const quickBtn = this.add.text(-80, 105, '⚡ ACCIÓN RÁPIDA (COMBATE)', {
+    // Direct Combat, Prologue & Close buttons
+    const quickBtn = this.add.text(-115, 105, '⚔ JUGAR 2D AHORA [ENTER]', {
       fontFamily: 'Cinzel, monospace',
       fontSize: '8px',
       color: '#ffd700',
-      backgroundColor: '#1b2612',
+      backgroundColor: '#1b3618',
       padding: { x: 8, y: 4 }
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
@@ -429,10 +441,25 @@ export class TitleScene extends Phaser.Scene {
     quickBtn.on('pointerout', () => quickBtn.setColor('#ffd700'));
     quickBtn.on('pointerdown', (p: Phaser.Input.Pointer) => {
       p.event.stopPropagation();
-      this.startQuickGame(this.selectedCharacter);
+      this.startDirect2DGame(this.selectedCharacter);
     });
 
-    const closeBtn = this.add.text(90, 105, '[ VOLVER AL MENÚ ]', {
+    const prologueBtn = this.add.text(20, 105, '📜 VER PRÓLOGO', {
+      fontFamily: 'Cinzel, monospace',
+      fontSize: '8px',
+      color: '#e0c8ff',
+      backgroundColor: '#261838',
+      padding: { x: 8, y: 4 }
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+    prologueBtn.on('pointerover', () => prologueBtn.setColor('#ffd700'));
+    prologueBtn.on('pointerout', () => prologueBtn.setColor('#e0c8ff'));
+    prologueBtn.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      p.event.stopPropagation();
+      this.startGame();
+    });
+
+    const closeBtn = this.add.text(135, 105, '[ CERRAR ]', {
       fontFamily: 'monospace',
       fontSize: '8px',
       color: '#bba8d4',
@@ -447,25 +474,17 @@ export class TitleScene extends Phaser.Scene {
       this.closeModal();
     });
 
-    this.activeModalContainer.add([c1, c2, quickBtn, closeBtn]);
+    this.activeModalContainer.add([c1, c2, quickBtn, prologueBtn, closeBtn]);
   }
 
-  private startQuickGame(charId: CharacterId = 'thomas'): void {
+  private startDirect2DGame(charId: CharacterId = 'thomas'): void {
     SessionStateStore.getInstance().resetToDefaults(charId, 1);
     this.audio.playSfx('dodge');
-    this.cameras.main.fade(300, 0, 0, 0);
-    this.time.delayedCall(320, () => {
-      this.scene.start('LoadingScene', {
-        targetScene: 'GameScene',
-        targetData: {
-          characterId: charId,
-          scenarioIndex: 1
-        },
-        imageKey: 'loading_pyre_remains',
-        chapterTitle: 'ACTO I — CENIZAS EN OAKHAVEN',
-        storyText: '«Thomas y Khaterine empuñan sus armas ante la pira de los herejes. Shalem observa desde el muro... La batalla comienza.»',
-        tipText: '«Consejo: Usa [J] para golpe ligero y [K] para golpe pesado capaz de romper escudos.»',
-        minDurationMs: 1200
+    this.cameras.main.fade(220, 0, 0, 0);
+    this.time.delayedCall(240, () => {
+      this.scene.start('GameScene', {
+        characterId: charId,
+        scenarioIndex: 1
       });
     });
   }
@@ -485,28 +504,26 @@ export class TitleScene extends Phaser.Scene {
       .setStrokeStyle(1.5, 0x6e4b8a)
       .setInteractive({ useHandCursor: true });
 
-    // Proportional character sprite rendering: Thomas native pixel art is 96x80 (ratio 1.2:1)
-    let spr: Phaser.GameObjects.Image;
-    if (charId === 'thomas') {
-      spr = this.add.image(0, -28, spriteKey).setDisplaySize(82, 68);
-    } else {
-      spr = this.add.image(0, -28, spriteKey).setDisplaySize(30, 68);
+    // Render animated 64x64 sprite sheet from the visual pack
+    const spr = this.add.sprite(0, -32, spriteKey, 0).setDisplaySize(64, 64);
+    if (this.anims.exists(spriteKey)) {
+      spr.play(spriteKey);
     }
 
-    const nameTxt = this.add.text(0, 16, name, {
+    const nameTxt = this.add.text(0, 14, name, {
       fontFamily: 'Cinzel, Georgia, serif',
       fontSize: '11px',
       color: '#ffd700',
       fontStyle: 'bold'
     }).setOrigin(0.5);
 
-    const roleTxt = this.add.text(0, 31, role, {
+    const roleTxt = this.add.text(0, 28, role, {
       fontFamily: 'sans-serif',
       fontSize: '8px',
       color: '#cca8f0'
     }).setOrigin(0.5);
 
-    const descTxt = this.add.text(0, 52, desc, {
+    const descTxt = this.add.text(0, 47, desc, {
       fontFamily: 'sans-serif',
       fontSize: '7.5px',
       color: '#9e91b3',
@@ -514,7 +531,15 @@ export class TitleScene extends Phaser.Scene {
       wordWrap: { width: 170 }
     }).setOrigin(0.5);
 
+    const playPill = this.add.text(0, 64, '▶ CLIC PARA JUGAR 2D', {
+      fontFamily: 'monospace',
+      fontSize: '7px',
+      color: '#88ffaa',
+      fontStyle: 'bold'
+    }).setOrigin(0.5);
+
     bg.on('pointerover', () => {
+      this.selectedCharacter = charId;
       bg.setFillStyle(0x2d1747, 0.98);
       bg.setStrokeStyle(2, 0xffd700);
       nameTxt.setColor('#ffffff');
@@ -529,10 +554,10 @@ export class TitleScene extends Phaser.Scene {
     bg.on('pointerdown', (p: Phaser.Input.Pointer) => {
       p.event.stopPropagation();
       this.selectedCharacter = charId;
-      this.startGame();
+      this.startDirect2DGame(charId);
     });
 
-    card.add([bg, spr, nameTxt, roleTxt, descTxt]);
+    card.add([bg, spr, nameTxt, roleTxt, descTxt, playPill]);
     return card;
   }
 

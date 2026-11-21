@@ -264,17 +264,25 @@ export class LoadingScene extends Phaser.Scene {
           repeat: -1,
           ease: 'Sine.easeInOut'
         });
+
+        // Auto-proceed after 450ms so gameplay starts smoothly without requiring an extra click
+        this.time.delayedCall(450, () => {
+          if (this.scene.isActive() && !this.isTransitioning) {
+            this.proceedToTargetScene();
+          }
+        });
       }
     });
   }
 
   public update(): void {
-    if (this.isLoaded && !this.isTransitioning) {
+    if (!this.isTransitioning) {
       if (
         (this.keyEnter && Phaser.Input.Keyboard.JustDown(this.keyEnter)) ||
         (this.keySpace && Phaser.Input.Keyboard.JustDown(this.keySpace)) ||
         (this.keyE && Phaser.Input.Keyboard.JustDown(this.keyE))
       ) {
+        this.isLoaded = true;
         this.proceedToTargetScene();
       }
     }

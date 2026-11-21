@@ -61,9 +61,13 @@ export class StoryIntroScene extends Phaser.Scene {
       frequency: 250
     });
 
-    // 2. Center Stage: Shalem on Ancient Pedestal
+    // 2. Center Stage: Shalem on Ancient Pedestal (Animated Sprite from Visual Pack)
     this.add.rectangle(320, 160, 100, 35, 0x1b1429).setStrokeStyle(1, 0x7a5a3a);
-    const shalemSprite = this.add.image(320, 142, 'shalem_cat').setOrigin(0.5, 1).setScale(2.2);
+    const shalemKey = this.textures.exists('shalem_sit_idle') ? 'shalem_sit_idle' : 'shalem_cat';
+    const shalemSprite = this.add.sprite(320, 146, shalemKey, 0).setOrigin(0.5, 1).setScale(2.1);
+    if (this.anims.exists('shalem_sit_idle')) {
+      shalemSprite.play('shalem_sit_idle');
+    }
 
     // Subtle breathing animation for Shalem
     this.tweens.add({
