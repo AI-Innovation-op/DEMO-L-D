@@ -9,6 +9,10 @@ import {
   ACT_COMPANION_ANCHORS_3D,
   CINEMATIC_CAMERA_BEATS_3D
 } from '../../src/domain/story/ActEncountersAndLore3D';
+import {
+  ChronicleManager,
+  CANONICAL_ACHIEVEMENTS
+} from '../../src/domain/progression/ChronicleAchievements';
 import { GameSaveManager } from '../../src/infrastructure/storage/GameSaveManager';
 
 function createInitialSnapshot(overrides: Partial<CampaignWorldSnapshot3D> = {}): CampaignWorldSnapshot3D {
@@ -321,5 +325,44 @@ describe('3D Sequential Story Campaign Director (Prologue -> Caps. I-XX -> First
       expect(beat.caption.length).toBeGreaterThan(10);
       expect(beat.lookOffsetY).toBeGreaterThan(0);
     }
+  });
+
+  it('tracks the 10 Canonical Achievements, combat statistics, and final Chronicle Rank (C -> B -> A -> S)', () => {
+    expect(CANONICAL_ACHIEVEMENTS).toHaveLength(10);
+    const chronicle = new ChronicleManager();
+    chronicle.reset();
+
+    const unlockedEvents: string[] = [];
+    chronicle.setOnUnlock(spec => unlockedEvents.push(spec.id));
+
+    expect(chronicle.computeRank().grade).toBe('C');
+
+    chronicle.recordPerfectParry();
+    chronicle.recordPerfectDodge();
+    chronicle.recordComboFinisher();
+    expect(chronicle.isUnlocked('first_parry')).toBe(true);
+    expect(chronicle.isUnlocked('first_perfect_dodge')).toBe(true);
+    expect(chronicle.isUnlocked('combo_master_3')).toBe(true);
+    expect(chronicle.computeRank().grade).toBe('B');
+
+    chronicle.recordBrazierDestroyed(3);
+    chronicle.recordMirrorShattered(3);
+    chronicle.recordBridgeKnockoff();
+    expect(chronicle.computeRank().grade).toBe('A');
+
+    chronicle.unlock('burned_barn_truth');
+    chronicle.unlock('crucible_saboteur');
+    chronicle.unlock('alba_gris_forged');
+    chronicle.unlock('first_dawn_champion');
+    chronicle.recordEnemyPurified(true);
+
+    const finalRank = chronicle.computeRank();
+    expect(finalRank.grade).toBe('S');
+    expect(finalRank.unlockedCount).toBe(10);
+    expect(unlockedEvents).toHaveLength(10);
+
+    // Unlocking an already-earned achievement does not duplicate events
+    expect(chronicle.unlock('first_parry')).toBe(false);
+    expect(unlockedEvents).toHaveLength(10);
   });
 });

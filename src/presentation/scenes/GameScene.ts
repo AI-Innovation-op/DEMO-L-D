@@ -3948,7 +3948,7 @@ export class GameScene extends Phaser.Scene {
       // El Campanario y Granero del Sur (Caps VII-IX)
       this.bgImage.setTexture('bg_belltower');
       if (this.bgImageEast) this.bgImageEast.setTexture('bg_belltower');
-      this.audio.playBgm('bgm_oakhaven_night');
+      this.audio.playBgm('bgm_belltower_crucible');
       this.emberParticles.stop();
 
       // Spawn Elowen NPC in Belltower cell
@@ -3987,7 +3987,7 @@ export class GameScene extends Phaser.Scene {
       // El Gran Puente de Piedra y Camino de los Herejes (Caps X-XIII)
       this.bgImage.setTexture('bg_bridge');
       if (this.bgImageEast) this.bgImageEast.setTexture('bg_bridge');
-      this.audio.playBgm('bgm_londinium_city');
+      this.audio.playBgm('bgm_great_stone_bridge');
       this.emberParticles.stop();
 
       // Spawn Elowen NPC escorting refugees

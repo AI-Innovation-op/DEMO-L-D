@@ -7,6 +7,11 @@ import {
 } from '../../domain/audio/ActSoundscapeCatalog';
 import { Inventory, CANONICAL_WILLOW_RELIC } from '../../domain/inventory/Inventory';
 import { Progression } from '../../domain/progression/Progression';
+import {
+  ChronicleManager,
+  CANONICAL_ACHIEVEMENTS,
+  CanonicalAchievementSpec
+} from '../../domain/progression/ChronicleAchievements';
 import { HeroType } from '../../domain/progression/Skill';
 import { GameSaveManager } from '../../infrastructure/storage/GameSaveManager';
 import { Party } from '../../domain/party/Party';
@@ -137,7 +142,7 @@ export function computeMalphasBrazierMultiplier(destroyedBraziers: number): numb
   return 1 + clamped * 0.15;
 }
 
-export type InputContext = 'gameplay' | 'prologue' | 'dialogue' | 'inventory' | 'skillTree' | 'alchemy' | 'compendium' | 'designs' | 'moralDilemma' | 'defeated';
+export type InputContext = 'gameplay' | 'paused' | 'prologue' | 'dialogue' | 'inventory' | 'skillTree' | 'alchemy' | 'compendium' | 'designs' | 'moralDilemma' | 'defeated';
 
 export class Oakhaven3DExperience {
   private container: HTMLElement;
@@ -576,6 +581,17 @@ export class Oakhaven3DExperience {
   private slowMoVignetteEl?: HTMLDivElement;
   private combatFlowBadgeEl?: HTMLDivElement;
 
+  // Pause Menu, Chronicle Achievements & Tactical Mini-Radar
+  private chronicle: ChronicleManager = new ChronicleManager();
+  private isPaused: boolean = false;
+  private pauseModalEl?: HTMLDivElement;
+  private pauseActiveTab: 'controls' | 'chronicle' = 'controls';
+  private achievementToastEl?: HTMLDivElement;
+  private achievementToastTimer: number = 0;
+  private cameraSensitivity: number = 1.0;
+  private minimapWrapEl?: HTMLDivElement;
+  private minimapCanvasEl?: HTMLCanvasElement;
+
   // Arsenal & Munitions Manager
   private arsenalManager: ArsenalManager = new ArsenalManager();
   private activeBurnEffects: Array<{ targetId: string; ticksLeft: number; dmgPerTick: number; timer: number }> = [];
@@ -691,6 +707,7 @@ export class Oakhaven3DExperience {
 
     // 6. Build 3D UI Overlay
     this.createUIOverlay();
+    this.chronicle.setOnUnlock(spec => this.showAchievementToast(spec));
     const hadExistingSave = GameSaveManager.hasSave();
     this.loadSavedSanctuaryState();
 
@@ -3911,6 +3928,7 @@ export class Oakhaven3DExperience {
     if (this.hasForgedAlbaGris) return;
 
     this.hasForgedAlbaGris = true;
+    this.chronicle.unlock('alba_gris_forged');
     this.audio.playCosmicChime?.();
     this.triggerHolyFlash(1.2);
     this.applyAlbaGrisSwordVisual();
@@ -4614,6 +4632,7 @@ export class Oakhaven3DExperience {
           if (isParry) {
             this.audio.playSfx('parry');
             this.triggerHolyFlash(0.85);
+            this.chronicle.recordPerfectParry();
             this.combatVfx?.spawnParryOrCritFlash(pPos, 'parry');
             this.crucibleGuardianEncounter.setState('STUNNED');
             this.crucibleTimer = 2.0 * this.getStaggerMultiplier();
@@ -4667,6 +4686,7 @@ export class Oakhaven3DExperience {
 
     const reward = this.crucibleGuardianEncounter.claimRewards(this.inventory, this.progression);
     if (reward.claimed) {
+      this.chronicle.recordEnemyPurified(true);
       this.spawnFloatingText(
         this.crucibleGuardianGroup.position,
         `👑 ¡GUARDIÁN DEL CRISOL PURIFICADO! (+${reward.expAwarded} EXP & LAMENTO DE OAKHAVEN)`,
@@ -4801,6 +4821,7 @@ export class Oakhaven3DExperience {
             this.audio.playSfx('parry');
             this.audio.playSfx('shield_break');
             this.triggerHolyFlash(0.85);
+            this.chronicle.recordPerfectParry();
             this.combatVfx?.spawnParryOrCritFlash(pPos, 'parry');
             this.combatVfx?.spawnParticleBurst(vPos, 18, 'solar_gold', { useShards: true, speed: 6.8 });
             this.captainVaneEncounter.breakShield();
@@ -4856,6 +4877,7 @@ export class Oakhaven3DExperience {
 
     const reward = this.captainVaneEncounter.claimRewards(this.inventory, this.progression);
     if (reward.claimed) {
+      this.chronicle.recordEnemyPurified(true);
       this.spawnFloatingText(
         this.captainVaneGroup.position,
         `👑 ¡CAPITÁN ÁUREO VANE DERROTADO! (+${reward.expAwarded} EXP & FALSO VEREDICTO)`,
@@ -4909,6 +4931,7 @@ export class Oakhaven3DExperience {
       guard.fallVelocity = 0;
       guard.hp = 0;
       this.progression.addExp(100);
+      this.chronicle.recordBridgeKnockoff();
       this.audio.playFinisherSound(true);
       this.triggerScreenShake(0.45);
       this.spawnFloatingText(
@@ -5242,6 +5265,7 @@ export class Oakhaven3DExperience {
           if (isParry) {
             this.audio.playSfx('parry');
             this.triggerHolyFlash(0.85);
+            this.chronicle.recordPerfectParry();
             this.combatVfx?.spawnParryOrCritFlash(pPos, 'parry');
             this.rexMalphasEncounter.setState('STUNNED');
             this.malphasTimer = 2.0 * this.getStaggerMultiplier();
@@ -5296,6 +5320,7 @@ export class Oakhaven3DExperience {
 
     const reward = this.rexMalphasEncounter.claimRewards(this.inventory, this.progression);
     if (reward.claimed) {
+      this.chronicle.recordEnemyPurified(true);
       this.spawnFloatingText(
         this.rexMalphasGroup.position,
         `👑 ¡REX MALPHAS DERROCADO! (+${reward.expAwarded} EXP & ESPEJISMO DE ORO Y HUMO)`,
@@ -5442,6 +5467,7 @@ export class Oakhaven3DExperience {
           if (isParry) {
             this.audio.playSfx('parry');
             this.triggerHolyFlash(1.0);
+            this.chronicle.recordPerfectParry();
             this.combatVfx?.spawnParryOrCritFlash(pPos, 'parry');
             this.astarothEncounter.setState('STUNNED');
             this.astarothTimer = 2.0 * this.getStaggerMultiplier();
@@ -5493,7 +5519,9 @@ export class Oakhaven3DExperience {
 
     const reward = this.astarothEncounter.claimRewards(this.inventory, this.progression);
     if (reward.claimed) {
+      this.chronicle.recordEnemyPurified(true);
       this.hasForgedAlbaGris = true;
+      this.chronicle.unlock('alba_gris_forged');
       this.applyAlbaGrisSwordVisual();
       this.spawnFloatingText(
         this.astarothGroup.position,
@@ -5720,11 +5748,13 @@ export class Oakhaven3DExperience {
     this.triggerHolyFlash(1.1);
     this.spawnFloatingText(this.playerGroup.position, '🌅 ¡EL PRIMER AMANECER DE OAKHAVEN!', '#ffd700');
 
-    // 7. Canonical Chapter XX Epilogue Modal
+    // 7. Canonical Chapter XX Epilogue Modal with Final Chronicle Rank
+    this.chronicle.unlock('first_dawn_champion');
+    const finalRank = this.chronicle.computeRank();
     this.showDialogueModal(
       '🌅 EPÍLOGO CANÓNICO — EL PRIMER AMANECER EN LA COLINA DEL VIEJO ROBLE 🌅',
       '«Por primera vez en dieciocho años, la niebla de ceniza se abre sobre el valle de Oakhaven y un sol cálido tiñe de oro las hojas del Viejo Roble. Shalem ronronea hecho un ovillo sobre la piedra musgosa, libre al fin de las cadenas del Abismo. Elowen apoya su frente sobre el hombro de Thomas mientras Khaterine contempla el horizonte en paz: "Ya no somos hijos de la noche ni del temor, Thomas. Somos la oscuridad que eligió amar."»',
-      '👑 OBRA COMPLETA (20/20 CAPÍTULOS) — PUEDES CAMINAR LIBREMENTE POR LA COLINA O USAR EL COMPENDIO [N] 👑'
+      `👑 OBRA COMPLETA (20/20 CAPÍTULOS) · RANGO FINAL ${finalRank.grade}: ${finalRank.title.toUpperCase()} (${finalRank.unlockedCount}/${finalRank.totalCount} HAZAÑAS · PULSA [ESC] PARA VER TU CRÓNICA) 👑`
     );
     this.updateHUD();
   }
@@ -6106,6 +6136,11 @@ export class Oakhaven3DExperience {
       const showControls = !hideChrome && !st.minimalHud;
       this.controlsBarEl.style.opacity = showControls ? '1' : '0';
     }
+
+    if (this.minimapWrapEl) {
+      const showMap = !hideChrome && !st.minimalHud;
+      this.minimapWrapEl.style.opacity = showMap ? '1' : '0';
+    }
   }
 
   private syncDynamicSoundscape(): void {
@@ -6147,6 +6182,7 @@ export class Oakhaven3DExperience {
     }
 
     // Reward posture recovery + shadow-time VFX pulse + slow-mo counter window
+    this.chronicle.recordPerfectDodge();
     this.playerStats.posture = Math.min(this.playerStats.maxPosture, this.playerStats.posture + 15);
     this.audio.playHolyFlash?.();
     this.combatVfx?.spawnPerfectDodgePulse(this.playerGroup.position);
@@ -6180,6 +6216,238 @@ export class Oakhaven3DExperience {
         this.combatFlowBadgeEl.style.display = 'none';
       }
     }
+  }
+
+  public togglePauseModal(initialTab?: 'controls' | 'chronicle'): void {
+    if (!this.pauseModalEl) return;
+    if (initialTab && this.isPaused && this.pauseActiveTab !== initialTab) {
+      this.pauseActiveTab = initialTab;
+      this.renderPauseModalState();
+      return;
+    }
+
+    this.isPaused = !this.isPaused;
+    if (this.isPaused) {
+      if (initialTab) this.pauseActiveTab = initialTab;
+      this.releaseAllInputs();
+      this.pauseModalEl.style.display = 'block';
+      this.renderPauseModalState();
+      this.audio.playSfx('menu_select');
+    } else {
+      this.pauseModalEl.style.display = 'none';
+      this.audio.playSfx('menu_select');
+    }
+  }
+
+  private renderPauseModalState(): void {
+    if (!this.pauseModalEl) return;
+    const controlsPane = this.pauseModalEl.querySelector('#p3d-pause-pane-controls') as HTMLDivElement | null;
+    const chroniclePane = this.pauseModalEl.querySelector('#p3d-pause-pane-chronicle') as HTMLDivElement | null;
+    const tabControls = this.pauseModalEl.querySelector('#p3d-pause-tab-controls') as HTMLButtonElement | null;
+    const tabChronicle = this.pauseModalEl.querySelector('#p3d-pause-tab-chronicle') as HTMLButtonElement | null;
+
+    const showingChronicle = this.pauseActiveTab === 'chronicle';
+    if (controlsPane) controlsPane.style.display = showingChronicle ? 'none' : 'block';
+    if (chroniclePane) chroniclePane.style.display = showingChronicle ? 'block' : 'none';
+
+    if (tabControls) {
+      tabControls.style.background = !showingChronicle ? '#3b2812' : '#1a162b';
+      tabControls.style.color = !showingChronicle ? '#ffd7aa' : '#dcd0ea';
+      tabControls.style.borderColor = !showingChronicle ? '#d49a37' : '#5a3d78';
+    }
+    if (tabChronicle) {
+      const rank = this.chronicle.computeRank();
+      tabChronicle.innerText = `🏆 CRÓNICA & HAZAÑAS (${rank.unlockedCount}/${rank.totalCount})`;
+      tabChronicle.style.background = showingChronicle ? '#3b2812' : '#1a162b';
+      tabChronicle.style.color = showingChronicle ? '#ffd7aa' : '#dcd0ea';
+      tabChronicle.style.borderColor = showingChronicle ? '#d49a37' : '#5a3d78';
+    }
+
+    const volSlider = this.pauseModalEl.querySelector('#p3d-volume-slider') as HTMLInputElement | null;
+    const volLabel = this.pauseModalEl.querySelector('#p3d-volume-val') as HTMLSpanElement | null;
+    const curVol = Math.round(this.audio.getMasterVolume() * 100);
+    if (volSlider) volSlider.value = String(curVol);
+    if (volLabel) volLabel.innerText = `${curVol}%`;
+
+    const sensSlider = this.pauseModalEl.querySelector('#p3d-camsens-slider') as HTMLInputElement | null;
+    const sensLabel = this.pauseModalEl.querySelector('#p3d-camsens-val') as HTMLSpanElement | null;
+    if (sensSlider) sensSlider.value = String(Math.round(this.cameraSensitivity * 100));
+    if (sensLabel) sensLabel.innerText = `${this.cameraSensitivity.toFixed(1)}x`;
+
+    if (showingChronicle) {
+      this.renderChroniclePanel();
+    }
+  }
+
+  private renderChroniclePanel(): void {
+    if (!this.pauseModalEl) return;
+    const summaryEl = this.pauseModalEl.querySelector('#p3d-chronicle-summary') as HTMLDivElement | null;
+    const gridEl = this.pauseModalEl.querySelector('#p3d-chronicle-grid') as HTMLDivElement | null;
+    const rank = this.chronicle.computeRank();
+    const st = this.chronicle.getStats();
+    const mins = Math.floor(st.playTimeSec / 60);
+    const secs = Math.floor(st.playTimeSec % 60).toString().padStart(2, '0');
+
+    if (summaryEl) {
+      summaryEl.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+          <div>
+            <span style="color:#ffd700; font-weight:bold; font-size:9px;">RANGO ${rank.grade} · ${rank.title.toUpperCase()}</span>
+            <div style="font-family:monospace; font-size:7px; color:#a3ffc7; margin-top:2px;">
+              Hazañas: ${rank.unlockedCount}/${rank.totalCount} | Puntos: ${rank.score} | Tiempo: ${mins}:${secs}
+            </div>
+          </div>
+          <div style="font-family:monospace; font-size:6.8px; color:#dcd0ea; text-align:right; line-height:1.4;">
+            Parries: ${st.perfectParries} · Esquivas Perf.: ${st.perfectDodges}<br/>
+            Combos III: ${st.comboFinishers} · Jefes: ${st.bossesPurified}
+          </div>
+        </div>
+      `;
+    }
+
+    if (gridEl) {
+      gridEl.innerHTML = CANONICAL_ACHIEVEMENTS.map(ach => {
+        const unlocked = this.chronicle.isUnlocked(ach.id);
+        return `
+          <div style="background:${unlocked ? 'rgba(42, 28, 12, 0.85)' : 'rgba(18, 13, 28, 0.72)'}; border:1px solid ${unlocked ? '#d4af37' : '#3e2d54'}; border-radius:4px; padding:5px 7px; opacity:${unlocked ? '1' : '0.68'};">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:4px; margin-bottom:2px;">
+              <span style="font-size:7.5px; font-weight:bold; color:${unlocked ? '#ffd700' : '#a99bb8'};">${ach.icon} ${ach.title}</span>
+              <span style="font-family:monospace; font-size:6.2px; color:${unlocked ? '#88ffaa' : '#807094'};">${unlocked ? '✓ ' + ach.actLabel : ach.actLabel}</span>
+            </div>
+            <div style="font-family:monospace; font-size:6.4px; color:#dcd0ea; line-height:1.25;">${ach.description}</div>
+          </div>
+        `;
+      }).join('');
+    }
+  }
+
+  private showAchievementToast(spec: CanonicalAchievementSpec): void {
+    if (!this.achievementToastEl) return;
+    const titleEl = this.achievementToastEl.querySelector('#p3d-ach-title') as HTMLDivElement | null;
+    const descEl = this.achievementToastEl.querySelector('#p3d-ach-desc') as HTMLDivElement | null;
+    if (titleEl) titleEl.innerText = `🏆 ${spec.icon} ${spec.title.toUpperCase()}`;
+    if (descEl) descEl.innerText = spec.description;
+    this.achievementToastEl.style.opacity = '1';
+    this.achievementToastEl.style.transform = 'translateY(0px)';
+    this.achievementToastTimer = 4.2;
+    this.audio.playCosmicChime?.();
+  }
+
+  private updateMiniRadar(): void {
+    if (!this.minimapCanvasEl || !this.playerGroup) return;
+    const ctx = this.minimapCanvasEl.getContext('2d');
+    if (!ctx) return;
+
+    const w = this.minimapCanvasEl.width;
+    const h = this.minimapCanvasEl.height;
+    const cx = w * 0.5;
+    const cy = h * 0.5;
+    const radius = cx - 4;
+    const rangeMeters = 24;
+    const scale = radius / rangeMeters;
+
+    ctx.clearRect(0, 0, w, h);
+
+    // Dark obsidian radar dial & subtle concentric rings
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(10, 6, 18, 0.84)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(212, 175, 55, 0.72)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius * 0.52, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(155, 115, 200, 0.25)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // North indicator
+    ctx.fillStyle = '#ffd700';
+    ctx.font = 'bold 7px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('N', cx, 10);
+
+    const px = this.playerGroup.position.x;
+    const pz = this.playerGroup.position.z;
+    const area = this.dungeonAreaManager.currentArea;
+
+    const drawBlip = (wx: number, wz: number, color: string, size: number, diamond = false): void => {
+      let dx = (wx - px) * scale;
+      let dz = (wz - pz) * scale;
+      const dist = Math.hypot(dx, dz);
+      const maxR = radius - 5;
+      if (dist > maxR) {
+        dx = (dx / dist) * maxR;
+        dz = (dz / dist) * maxR;
+      }
+      const bx = cx + dx;
+      const by = cy + dz;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      if (diamond) {
+        ctx.moveTo(bx, by - size);
+        ctx.lineTo(bx + size, by);
+        ctx.lineTo(bx, by + size);
+        ctx.lineTo(bx - size, by);
+        ctx.closePath();
+      } else {
+        ctx.arc(bx, by, size, 0, Math.PI * 2);
+      }
+      ctx.fill();
+    };
+
+    // Active Campaign Objective Waypoint (pulsing gold)
+    if (this.activeCampaignObjective?.waypoint && this.activeCampaignObjective.targetArea === area) {
+      const pulse = 2.8 + Math.sin(this.clock.elapsedTime * 6) * 0.9;
+      drawBlip(this.activeCampaignObjective.waypoint.x, this.activeCampaignObjective.waypoint.z, '#ffd700', pulse, true);
+    }
+
+    // Safe-Alcove Companions (cyan-lavender)
+    for (const comp of this.actCompanions) {
+      if (comp.spec.area === area) {
+        drawBlip(comp.spec.position.x, comp.spec.position.z, '#88eeff', 2.5);
+      }
+    }
+
+    // Active Secondary Enemies (orange-red)
+    for (const enemy of this.actEnemies) {
+      if (enemy.spec.area === area && enemy.state !== 'DEAD') {
+        drawBlip(enemy.group.position.x, enemy.group.position.z, '#ff6644', 2.4);
+      }
+    }
+
+    // Act Boss Blips (large crimson/magenta diamond)
+    if (area === 'surface' && this.morwennaState !== 'DEAD' && this.morwennaGroup?.visible) {
+      drawBlip(this.morwennaGroup.position.x, this.morwennaGroup.position.z, '#ff2244', 3.6, true);
+    } else if (area === 'crypts_interior' && !this.inquisitorEncounter.isDefeated) {
+      drawBlip(this.inquisitorGroup.position.x, this.inquisitorGroup.position.z, '#cc55ff', 3.6, true);
+    } else if (area === 'black_willow_forest' && !this.rootProwlerEncounter.isDefeated) {
+      drawBlip(this.rootProwlerGroup.position.x, this.rootProwlerGroup.position.z, '#bb44ff', 3.6, true);
+    } else if (area === 'belltower_summit' && !this.crucibleGuardianEncounter.isDefeated) {
+      drawBlip(this.crucibleGuardianGroup.position.x, this.crucibleGuardianGroup.position.z, '#ff7722', 3.6, true);
+    } else if (area === 'great_stone_bridge' && !this.captainVaneEncounter.isDefeated) {
+      drawBlip(this.captainVaneGroup.position.x, this.captainVaneGroup.position.z, '#ffd700', 3.6, true);
+    } else if (area === 'londinium_citadel' && !this.rexMalphasEncounter.isDefeated) {
+      drawBlip(this.rexMalphasGroup.position.x, this.rexMalphasGroup.position.z, '#cc44ff', 3.8, true);
+    } else if (area === 'inverted_cathedral' && !this.astarothEncounter.isDefeated) {
+      drawBlip(this.astarothGroup.position.x, this.astarothGroup.position.z, '#ff2288', 4.0, true);
+    }
+
+    // Center Hero Arrow oriented by playerGroup.rotation.y
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(-this.playerGroup.rotation.y);
+    ctx.fillStyle = '#a3ffc7';
+    ctx.beginPath();
+    ctx.moveTo(0, -4.5);
+    ctx.lineTo(3.2, 3.5);
+    ctx.lineTo(0, 1.8);
+    ctx.lineTo(-3.2, 3.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
   }
 
   private updateActSecondaryEnemies(delta: number): void {
@@ -6269,6 +6537,7 @@ export class Oakhaven3DExperience {
             if (isParry) {
               this.audio.playSfx('parry');
               this.triggerHolyFlash(0.6);
+              this.chronicle.recordPerfectParry();
               enemy.state = 'STUNNED';
               enemy.timer = 2.0 * this.getStaggerMultiplier();
               this.spawnFloatingText(pPos, '⚡ ¡PARRY PERFECTO!', '#66ccff');
@@ -6687,6 +6956,9 @@ export class Oakhaven3DExperience {
             </div>
             <button id="btn-toggle-designs" style="background: #38184c; color: #f3c6ff; border: 1px solid #cc66ff; padding: 4px 6px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer; font-weight: bold; text-align: center;">
               🎨 [V] DISEÑOS 3D & MODELOS .GLB
+            </button>
+            <button id="btn-open-chronicle" style="background: #2f200e; color: #ffd700; border: 1px solid #d4af37; padding: 3.5px 6px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer; font-weight: bold; text-align: center;">
+              🏆 [ESC] PAUSA, CONTROLES & HAZAÑAS
             </button>
 
             <div style="font-size: 6.8px; font-weight: bold; color: #c7a8e8; letter-spacing: 0.9px; border-bottom: 1px solid rgba(155,89,182,0.3); padding-bottom: 2px; margin-top: 1px;">
@@ -7111,7 +7383,85 @@ export class Oakhaven3DExperience {
 
       <!-- Bottom Controls Bar -->
       <div id="p3d-controls-bar" style="position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%); max-width: 96%; background: rgba(8, 4, 14, 0.86); border: 1px solid rgba(90, 61, 120, 0.55); border-radius: 3px; padding: 2px 8px; font-family: monospace; font-size: 6.6px; color: #c5b4db; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: opacity 0.35s ease;">
-        WASD: Mover | J/K: Ataque | L: Guardia | Espacio: Esquivar | E: Interactuar | T: Lanzar | R: Fijar | TAB: Héroe | X: Menú | Z: HUD
+        WASD: Mover | J/K: Combo/Pesado | L: Parry | Espacio: Esquiva | E: Interactuar | T: Lanzar | R: Fijar | TAB: Héroe | X: Menú | ESC: Pausa
+      </div>
+
+      <!-- Golden Non-Blocking Canonical Achievement Unlock Toast -->
+      <div id="p3d-achievement-toast" style="position: absolute; top: 42px; right: 10px; max-width: 225px; background: linear-gradient(135deg, rgba(36, 22, 10, 0.96), rgba(18, 10, 28, 0.96)); border: 1.4px solid #ffd700; border-radius: 5px; padding: 6px 9px; box-shadow: 0 8px 26px rgba(0,0,0,0.92); pointer-events: none; opacity: 0; transform: translateY(-8px); transition: opacity 0.35s ease, transform 0.35s ease; z-index: 82;">
+        <div style="font-family: monospace; font-size: 6.2px; color: #88ffaa; letter-spacing: 0.9px; margin-bottom: 1px;">✦ HAZAÑA CANÓNICA DESBLOQUEADA ✦</div>
+        <div id="p3d-ach-title" style="font-size: 8px; font-weight: bold; color: #ffd700; margin-bottom: 1px;">🏆 HAZAÑA</div>
+        <div id="p3d-ach-desc" style="font-family: monospace; font-size: 6.4px; color: #e8dcf5; line-height: 1.25;"></div>
+      </div>
+
+      <!-- Tactical Circular Mini-Radar (Bottom Right) -->
+      <div id="p3d-minimap-wrap" title="Radar Táctico: Verde=Héroe · Oro=Objetivo · Cian=Aliado · Rojo=Enemigo" style="position: absolute; bottom: 24px; right: 10px; width: 66px; height: 66px; pointer-events: none; z-index: 42; transition: opacity 0.35s ease;">
+        <canvas id="p3d-minimap-canvas" width="66" height="66" style="width: 66px; height: 66px; display: block;"></canvas>
+      </div>
+
+      <!-- Gothic Pause Menu, Interactive Controls, Settings & Chronicle Achievements Modal ([ESC]) -->
+      <div id="p3d-pause-modal" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(11, 7, 22, 0.98); backdrop-filter: blur(8px); border: 2px solid #d4af37; border-radius: 6px; padding: 12px 16px; max-width: 560px; width: 92%; box-shadow: 0 16px 60px rgba(0,0,0,0.98); display: none; z-index: 165; pointer-events: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1.5px solid #482f5e; padding-bottom: 6px; margin-bottom: 8px;">
+          <div style="font-size: 10.5px; font-weight: bold; color: #ffd700; letter-spacing: 1px;">
+            ⏸ PAUSA — THE LIGHT IN THE DARKNESS (3D)
+          </div>
+          <button id="p3d-pause-resume" style="background: #143822; color: #a3ffc7; border: 1.2px solid #2ecc71; border-radius: 3px; padding: 3px 10px; font-family: monospace; font-size: 7.5px; cursor: pointer; font-weight: bold;">▶ REANUDAR [ESC]</button>
+        </div>
+
+        <div style="display: flex; gap: 6px; margin-bottom: 8px;">
+          <button id="p3d-pause-tab-controls" style="flex: 1; background: #3b2812; color: #ffd7aa; border: 1px solid #d49a37; border-radius: 4px; padding: 4px 8px; font-family: monospace; font-size: 7.4px; font-weight: bold; cursor: pointer;">⚔ CONTROLES & AJUSTES</button>
+          <button id="p3d-pause-tab-chronicle" style="flex: 1; background: #1a162b; color: #dcd0ea; border: 1px solid #5a3d78; border-radius: 4px; padding: 4px 8px; font-family: monospace; font-size: 7.4px; font-weight: bold; cursor: pointer;">🏆 CRÓNICA & HAZAÑAS (0/10)</button>
+        </div>
+
+        <!-- Pane 1: Controls & Real-Time Settings -->
+        <div id="p3d-pause-pane-controls">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; background: rgba(24, 15, 38, 0.78); border: 1px solid #4d356b; border-radius: 4px; padding: 7px 10px; margin-bottom: 8px;">
+            <div>
+              <div style="display:flex; justify-content:space-between; font-family:monospace; font-size:7.2px; color:#ffd700; margin-bottom:3px;">
+                <span>🔊 VOLUMEN MAESTRO</span>
+                <span id="p3d-volume-val">85%</span>
+              </div>
+              <input id="p3d-volume-slider" type="range" min="0" max="100" value="85" style="width:100%; accent-color:#d4af37; cursor:pointer;" />
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between; font-family:monospace; font-size:7.2px; color:#99ddff; margin-bottom:3px;">
+                <span>🎥 SENSIBILIDAD RATÓN</span>
+                <span id="p3d-camsens-val">1.0x</span>
+              </div>
+              <input id="p3d-camsens-slider" type="range" min="50" max="200" value="100" style="width:100%; accent-color:#66ccff; cursor:pointer;" />
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 7px; font-family: monospace; font-size: 6.9px; color: #e2d8f0; margin-bottom: 10px;">
+            <div style="background: rgba(20, 12, 32, 0.8); border: 1px solid #3d2852; border-radius: 4px; padding: 6px 8px; line-height: 1.5;">
+              <div style="color:#ffd700; font-weight:bold; margin-bottom:3px;">⚔ COMBATE DE THOMAS & KHATERINE</div>
+              • <b>[J] x3</b>: Combo 3 Golpes (x1.0 -> x1.18 -> x1.48)<br/>
+              • <b>[K]</b>: Ataque Pesado (+15% tras Combo II/III)<br/>
+              • <b>[L]</b>: Guardia / <b>Parry Perfecto</b> en el impacto<br/>
+              • <b>[Espacio]</b>: <b>Esquiva Perfecta</b> (Cámara Lenta +50%)<br/>
+              • <b>[E]</b>: Interactuar / Hablar / Remate Crítico
+            </div>
+            <div style="background: rgba(20, 12, 32, 0.8); border: 1px solid #3d2852; border-radius: 4px; padding: 6px 8px; line-height: 1.5;">
+              <div style="color:#d999ff; font-weight:bold; margin-bottom:3px;">🏹 ARSENAL, CÁMARA & MENÚS</div>
+              • <b>[TAB]</b>: Alternar Thomas / Khaterine<br/>
+              • <b>[1 / 2 / 3]</b> (Khaterine): Abisal / Fuego / Plata<br/>
+              • <b>[T]</b>: Lanzar Espada (traba Gran Crisol) · <b>[U]</b>: Eco<br/>
+              • <b>[R] / Clic Der.</b>: Fijar Objetivo · <b>[C]</b>: Cámara<br/>
+              • <b>[X]</b>: Menú Compacto · <b>[Z]</b>: HUD Mínimo · <b>[V]</b>: .GLB
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;">
+            <button id="p3d-pause-save" style="background: #1c2538; color: #99ddff; border: 1px solid #3b6b99; border-radius: 4px; padding: 5px 6px; font-family: monospace; font-size: 7px; font-weight: bold; cursor: pointer;">💾 GUARDAR SANTUARIO</button>
+            <button id="p3d-pause-new-campaign" style="background: #2f200e; color: #ffd7aa; border: 1px solid #d49a37; border-radius: 4px; padding: 5px 6px; font-family: monospace; font-size: 7px; font-weight: bold; cursor: pointer;">🔄 NUEVA CAMPAÑA</button>
+            <button id="p3d-pause-exit-2d" style="background: #331426; color: #ff99bb; border: 1px solid #aa3366; border-radius: 4px; padding: 5px 6px; font-family: monospace; font-size: 7px; font-weight: bold; cursor: pointer;">⮌ MENÚ PRINCIPAL 2D</button>
+          </div>
+        </div>
+
+        <!-- Pane 2: Canonical Chronicle & 10 Achievements -->
+        <div id="p3d-pause-pane-chronicle" style="display: none;">
+          <div id="p3d-chronicle-summary" style="background: rgba(34, 22, 12, 0.85); border: 1px solid #d4af37; border-radius: 4px; padding: 6px 9px; margin-bottom: 7px;"></div>
+          <div id="p3d-chronicle-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; max-height: 205px; overflow-y: auto; padding-right: 3px;"></div>
+        </div>
       </div>
     `;
 
@@ -7244,6 +7594,69 @@ export class Oakhaven3DExperience {
     this.dialogueToastContainerEl = this.uiOverlay.querySelector('#p3d-dialogue-toast-container') as HTMLDivElement;
     this.soundscapeTitleEl = this.uiOverlay.querySelector('#p3d-soundscape-title') as HTMLDivElement;
     this.soundscapeAtmosEl = this.uiOverlay.querySelector('#p3d-soundscape-atmos') as HTMLDivElement;
+    this.pauseModalEl = this.uiOverlay.querySelector('#p3d-pause-modal') as HTMLDivElement;
+    this.achievementToastEl = this.uiOverlay.querySelector('#p3d-achievement-toast') as HTMLDivElement;
+    this.minimapWrapEl = this.uiOverlay.querySelector('#p3d-minimap-wrap') as HTMLDivElement;
+    this.minimapCanvasEl = this.uiOverlay.querySelector('#p3d-minimap-canvas') as HTMLCanvasElement;
+
+    const btnOpenChronicle = this.uiOverlay.querySelector('#btn-open-chronicle') as HTMLButtonElement | null;
+    if (btnOpenChronicle) {
+      btnOpenChronicle.addEventListener('click', () => this.togglePauseModal('chronicle'));
+    }
+    const btnPauseResume = this.uiOverlay.querySelector('#p3d-pause-resume') as HTMLButtonElement | null;
+    if (btnPauseResume) {
+      btnPauseResume.addEventListener('click', () => this.togglePauseModal());
+    }
+    const btnPauseTabControls = this.uiOverlay.querySelector('#p3d-pause-tab-controls') as HTMLButtonElement | null;
+    if (btnPauseTabControls) {
+      btnPauseTabControls.addEventListener('click', () => {
+        this.pauseActiveTab = 'controls';
+        this.renderPauseModalState();
+      });
+    }
+    const btnPauseTabChronicle = this.uiOverlay.querySelector('#p3d-pause-tab-chronicle') as HTMLButtonElement | null;
+    if (btnPauseTabChronicle) {
+      btnPauseTabChronicle.addEventListener('click', () => {
+        this.pauseActiveTab = 'chronicle';
+        this.renderPauseModalState();
+      });
+    }
+    const volSlider = this.uiOverlay.querySelector('#p3d-volume-slider') as HTMLInputElement | null;
+    const volVal = this.uiOverlay.querySelector('#p3d-volume-val') as HTMLSpanElement | null;
+    if (volSlider) {
+      volSlider.addEventListener('input', () => {
+        const pct = parseInt(volSlider.value, 10);
+        this.audio.setMasterVolume(pct / 100);
+        if (volVal) volVal.innerText = `${pct}%`;
+      });
+    }
+    const sensSlider = this.uiOverlay.querySelector('#p3d-camsens-slider') as HTMLInputElement | null;
+    const sensVal = this.uiOverlay.querySelector('#p3d-camsens-val') as HTMLSpanElement | null;
+    if (sensSlider) {
+      sensSlider.addEventListener('input', () => {
+        const val = Math.max(50, Math.min(200, parseInt(sensSlider.value, 10))) / 100;
+        this.cameraSensitivity = val;
+        if (sensVal) sensVal.innerText = `${val.toFixed(1)}x`;
+      });
+    }
+    const btnPauseSave = this.uiOverlay.querySelector('#p3d-pause-save') as HTMLButtonElement | null;
+    if (btnPauseSave) {
+      btnPauseSave.addEventListener('click', () => {
+        this.togglePauseModal();
+        this.executeSanctuarySave();
+      });
+    }
+    const btnPauseNew = this.uiOverlay.querySelector('#p3d-pause-new-campaign') as HTMLButtonElement | null;
+    if (btnPauseNew) {
+      btnPauseNew.addEventListener('click', () => {
+        this.togglePauseModal();
+        this.resetAndStartNew3DCampaign();
+      });
+    }
+    const btnPauseExit = this.uiOverlay.querySelector('#p3d-pause-exit-2d') as HTMLButtonElement | null;
+    if (btnPauseExit) {
+      btnPauseExit.addEventListener('click', () => this.exit());
+    }
 
     const btnCompactMenu = this.uiOverlay.querySelector('#btn-toggle-compact-menu') as HTMLButtonElement | null;
     if (btnCompactMenu) {
@@ -7583,6 +7996,7 @@ export class Oakhaven3DExperience {
   // =========================================================================
   public getInputContext(): InputContext {
     if (this.isPlayerDefeated) return 'defeated';
+    if (this.isPaused) return 'paused';
     if (this.isPrologueOpen) return 'prologue';
     if (this.isMoralDilemmaOpen) return 'moralDilemma';
     if (this.isDesignsModalOpen) return 'designs';
@@ -7655,7 +8069,7 @@ export class Oakhaven3DExperience {
     if (!this.isPointerDragging || this.cameraMode !== 'third_person') return;
     const deltaX = e.clientX - this.pointerDragStartX;
     this.pointerDragStartX = e.clientX;
-    this.cameraYaw -= deltaX * 0.005;
+    this.cameraYaw -= deltaX * 0.005 * this.cameraSensitivity;
     this.targetCameraYaw = this.cameraYaw;
     this.lastManualOrbitTime = performance.now();
   };
@@ -7674,6 +8088,14 @@ export class Oakhaven3DExperience {
       return;
     }
     this.audio.unlockAndResumeIfNeeded();
+
+    // --- CONTEXT: PAUSED ---
+    if (context === 'paused') {
+      if (!e.repeat && e.key === 'Escape') {
+        this.togglePauseModal();
+      }
+      return;
+    }
 
     // --- CONTEXT: PROLOGUE CUTSCENE MODAL ---
     if (context === 'prologue') {
@@ -7757,10 +8179,14 @@ export class Oakhaven3DExperience {
       this.endCinematicCameraBeat();
       return;
     }
-    // Close open compact menu / dev drawer with [Escape]
-    if (!e.repeat && e.key === 'Escape' && this.hudCompactController.state.activeDrawer !== 'none') {
-      this.hudCompactController.closeDrawers();
-      this.syncCompactHudUI();
+    // Close open compact menu / dev drawer with [Escape], or open Gothic Pause Menu
+    if (!e.repeat && e.key === 'Escape') {
+      if (this.hudCompactController.state.activeDrawer !== 'none') {
+        this.hudCompactController.closeDrawers();
+        this.syncCompactHudUI();
+      } else {
+        this.togglePauseModal('controls');
+      }
       return;
     }
     // Toggle Compact Menu Drawer with [X]
@@ -8181,6 +8607,7 @@ export class Oakhaven3DExperience {
       this.attackCooldown = stepSpec.cooldownSec;
       arcColorHex = this.hasForgedAlbaGris ? 0x88eeff : stepSpec.arcColorHex;
       if (stepSpec.step === 3) {
+        this.chronicle.recordComboFinisher();
         this.spawnFloatingText(this.playerGroup.position, '🔥 ¡COMBO III: REMATE DE FUEGO NEGRO!', '#ff7733');
       }
     } else {
@@ -9362,6 +9789,7 @@ export class Oakhaven3DExperience {
     // Phase 2 Act IV: Destroying a Royal Narcotic Incense Brazier awakens its noble citizen & weakens Rex Malphas (+15% each)
     if (prop.id.startsWith('narcotic_brazier_')) {
       this.destroyedNarcoticBraziersCount = Math.min(3, this.destroyedNarcoticBraziersCount + 1);
+      this.chronicle.recordBrazierDestroyed(this.destroyedNarcoticBraziersCount);
       const citizen = this.hypnotizedCitizens.find(c => c.id === prop.id);
       if (citizen && !citizen.awakened) {
         citizen.awakened = true;
@@ -9517,6 +9945,7 @@ export class Oakhaven3DExperience {
       (dropPos.distanceTo(new THREE.Vector3(0, 0, -214)) <= 6.5 || dropPos.distanceTo(this.crucibleGuardianGroup.position) <= 5.0)
     ) {
       this.hasTriggeredCrucibleGearJam = true;
+      this.chronicle.unlock('crucible_saboteur');
       const res = this.crucibleGuardianEncounter.takeDamage(120, true);
       this.crucibleGuardianEncounter.setState('STUNNED');
       this.crucibleTimer = 3.0;
@@ -10276,6 +10705,7 @@ export class Oakhaven3DExperience {
     this.audio.playWillowWhisper?.();
     if (!this.hasInspectedBurnedBarn) {
       this.hasInspectedBurnedBarn = true;
+      this.chronicle.unlock('burned_barn_truth');
       this.progression.addExp(60);
       this.unlockAndAdvanceCanonChapter(8);
       this.playerStats.posture = Math.min(this.playerStats.maxPosture, this.playerStats.posture + 25);
@@ -10333,6 +10763,7 @@ export class Oakhaven3DExperience {
     this.audio.playGlassShatter?.();
     if (!this.hasClearedMirrorGallery) {
       this.shatteredGuiltMirrors = Math.min(3, this.shatteredGuiltMirrors + 1);
+      this.chronicle.recordMirrorShattered(this.shatteredGuiltMirrors);
       const mirrorBurstPos = new THREE.Vector3(-7.0, 0.4, -320);
       this.combatVfx?.spawnShockwaveRing(mirrorBurstPos, 0.4, 4.4, 0.48, 0x88eeff, true);
       this.combatVfx?.spawnParticleBurst(mirrorBurstPos, 24, 'mirror_astral', {
@@ -11449,6 +11880,7 @@ export class Oakhaven3DExperience {
 
     // H04: Claim rewards through MorwennaEncounter idempotently
     this.morwennaEncounter.claimRewards(this.inventory, this.progression);
+    this.chronicle.recordEnemyPurified(true);
 
     // Automatically open the cemetery gate
     this.openCemeteryGate();
@@ -12259,6 +12691,24 @@ export class Oakhaven3DExperience {
     if (!this.isRunning) return;
 
     const rawDelta = Math.min(this.clock.getDelta(), 0.1);
+
+    // Achievement unlock toast fade countdown (ticks even in calm moments)
+    if (this.achievementToastTimer > 0) {
+      this.achievementToastTimer = Math.max(0, this.achievementToastTimer - rawDelta);
+      if (this.achievementToastTimer === 0 && this.achievementToastEl) {
+        this.achievementToastEl.style.opacity = '0';
+        this.achievementToastEl.style.transform = 'translateY(-8px)';
+      }
+    }
+
+    // Freeze simulation cleanly while Gothic Pause Menu is open
+    if (this.isPaused) {
+      this.renderer.render(this.scene, this.camera);
+      this.animationFrameId = requestAnimationFrame(this.animate);
+      return;
+    }
+
+    this.chronicle.addPlayTime(rawDelta);
     const baseDelta = this.combatVfx ? this.combatVfx.consumeSimulationDelta(rawDelta) : rawDelta;
     const flowTick = this.combatFlow.tick(rawDelta);
     const playerDelta = baseDelta * flowTick.playerTimeScale;
@@ -12266,6 +12716,7 @@ export class Oakhaven3DExperience {
 
     this.updatePlayer(playerDelta);
     this.syncCombatFlowUI();
+    this.updateMiniRadar();
     if (!this.isPlayerAttacking && this.attackCooldown <= 0 && !this.playerStats.isDodging && this.combatFlow.hasBufferedAttack) {
       const queued = this.combatFlow.popBufferedAttack();
       if (queued !== 'none') {

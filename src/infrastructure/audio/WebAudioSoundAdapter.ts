@@ -18,17 +18,26 @@ export class WebAudioSoundAdapter implements IAudioPort {
   private droneOscs: OscillatorNode[] = [];
   private ambientSources: AudioScheduledSourceNode[] = [];
   private bgmMasterGain: GainNode | null = null;
+  private masterOutputGain: GainNode | null = null;
   private pinkNoiseBuffer: AudioBuffer | null = null;
   private isMuted: boolean = false;
+  private masterVolume: number = 0.85;
   private isBgmPlaying: boolean = false;
   private lastTrackKey: string = 'bgm_oakhaven_dawn';
 
   constructor() {
-    // Restore mute preference from localStorage if available
+    // Restore mute & volume preferences from localStorage if available
     try {
       const savedMute = localStorage.getItem('totd_audio_muted');
       if (savedMute !== null) {
         this.isMuted = savedMute === 'true';
+      }
+      const savedVol = localStorage.getItem('totd_audio_volume');
+      if (savedVol !== null) {
+        const parsed = parseFloat(savedVol);
+        if (!Number.isNaN(parsed)) {
+          this.masterVolume = Math.max(0, Math.min(1, parsed));
+        }
       }
     } catch {}
   }
@@ -78,6 +87,33 @@ export class WebAudioSoundAdapter implements IAudioPort {
 
   public getIsMuted(): boolean {
     return this.isMuted;
+  }
+
+  public getMasterVolume(): number {
+    return this.masterVolume;
+  }
+
+  public setMasterVolume(volume: number): number {
+    const clamped = Math.max(0, Math.min(1, Number.isFinite(volume) ? volume : 0.85));
+    this.masterVolume = clamped;
+    try {
+      localStorage.setItem('totd_audio_volume', String(clamped));
+    } catch {}
+    if (this.masterOutputGain && this.ctx) {
+      try {
+        this.masterOutputGain.gain.setTargetAtTime(clamped, this.ctx.currentTime, 0.04);
+      } catch {}
+    }
+    return this.masterVolume;
+  }
+
+  private getOutputNode(ctx: AudioContext): AudioNode {
+    if (!this.masterOutputGain) {
+      this.masterOutputGain = ctx.createGain();
+      this.masterOutputGain.gain.setValueAtTime(this.masterVolume, ctx.currentTime);
+      this.masterOutputGain.connect(ctx.destination);
+    }
+    return this.masterOutputGain;
   }
 
   private initContext(): AudioContext | null {
@@ -147,11 +183,11 @@ export class WebAudioSoundAdapter implements IAudioPort {
 
       const now = ctx.currentTime;
 
-      // Dedicated Master Bus per track with smooth 0.75s fade-in
+      // Dedicated Master Bus per track with smooth 0.75s fade-in routed through Master Volume
       const masterBus = ctx.createGain();
       masterBus.gain.setValueAtTime(0.0001, now);
       masterBus.gain.linearRampToValueAtTime(1.0, now + 0.75);
-      masterBus.connect(ctx.destination);
+      masterBus.connect(this.getOutputNode(ctx));
       this.bgmMasterGain = masterBus;
       this.isBgmPlaying = true;
 

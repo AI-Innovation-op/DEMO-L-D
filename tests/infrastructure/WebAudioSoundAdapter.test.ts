@@ -113,4 +113,12 @@ describe('WebAudioSoundAdapter - Procedural Audio Synthesis', () => {
     expect(() => audio.unlockAndResumeIfNeeded()).not.toThrow();
     expect(() => audio.stopBgm(true)).not.toThrow();
   });
+
+  it('clamps and persists master volume cleanly between 0 and 1', () => {
+    expect(audio.setMasterVolume(0.6)).toBeCloseTo(0.6, 2);
+    expect(audio.getMasterVolume()).toBeCloseTo(0.6, 2);
+    expect(audio.setMasterVolume(1.8)).toBe(1);
+    expect(audio.setMasterVolume(-0.4)).toBe(0);
+    expect(audio.setMasterVolume(0.85)).toBeCloseTo(0.85, 2);
+  });
 });
