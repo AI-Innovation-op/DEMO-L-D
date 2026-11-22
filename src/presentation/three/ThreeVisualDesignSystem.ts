@@ -44,6 +44,7 @@ export class ThreeVisualDesignSystem {
   private transientVfx: TransientVfxBillboard[] = [];
   private vistaMeshes: THREE.Mesh[] = [];
   public isEnabled: boolean = true;
+  public heroRigMode: 'articulated_3d' | 'billboard_hd2d' = 'articulated_3d';
 
   public loadStripTexture(url: string, frames: number): THREE.Texture {
     const cacheKey = `${url}#${frames}`;
@@ -129,11 +130,15 @@ export class ThreeVisualDesignSystem {
     mesh.name = `visual_billboard_${id}`;
     mesh.renderOrder = 2;
 
+    const isPlayableHero = id === 'hero_thomas' || id === 'hero_khaterine';
+    const showBillboardNow = this.isEnabled && !(isPlayableHero && this.heroRigMode === 'articulated_3d');
+    mesh.visible = showBillboardNow;
+
     if (hideProceduralChildren) {
       parent.children.forEach(child => {
         if ((child as THREE.Light).isLight) return;
         if (child.name && child.name.includes('Warning')) return;
-        child.visible = false;
+        child.visible = !showBillboardNow;
       });
     }
 
@@ -250,21 +255,20 @@ export class ThreeVisualDesignSystem {
   }
 
   public toggleVisualStyle(): boolean {
-    this.isEnabled = !this.isEnabled;
+    this.heroRigMode = this.heroRigMode === 'articulated_3d' ? 'billboard_hd2d' : 'articulated_3d';
     for (const b of this.billboards.values()) {
-      b.mesh.visible = this.isEnabled;
+      const isPlayableHero = b.id === 'hero_thomas' || b.id === 'hero_khaterine';
+      const showBillboard = this.isEnabled && !(isPlayableHero && this.heroRigMode === 'articulated_3d');
+      b.mesh.visible = showBillboard;
       if (b.hideProceduralChildren) {
         b.parent.children.forEach(child => {
           if (child === b.mesh || (child as THREE.Light).isLight) return;
           if (child.name && child.name.includes('Warning')) return;
-          child.visible = !this.isEnabled;
+          child.visible = !showBillboard;
         });
       }
     }
-    for (const vm of this.vistaMeshes) {
-      vm.visible = this.isEnabled;
-    }
-    return this.isEnabled;
+    return this.heroRigMode === 'articulated_3d';
   }
 
   public update(delta: number, camera: THREE.Camera): void {

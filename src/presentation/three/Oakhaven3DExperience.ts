@@ -18,6 +18,7 @@ import { CanonChapterManager } from '../../domain/story/CanonChapterCompendium';
 import { ArsenalManager, ArrowType } from '../../domain/combat/ArsenalManager';
 import { ThreeVisualDesignSystem } from './ThreeVisualDesignSystem';
 import { VISUAL_PACK_3D_CONCEPTS } from '../assets/VisualPackCatalog';
+import { GothicArticulatedRig3D } from './GothicArticulatedRig3D';
 
 export interface CombatStats3D {
   health: number;
@@ -58,7 +59,7 @@ export interface DebrisParticle3D {
   maxLife: number;
 }
 
-export type InputContext = 'gameplay' | 'dialogue' | 'inventory' | 'skillTree' | 'alchemy' | 'compendium' | 'designs' | 'defeated';
+export type InputContext = 'gameplay' | 'dialogue' | 'inventory' | 'skillTree' | 'alchemy' | 'compendium' | 'designs' | 'moralDilemma' | 'defeated';
 
 export class Oakhaven3DExperience {
   private container: HTMLElement;
@@ -82,8 +83,8 @@ export class Oakhaven3DExperience {
   private cauldronLight!: THREE.PointLight;
   private cauldronVapors: { mesh: THREE.Mesh; basePos: THREE.Vector3; speed: number; phase: number }[] = [];
 
-  // Camera & View Settings (OpenLara & Vice City Architecture)
-  private cameraMode: 'isometric' | 'third_person' = 'isometric';
+  // Camera & View Settings (OpenLara & Vice City Architecture — Default Third-Person Close Camera)
+  private cameraMode: 'isometric' | 'third_person' = 'third_person';
   private targetCameraPos = new THREE.Vector3();
   private targetCameraLook = new THREE.Vector3();
   private currentCameraLook = new THREE.Vector3(0, 1.4, 4);
@@ -93,14 +94,21 @@ export class Oakhaven3DExperience {
   private pointerDragStartX: number = 0;
   private lastManualOrbitTime: number = 0;
 
-  // Dual Hero System (Thomas & Khaterine)
+  // Combat Lock-On Targeting System ([R] / Right-Click)
+  private isLockOnActive: boolean = false;
+  private lockedTargetGroup?: THREE.Object3D;
+  private lockOnRingMesh!: THREE.Mesh;
+
+  // Dual Hero System (Thomas & Khaterine) & OpenLara Articulated 3D Rigs
   public get activeHero(): 'thomas' | 'khaterine' {
     return (this.party.getActiveHeroId() === 'khaterine' ? 'khaterine' : 'thomas');
   }
   private playerGroup!: THREE.Group;
-  private playerBody!: THREE.Mesh;
+  private playerBody!: THREE.Object3D;
   private thomasModelGroup!: THREE.Group;
   private khaterineModelGroup!: THREE.Group;
+  private thomasRig!: GothicArticulatedRig3D;
+  private khaterineRig!: GothicArticulatedRig3D;
   private khaterineBowMesh!: THREE.Group;
   private wardBarrierMesh!: THREE.Mesh;
   private thomasNpcGroup!: THREE.Group;
@@ -356,12 +364,31 @@ export class Oakhaven3DExperience {
   private hasClearedMirrorGallery: boolean = false;
 
   // 3D Proximity Interactions & Modals
-  private activeInteractTarget?: 'elowen' | 'cauldron' | 'cedric' | 'shalem' | 'khaterine' | 'thomas' | 'sword' | 'finisher' | 'cemetery_gate' | 'crypt_entrance' | 'crypt_exit' | 'crypt_sarcophagus_loot' | 'crypt_sarcophagus_ambush' | 'crypt_to_forest' | 'forest_to_crypt' | 'sister_altar' | 'forest_to_belltower' | 'belltower_to_forest' | 'elowen_cell' | 'crucible_furnace' | 'belltower_to_bridge' | 'refugees_cart' | 'vane_gate' | 'mirror_gallery' | 'astral_throne' | 'dawn_grey_altar' | 'black_sun_core';
+  private activeInteractTarget?: 'elowen' | 'cauldron' | 'cedric' | 'shalem' | 'khaterine' | 'thomas' | 'sword' | 'finisher' | 'cemetery_gate' | 'crypt_entrance' | 'crypt_exit' | 'crypt_sarcophagus_loot' | 'crypt_sarcophagus_ambush' | 'crypt_to_forest' | 'forest_to_crypt' | 'sister_altar' | 'forest_to_belltower' | 'belltower_to_forest' | 'elowen_cell' | 'crucible_furnace' | 'belltower_to_bridge' | 'refugees_cart' | 'vane_gate' | 'mirror_gallery' | 'astral_throne' | 'dawn_grey_altar' | 'black_sun_core' | 'villager_gedeon' | 'villager_marta' | 'oak_hill_bench' | 'tri_hero_synergy';
   private proximityBadgeEl?: HTMLDivElement;
   private dialogueModalEl?: HTMLDivElement;
   private inventoryModalEl?: HTMLDivElement;
   private isDialogueOpen: boolean = false;
   private isPlayerDefeated: boolean = false;
+
+  // Multi-Sector Oakhaven, Dawn-to-Midnight Tempo & Chapter XX Moral Dilemma
+  private oakhavenNarrativePhase: 'DAWN_CALM' | 'MIDNIGHT_SIEGE' | 'FIRST_DAWN_EPILOGUE' = 'DAWN_CALM';
+  private hasDeliveredBirdOnOakHill: boolean = false;
+  private oakHillGroup!: THREE.Group;
+  private oakHillSunbeamMesh?: THREE.Mesh;
+  private villagerGedeonGroup!: THREE.Group;
+  private villagerMartaGroup!: THREE.Group;
+  private hasHealedGedeon: boolean = false;
+  private hasHealedMarta: boolean = false;
+  private currentSubSectorLabel: string = 'ATRIO DE LA PARROQUIA DE SAN JUDE (CAP. I)';
+  private isMoralDilemmaOpen: boolean = false;
+  private moralDilemmaModalEl?: HTMLDivElement;
+  private hasTriggeredCrucibleGearJam: boolean = false;
+  private hasTriggeredTriHeroSynergy: boolean = false;
+  private ambientLightRef?: THREE.AmbientLight;
+  private hemiLightRef?: THREE.HemisphereLight;
+  private moonLightRef?: THREE.DirectionalLight;
+  private pyreLightRef?: THREE.PointLight;
 
   // Arsenal & Munitions Manager
   private arsenalManager: ArsenalManager = new ArsenalManager();
@@ -406,15 +433,18 @@ export class Oakhaven3DExperience {
   public init(): void {
     this.clock = new THREE.Clock();
 
-    // 1. Scene & Atmosphere (Brightened Gothic Nocturnal Palette for Clear 3D Visibility)
+    // 1. Scene & Atmosphere (Starts in Chapters I-II Dawn Mist over Oakhaven, shifts to Midnight Siege in Chapter III)
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x161228);
-    this.scene.fog = new THREE.FogExp2(0x18132c, 0.012);
+    this.scene.background = new THREE.Color(0x222c46);
+    this.scene.fog = new THREE.FogExp2(0x242e48, 0.011);
 
-    // 2. Camera (oblique 3/4 isometric by default)
+    // 2. Camera (3rd-Person Close Follow Camera by default — OpenLara & Vice City Architecture)
     const aspect = this.container.clientWidth / this.container.clientHeight || 16 / 9;
     this.camera = new THREE.PerspectiveCamera(48, aspect, 0.1, 180);
-    this.camera.position.set(0, 7.5, 9);
+    this.camera.position.set(0, 2.4, 8.0);
+    this.currentCameraLook.set(0, 1.35, 4.0);
+    this.targetCameraLook.set(0, 1.35, 4.0);
+    this.camera.lookAt(this.currentCameraLook);
 
     // 3. Renderer with antialiasing and shadow maps
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -429,8 +459,10 @@ export class Oakhaven3DExperience {
     // 4. Build Environment & World
     this.createLighting();
     this.createStreetEnvironment();
+    this.createOldOakHillAndVillagers();
     this.createSceneryProps();
     this.createEmbers();
+    this.createLockOnTargetingRing();
 
     // 5. Build Characters & Allies
     this.createPlayer();
@@ -482,15 +514,17 @@ export class Oakhaven3DExperience {
   // LIGHTING & ATMOSPHERE
   // =========================================================================
   private createLighting(): void {
-    // Brightened gothic moon & sky illumination
-    const ambient = new THREE.AmbientLight(0x524478, 2.5);
+    // Brightened gothic dawn/moon & sky illumination
+    const ambient = new THREE.AmbientLight(0x64588c, 2.6);
     this.scene.add(ambient);
+    this.ambientLightRef = ambient;
 
-    const hemi = new THREE.HemisphereLight(0xa8c0f0, 0x483860, 2.0);
+    const hemi = new THREE.HemisphereLight(0xb8d0f8, 0x4c3c68, 2.1);
     this.scene.add(hemi);
+    this.hemiLightRef = hemi;
 
-    // Moon Directional Light casting crisp shadows
-    const moonLight = new THREE.DirectionalLight(0x9ab4e0, 2.6);
+    // Moon / Dawn Directional Light casting crisp shadows
+    const moonLight = new THREE.DirectionalLight(0xaac4ee, 2.65);
     moonLight.position.set(-15, 22, -10);
     moonLight.castShadow = true;
     moonLight.shadow.mapSize.width = 1024;
@@ -503,6 +537,7 @@ export class Oakhaven3DExperience {
     moonLight.shadow.camera.bottom = -18;
     moonLight.shadow.bias = -0.0005;
     this.scene.add(moonLight);
+    this.moonLightRef = moonLight;
 
     // Player-following fill light so every zone (Crypts, Forest, Belltower, Bridge, Londinium, Cathedral) is clearly illuminated
     this.playerAmbientFollowLight = new THREE.PointLight(0xffeedd, 2.6, 30);
@@ -513,6 +548,7 @@ export class Oakhaven3DExperience {
     const pyreLight = new THREE.PointLight(0xff5511, 5.5, 34);
     pyreLight.position.set(0, 3, -22);
     this.scene.add(pyreLight);
+    this.pyreLightRef = pyreLight;
 
     // Pyre mesh (glowing fire pit)
     const pyreGeo = new THREE.CylinderGeometry(2, 2.6, 1.5, 8);
@@ -573,7 +609,7 @@ export class Oakhaven3DExperience {
     ground.receiveShadow = true;
     this.scene.add(ground);
 
-    // 2. Gothic Wooden & Stone Houses along the street
+    // 2. Gothic Wooden & Stone Houses along the street (leaving East open at z = 5 for Old Oak Hill path)
     const houseMat = new THREE.MeshStandardMaterial({ color: 0x362c4c, roughness: 0.85 });
     const roofMat = new THREE.MeshStandardMaterial({ color: 0x241c38, roughness: 0.7 });
     const woodTrimMat = new THREE.MeshStandardMaterial({ color: 0x62442c, roughness: 0.75 });
@@ -581,6 +617,9 @@ export class Oakhaven3DExperience {
 
     for (let z = 12; z >= -24; z -= 7) {
       [-7.5, 7.5].forEach(sideX => {
+        // Leave eastern archway open at z = 5 so the stone-and-moss trail climbs up to Colina del Viejo Roble
+        if (sideX > 0 && Math.abs(z - 5) <= 3.6) return;
+
         const houseGroup = new THREE.Group();
         houseGroup.position.set(sideX, 0, z);
 
@@ -823,6 +862,153 @@ export class Oakhaven3DExperience {
     this.scene.add(wellRoofGroup);
   }
 
+  // =========================================================================
+  // SUB-SECTOR 2: COLINA DEL VIEJO ROBLE (+2.2M ELEVATION) & REACTIVE VILLAGERS
+  // =========================================================================
+  public getTerrainHeightAt(x: number, z: number): number {
+    if (this.dungeonAreaManager.currentArea === 'surface') {
+      // Ascending stone-and-moss trail from Parish Atrium (x: 4.5, y: 0) up to Old Oak Hill plateau (x >= 8.4, y: 2.2m)
+      if (x > 4.5 && z >= 0.4 && z <= 9.6) {
+        const t = THREE.MathUtils.clamp((x - 4.5) / 3.9, 0, 1);
+        const smooth = t * t * (3 - 2 * t);
+        return smooth * 2.2;
+      }
+    }
+    return 0;
+  }
+
+  private createOldOakHillAndVillagers(): void {
+    this.oakHillGroup = new THREE.Group();
+
+    const mossStoneMat = new THREE.MeshStandardMaterial({ color: 0x3b4238, roughness: 0.9 });
+    const hillGrassMat = new THREE.MeshStandardMaterial({ color: 0x263829, roughness: 0.92 });
+    const barkMat = new THREE.MeshStandardMaterial({ color: 0x362316, roughness: 0.9 });
+    const canopyMat = new THREE.MeshStandardMaterial({
+      color: 0x5c3e1e,
+      emissive: 0x241508,
+      emissiveIntensity: 0.35,
+      roughness: 0.8
+    });
+
+    // 1. Six Mossy Stone Steps ascending from x = 4.7 to x = 8.3 (z = 5.0)
+    for (let i = 0; i < 6; i++) {
+      const stepX = 4.9 + i * 0.62;
+      const stepH = this.getTerrainHeightAt(stepX, 5.0);
+      const stepMesh = new THREE.Mesh(new THREE.BoxGeometry(0.75, stepH + 0.25, 3.6), mossStoneMat);
+      stepMesh.position.set(stepX, (stepH - 0.12) * 0.5, 5.0);
+      stepMesh.castShadow = true;
+      stepMesh.receiveShadow = true;
+      this.oakHillGroup.add(stepMesh);
+    }
+
+    // 2. Old Oak Hill Plateau (x: 8.2..13.2, z: 1.0..9.0, height: 2.2m)
+    const hillMound = new THREE.Mesh(new THREE.CylinderGeometry(4.2, 5.4, 2.2, 16), hillGrassMat);
+    hillMound.position.set(10.5, 1.1, 5.0);
+    hillMound.receiveShadow = true;
+    this.oakHillGroup.add(hillMound);
+
+    // Celtic Low Stone Perimeter along the Hilltop Overlook
+    for (let a = -1.1; a <= 1.1; a += 0.55) {
+      const stone = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.55, 0.7), mossStoneMat);
+      stone.position.set(10.5 + Math.cos(a) * 3.7, 2.45, 5.0 + Math.sin(a) * 3.7);
+      stone.rotation.y = -a;
+      stone.castShadow = true;
+      this.oakHillGroup.add(stone);
+    }
+
+    // 3. The Ancient Gnarled Oak of Oakhaven (El Viejo Roble — Capítulos II y XX)
+    const oakTrunk = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.92, 4.4, 10), barkMat);
+    oakTrunk.position.set(11.3, 4.2, 5.0);
+    oakTrunk.castShadow = true;
+    this.oakHillGroup.add(oakTrunk);
+
+    const canopyOffsets = [
+      { x: 11.1, y: 6.7, z: 5.0, r: 2.3 },
+      { x: 10.1, y: 6.1, z: 4.1, r: 1.7 },
+      { x: 10.2, y: 6.2, z: 6.0, r: 1.75 },
+      { x: 12.0, y: 6.3, z: 5.1, r: 1.8 }
+    ];
+    canopyOffsets.forEach(c => {
+      const foliage = new THREE.Mesh(new THREE.DodecahedronGeometry(c.r, 1), canopyMat);
+      foliage.position.set(c.x, c.y, c.z);
+      foliage.castShadow = true;
+      this.oakHillGroup.add(foliage);
+    });
+
+    // 4. The Mossy Stone Bench under the Old Oak (where Elowen awaits in Chapter II)
+    const mossyBench = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.48, 0.75), mossStoneMat);
+    mossyBench.position.set(10.1, 2.44, 5.0);
+    mossyBench.castShadow = true;
+    this.oakHillGroup.add(mossyBench);
+
+    // Carved Wooden Willow Bird resting on the mossy stone edge
+    const birdMat = new THREE.MeshStandardMaterial({ color: 0xd4a359, roughness: 0.55 });
+    const birdBody = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.28, 6), birdMat);
+    birdBody.rotation.z = Math.PI / 2;
+    birdBody.position.set(9.75, 2.75, 5.2);
+    this.oakHillGroup.add(birdBody);
+
+    // Warm Dawn Sunbeam Shaft illuminating the Old Oak Hill
+    const sunbeamGeo = new THREE.CylinderGeometry(1.4, 2.5, 8.5, 16, 1, true);
+    const sunbeamMat = new THREE.MeshBasicMaterial({
+      color: 0xffe4a0,
+      transparent: true,
+      opacity: 0.16,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending
+    });
+    this.oakHillSunbeamMesh = new THREE.Mesh(sunbeamGeo, sunbeamMat);
+    this.oakHillSunbeamMesh.position.set(9.8, 5.6, 5.0);
+    this.oakHillSunbeamMesh.rotation.z = -0.18;
+    this.oakHillGroup.add(this.oakHillSunbeamMesh);
+
+    const oakLight = new THREE.PointLight(0xffdd99, 2.8, 12);
+    oakLight.position.set(9.8, 4.8, 5.0);
+    this.oakHillGroup.add(oakLight);
+
+    this.scene.add(this.oakHillGroup);
+
+    // 5. Reactive Sick Villagers / Lepers in the Parish Atrium (Chapter I: El Peso de la Ceniza)
+    const villagerCloakMat = new THREE.MeshStandardMaterial({ color: 0x3b322c, roughness: 0.92 });
+    const bandageMat = new THREE.MeshStandardMaterial({ color: 0xcfc4b4, roughness: 0.85 });
+
+    this.villagerGedeonGroup = new THREE.Group();
+    this.villagerGedeonGroup.position.set(-2.5, 0, 2.7);
+    const gBody = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.42, 1.05, 8), villagerCloakMat);
+    gBody.position.y = 0.52;
+    const gHead = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 8), bandageMat);
+    gHead.position.set(0, 1.18, 0.05);
+    this.villagerGedeonGroup.add(gBody, gHead);
+    this.villagerGedeonGroup.rotation.y = Math.PI * 0.35;
+    this.scene.add(this.villagerGedeonGroup);
+
+    this.villagerMartaGroup = new THREE.Group();
+    this.villagerMartaGroup.position.set(2.3, 0, 3.9);
+    const mBody = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.4, 1.0, 8), villagerCloakMat);
+    mBody.position.y = 0.5;
+    const mHead = new THREE.Mesh(new THREE.SphereGeometry(0.19, 8, 8), bandageMat);
+    mHead.position.set(0, 1.12, 0.04);
+    this.villagerMartaGroup.add(mBody, mHead);
+    this.villagerMartaGroup.rotation.y = -Math.PI * 0.4;
+    this.scene.add(this.villagerMartaGroup);
+  }
+
+  private createLockOnTargetingRing(): void {
+    const ringGeo = new THREE.RingGeometry(0.75, 0.98, 24);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xffd700,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.88
+    });
+    this.lockOnRingMesh = new THREE.Mesh(ringGeo, ringMat);
+    this.lockOnRingMesh.rotation.x = -Math.PI / 2;
+    this.lockOnRingMesh.position.y = 0.06;
+    this.lockOnRingMesh.visible = false;
+    this.scene.add(this.lockOnRingMesh);
+  }
+
   private createEmbers(): void {
     const count = 180;
     const geo = new THREE.BufferGeometry();
@@ -848,53 +1034,21 @@ export class Oakhaven3DExperience {
   }
 
   // =========================================================================
-  // PLAYER 3D (DUAL HERO SYSTEM: THOMAS & KHATERINE)
+  // PLAYER 3D (DUAL HERO SYSTEM: THOMAS & KHATERINE WITH OPENLARA 3D RIG)
   // =========================================================================
   private createPlayer(): void {
     this.playerGroup = new THREE.Group();
     this.playerGroup.position.set(0, 0, 4);
 
     // -----------------------------------------------------------------------
-    // A. THOMAS THE ACOLYTE MODEL GROUP
+    // A. THOMAS THE ACOLYTE ARTICULATED 3D RIG (OpenLara Hierarchical Joints)
     // -----------------------------------------------------------------------
     this.thomasModelGroup = new THREE.Group();
+    this.thomasRig = new GothicArticulatedRig3D('thomas');
+    this.thomasModelGroup.add(this.thomasRig.nodes.root);
+    this.playerBody = this.thomasRig.nodes.torso;
 
-    const tunicMat = new THREE.MeshStandardMaterial({ color: 0x221a29, roughness: 0.8 });
-    const skinMat = new THREE.MeshStandardMaterial({ color: 0xd9b38c, roughness: 0.6 });
-    const hairMat = new THREE.MeshStandardMaterial({ color: 0x3d2719, roughness: 0.9 });
-    const ashMarkMat = new THREE.MeshBasicMaterial({ color: 0x73299e });
-
-    // Torso & Tunic
-    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, 1.1, 8), tunicMat);
-    torso.position.y = 1.05;
-    torso.castShadow = true;
-    this.thomasModelGroup.add(torso);
-    this.playerBody = torso;
-
-    // Ash Seal on Chest (Glowing purple/black rune)
-    const ashSeal = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.25), ashMarkMat);
-    ashSeal.position.set(0, 1.15, 0.36);
-    this.thomasModelGroup.add(ashSeal);
-
-    // Head
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.26, 8, 8), skinMat);
-    head.position.y = 1.8;
-    head.castShadow = true;
-    this.thomasModelGroup.add(head);
-
-    // Hair
-    const hair = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 8), hairMat);
-    hair.position.set(0, 1.88, -0.04);
-    this.thomasModelGroup.add(hair);
-
-    // Scarf / Capelet
-    const scarfMat = new THREE.MeshStandardMaterial({ color: 0x3f1f47, roughness: 0.7 });
-    const scarf = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.09, 6, 8), scarfMat);
-    scarf.rotation.x = Math.PI / 2;
-    scarf.position.y = 1.6;
-    this.thomasModelGroup.add(scarf);
-
-    // Equipped Weapon: Short Sword with Dark Fire Runes
+    // Equipped Weapon: Short Sword with Dark Fire Runes (attached to right hand weaponSocketR)
     this.playerSwordMesh = new THREE.Group();
     const bladeMat = new THREE.MeshStandardMaterial({
       color: 0xdcd6eb,
@@ -905,72 +1059,45 @@ export class Oakhaven3DExperience {
     const hiltMat = new THREE.MeshStandardMaterial({ color: 0x4a3219, roughness: 0.6 });
 
     const blade = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.95, 0.02), bladeMat);
-    blade.position.y = 0.55;
+    blade.position.y = 0.52;
     blade.castShadow = true;
     this.playerSwordMesh.add(blade);
 
     const crossguard = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.05, 0.06), hiltMat);
-    crossguard.position.y = 0.08;
+    crossguard.position.y = 0.06;
     this.playerSwordMesh.add(crossguard);
 
     const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.2, 6), hiltMat);
     handle.position.y = -0.05;
     this.playerSwordMesh.add(handle);
 
-    this.playerSwordMesh.position.set(0.45, 0.9, 0.1);
-    this.playerSwordMesh.rotation.set(0.3, 0, -0.2);
-    this.thomasModelGroup.add(this.playerSwordMesh);
+    this.playerSwordMesh.rotation.set(Math.PI * 0.38, 0, 0);
+    this.thomasRig.nodes.weaponSocketR.add(this.playerSwordMesh);
 
-    // Unarmed Fists Group (Visible when disarmed)
+    // Unarmed Fists Aura Group (Visible when disarmed)
     this.playerFistsGroup = new THREE.Group();
-    const fistGeo = new THREE.SphereGeometry(0.08, 6, 6);
+    const fistGeo = new THREE.SphereGeometry(0.085, 8, 8);
     const fistMat = new THREE.MeshBasicMaterial({ color: 0xaa55ff });
-    const leftFist = new THREE.Mesh(fistGeo, fistMat);
-    leftFist.position.set(-0.35, 1.0, 0.3);
     const rightFist = new THREE.Mesh(fistGeo, fistMat);
-    rightFist.position.set(0.35, 1.0, 0.3);
-    this.playerFistsGroup.add(leftFist, rightFist);
+    this.playerFistsGroup.add(rightFist);
     this.playerFistsGroup.visible = false;
-    this.thomasModelGroup.add(this.playerFistsGroup);
+    this.thomasRig.nodes.weaponSocketR.add(this.playerFistsGroup);
 
     // Standard local forward convention: -Z. Primitives constructed facing +Z are rotated by PI.
     this.thomasModelGroup.rotation.y = Math.PI;
     this.playerGroup.add(this.thomasModelGroup);
 
     // -----------------------------------------------------------------------
-    // B. KHATERINE THE OUTCAST MODEL GROUP (PLAYABLE HERO)
+    // B. KHATERINE THE OUTCAST ARTICULATED 3D RIG (PLAYABLE HERO)
     // -----------------------------------------------------------------------
     this.khaterineModelGroup = new THREE.Group();
+    this.khaterineRig = new GothicArticulatedRig3D('khaterine');
+    this.khaterineModelGroup.add(this.khaterineRig.nodes.root);
 
-    const kRobeMat = new THREE.MeshStandardMaterial({ color: 0x1a0f26, roughness: 0.8 });
-    const kVeilMat = new THREE.MeshStandardMaterial({ color: 0x11071c, roughness: 0.5 });
-    const kSkinMat = new THREE.MeshStandardMaterial({ color: 0xe5ccbe, roughness: 0.5 });
-    const kHairMat = new THREE.MeshStandardMaterial({ color: 0x14101a, roughness: 0.9 });
     const kBowWoodMat = new THREE.MeshStandardMaterial({ color: 0x2b1338, roughness: 0.4, metalness: 0.3 });
     const kGlowMat = new THREE.MeshBasicMaterial({ color: 0xcc66ff });
 
-    // Khaterine Robe
-    const kRobe = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.48, 1.3, 8), kRobeMat);
-    kRobe.position.y = 0.65;
-    kRobe.castShadow = true;
-    this.khaterineModelGroup.add(kRobe);
-
-    // Head & Dark Hair
-    const kHead = new THREE.Mesh(new THREE.SphereGeometry(0.23, 8, 8), kSkinMat);
-    kHead.position.y = 1.5;
-    kHead.castShadow = true;
-    this.khaterineModelGroup.add(kHead);
-
-    const kHair = new THREE.Mesh(new THREE.SphereGeometry(0.26, 8, 8), kHairMat);
-    kHair.position.set(0, 1.54, -0.04);
-    this.khaterineModelGroup.add(kHair);
-
-    // Flowing Veil
-    const kVeil = new THREE.Mesh(new THREE.ConeGeometry(0.38, 0.75, 8), kVeilMat);
-    kVeil.position.set(0, 1.35, -0.05);
-    this.khaterineModelGroup.add(kVeil);
-
-    // Abyssal Bow held in hands
+    // Abyssal Bow attached to Khaterine's left hand weaponSocketL
     this.khaterineBowMesh = new THREE.Group();
     const bowCurve = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.03, 6, 16, Math.PI * 0.9), kBowWoodMat);
     bowCurve.rotation.z = Math.PI * 0.55;
@@ -981,9 +1108,8 @@ export class Oakhaven3DExperience {
     bowString.position.x = 0.04;
     this.khaterineBowMesh.add(bowString);
 
-    this.khaterineBowMesh.position.set(0.35, 1.05, 0.25);
-    this.khaterineBowMesh.rotation.set(0.2, -0.3, 0.2);
-    this.khaterineModelGroup.add(this.khaterineBowMesh);
+    this.khaterineBowMesh.rotation.set(0.2, -0.2, 0.1);
+    this.khaterineRig.nodes.weaponSocketL.add(this.khaterineBowMesh);
 
     // Standard local forward convention: -Z. Primitives constructed facing +Z are rotated by PI.
     this.khaterineModelGroup.rotation.y = Math.PI;
@@ -1306,7 +1432,8 @@ export class Oakhaven3DExperience {
   // =========================================================================
   private createElowen(): void {
     this.elowenGroup = new THREE.Group();
-    this.elowenGroup.position.set(-3.2, 0, -1);
+    // Chapter II: Starts atop Colina del Viejo Roble (+2.2m elevation) during DAWN_CALM
+    this.elowenGroup.position.set(9.4, 2.2, 5.0);
 
     const dressMat = new THREE.MeshStandardMaterial({ color: 0x3d4b6e, roughness: 0.75 });
     const apronMat = new THREE.MeshStandardMaterial({ color: 0xede8f5, roughness: 0.6 });
@@ -4632,9 +4759,18 @@ export class Oakhaven3DExperience {
               🎵 [M] AUDIO: ACTIVO
             </button>
           </div>
-          <button id="btn-toggle-cam" style="background: #141f2a; color: #99ddff; border: 1px solid #336699; padding: 3px 8px; border-radius: 4px; font-family: monospace; font-size: 7.5px; cursor: pointer;">
-            🎥 [C] CÁMARA: OBLICUA 3/4
-          </button>
+          <div style="display: flex; gap: 4px;">
+            <button id="btn-toggle-cam" style="background: #141f2a; color: #99ddff; border: 1px solid #336699; padding: 3px 7px; border-radius: 4px; font-family: monospace; font-size: 7.5px; cursor: pointer;">
+              🎥 [C] CÁMARA: TERCERA PERSONA
+            </button>
+            <button id="btn-toggle-lockon" style="background: #2b1a14; color: #ffd700; border: 1px solid #d4af37; padding: 3px 7px; border-radius: 4px; font-family: monospace; font-size: 7.5px; cursor: pointer; font-weight: bold;">
+              🎯 [R] LOCK-ON: LIBRE
+            </button>
+          </div>
+          <div style="display: flex; gap: 3px; margin-top: 2px;">
+            <button id="btn-dbg-colina" style="background: #1d331a; color: #b8ff99; border: 1px solid #44cc55; padding: 2px 5px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer; font-weight: bold;">🌳 [Y] COLINA ROBLE</button>
+            <button id="btn-trigger-siege" style="background: #3b1218; color: #ffaa88; border: 1px solid #ff4422; padding: 2px 5px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer; font-weight: bold;">⚔️ [F] INICIAR ASEDIO</button>
+          </div>
           <!-- Fast Travel Act Inspection Shortcuts -->
           <div style="display: flex; gap: 3px; margin-top: 2px;">
             <button id="btn-dbg-portal" style="background: #1a162b; color: #a3ffc7; border: 1px solid #2ecc71; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer;">[1] PORTAL</button>
@@ -4881,7 +5017,7 @@ export class Oakhaven3DExperience {
             </div>
           </div>
           <div style="display: flex; gap: 6px; align-items: center;">
-            <button id="btn-toggle-visual-style" style="background: #143822; color: #a3ffc7; border: 1px solid #2ecc71; border-radius: 3px; padding: 3px 8px; font-family: monospace; font-size: 7.5px; cursor: pointer; font-weight: bold;">✨ SPRITES 3D: ACTIVOS</button>
+            <button id="btn-toggle-visual-style" style="background: #143822; color: #a3ffc7; border: 1px solid #2ecc71; border-radius: 3px; padding: 3px 8px; font-family: monospace; font-size: 7.5px; cursor: pointer; font-weight: bold;">🧊 HÉROES RIG 3D + DISEÑOS: ACTIVO</button>
             <button id="p3d-designs-close" style="background: #2a1440; color: #ffaaaa; border: 1px solid #7a2222; border-radius: 3px; padding: 2px 8px; font-size: 8px; cursor: pointer; font-weight: bold;">[X] CERRAR</button>
           </div>
         </div>
@@ -4890,11 +5026,45 @@ export class Oakhaven3DExperience {
         </div>
       </div>
 
+      <!-- Compact Tactical Parchment Compass & Sub-Sector Banner (Top Center below enemy bars) -->
+      <div id="p3d-sector-compass" style="position: absolute; bottom: 84px; left: 50%; transform: translateX(-50%); background: rgba(18, 12, 28, 0.92); border: 1.2px solid #d4af37; border-radius: 4px; padding: 3px 12px; display: flex; align-items: center; gap: 10px; box-shadow: 0 4px 14px rgba(0,0,0,0.85); pointer-events: none; z-index: 40;">
+        <div id="p3d-sector-name" style="font-size: 7.5px; font-weight: bold; color: #ffd700; letter-spacing: 0.5px;">
+          📍 ATRIO DE SAN JUDE (CAP. I — ALBA DE NIEBLA)
+        </div>
+        <div style="width: 1px; height: 11px; background: #5a3d78;"></div>
+        <div id="p3d-shalem-guide" style="font-family: monospace; font-size: 7.2px; color: #a3ffc7;">
+          🐈‍⬛ Shalem guía → Sube a la Colina del Viejo Roble [Este +2.2m] o pulsa [Y]
+        </div>
+      </div>
+
+      <!-- Chapter XX Interactive Moral Dilemma Modal (Before Astaroth in Act V) -->
+      <div id="p3d-moral-dilemma-modal" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(12, 6, 22, 0.98); border: 2px solid #88eeff; border-radius: 6px; padding: 16px 20px; max-width: 580px; width: 92%; box-shadow: 0 14px 60px rgba(0,0,0,0.98); display: none; z-index: 160; pointer-events: auto; text-align: center;">
+        <div style="font-size: 10.5px; font-weight: bold; color: #88eeff; letter-spacing: 1px; margin-bottom: 6px; border-bottom: 1px solid #3d5a78; padding-bottom: 6px;">
+          🌌 CAPÍTULO XX: EL DILEMA DEL SOL NEGRO — ASTAROTH Y LA DOBLE SANGRE 🌌
+        </div>
+        <div style="font-family: serif; font-size: 9.5px; color: #ede6f5; font-style: italic; line-height: 1.48; margin-bottom: 10px;">
+          «La voz de Astaroth retumba desde el Sol Negro: "Si me destruyes, hijo de mi sombra, tu propia sangre demoníaca morirá contigo. ¿Por qué defiendes un mundo que llamó bruja a Khaterine, que encerró a Elowen en sal y que os teme como a monstruos? Toma mi Trono de Ceniza y reina sobre ellos."»
+        </div>
+        <div style="font-family: monospace; font-size: 7.8px; color: #ffd700; margin-bottom: 12px;">
+          ✦ Elige el destino final de Thomas, Khaterine, Elowen y Shalem en el Altar de la Comunión:
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <button id="btn-dilemma-canon" style="background: linear-gradient(90deg, #1b3848, #2b1d48); color: #88eeff; border: 1.5px solid #88eeff; border-radius: 4px; padding: 7px 12px; font-family: 'Cinzel', serif; font-size: 8.2px; font-weight: bold; cursor: pointer; text-align: left; line-height: 1.35;">
+            🌅 OPCIÓN 1 (CANON): «¡Solo la Oscuridad que elija amar será la única Luz en las Tinieblas!»<br/>
+            <span style="font-family: monospace; font-size: 7px; color: #a3ffc7; font-weight: normal;">→ Forja Alba Gris (+100% Daño Crítico), Shalem rompe su pacto como León de Brasas y desata el Primer Amanecer.</span>
+          </button>
+          <button id="btn-dilemma-eclipse" style="background: rgba(38, 12, 22, 0.95); color: #ff99bb; border: 1.2px solid #cc3366; border-radius: 4px; padding: 7px 12px; font-family: 'Cinzel', serif; font-size: 8.2px; font-weight: bold; cursor: pointer; text-align: left; line-height: 1.35;">
+            🌑 OPCIÓN 2 (ALTERNATIVA): «Reclamar el Trono del Sol Negro — El Eclipse Perpetuo de Ceniza»<br/>
+            <span style="font-family: monospace; font-size: 7px; color: #dcb4c5; font-weight: normal;">→ Contempla el desenlace alternativo oscuro y luego regresa al Altar de la Comunión cuando lo desees.</span>
+          </button>
+        </div>
+      </div>
+
       <!-- Dialogue Toast (Bottom Center) -->
       <div id="p3d-dialogue-toast-container" style="position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 9px; background: rgba(14, 9, 23, 0.96); border: 1.2px solid #d4af37; border-radius: 4px; padding: 4px 12px; max-width: 560px; width: 85%; box-shadow: 0 6px 25px rgba(0,0,0,0.9);">
         <img id="p3d-dialogue-portrait" src="/assets/characters/portrait_shalem.png" alt="Retrato Hablante" style="width: 32px; height: 32px; border: 1.2px solid #d4af37; border-radius: 4px; object-fit: cover; object-position: center; flex-shrink: 0; image-rendering: pixelated;" />
         <div id="p3d-dialogue-toast" style="font-size: 8px; color: #e6dcfa; line-height: 1.35; flex: 1;">
-          <span style="color: #ffd700; font-weight: bold;">Shalem:</span> «¡Bienvenido a Oakhaven! Pulsa <span style="color:#f3c6ff;">[V]</span> para inspeccionar las 22 láminas 3D, <span style="color:#ffd7aa;">[I]</span> para el inventario o <span style="color:#a3ffc7;">[Q]</span> para usar un bálsamo.»
+          <span style="color: #ffd700; font-weight: bold;">Shalem:</span> «¡Alba en Oakhaven! Sube al este hacia la <span style="color:#b8ff99;">Colina del Viejo Roble [Y]</span> para entregarle el pájaro de sauce a Elowen, o pulsa <span style="color:#ffaa88;">[F]</span> para iniciar el asedio nocturno.»
         </div>
       </div>
 
@@ -4910,7 +5080,7 @@ export class Oakhaven3DExperience {
 
       <!-- Bottom Controls Bar -->
       <div style="position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); background: rgba(8, 4, 14, 0.95); border: 1px solid #3d2852; border-radius: 3px; padding: 2px 10px; font-family: monospace; font-size: 7px; color: #c5b4db; white-space: nowrap;">
-        WASD: Moverse 3D | TAB: Héroe | N: Compendio (20 Caps) | I: Inventario | B: Botica | H: Habilidades | Q: Curar | G: Guardar | J/K: Ataque | L: Guardia | Espacio: Esquivar | T: Lanzar | U: Eco Aquelarre | E: Interactuar | M: Audio | C: Cámara
+        WASD: Moverse 3D | R: Lock-On | Y: Colina Roble | F: Asedio Cap. III | TAB: Héroe | N: Compendio | I: Bolsa | B: Botica | H: Habilidades | J/K: Ataque | L: Guardia | Espacio: Esquivar | T: Lanzar | E: Interactuar | C: Cámara
       </div>
     `;
 
@@ -4943,15 +5113,25 @@ export class Oakhaven3DExperience {
     const btnToggleVisualStyle = this.uiOverlay.querySelector('#btn-toggle-visual-style') as HTMLButtonElement | null;
     if (btnToggleVisualStyle) {
       btnToggleVisualStyle.addEventListener('click', () => {
-        const active = this.visualDesigns.toggleVisualStyle();
-        btnToggleVisualStyle.innerText = active ? '✨ SPRITES 3D: ACTIVOS' : '🧊 GEOMETRÍA 3D: ACTIVA';
-        btnToggleVisualStyle.style.background = active ? '#143822' : '#2a1440';
+        const isRig3D = this.visualDesigns.toggleVisualStyle();
+        btnToggleVisualStyle.innerText = isRig3D ? '🧊 HÉROES RIG 3D + DISEÑOS: ACTIVO' : '✨ HÉROES SPRITES HD-2D: ACTIVO';
+        btnToggleVisualStyle.style.background = isRig3D ? '#143822' : '#2a1440';
         this.spawnFloatingText(
           this.playerGroup.position,
-          active ? '✨ Diseños Visuales Oficiales Activados' : '🧊 Geometría 3D Procedural Activada',
+          isRig3D ? '🧊 Rig 3D Articulado Gótico + Vistas Oficiales' : '✨ Sprites HD-2D + Vistas Oficiales',
           '#f3c6ff'
         );
       });
+    }
+
+    this.moralDilemmaModalEl = this.uiOverlay.querySelector('#p3d-moral-dilemma-modal') as HTMLDivElement;
+    const btnDilemmaCanon = this.uiOverlay.querySelector('#btn-dilemma-canon') as HTMLButtonElement | null;
+    if (btnDilemmaCanon) {
+      btnDilemmaCanon.addEventListener('click', () => this.resolveChapter20MoralDilemma('canon'));
+    }
+    const btnDilemmaEclipse = this.uiOverlay.querySelector('#btn-dilemma-eclipse') as HTMLButtonElement | null;
+    if (btnDilemmaEclipse) {
+      btnDilemmaEclipse.addEventListener('click', () => this.resolveChapter20MoralDilemma('eclipse'));
     }
 
     const btnHero = this.uiOverlay.querySelector('#btn-toggle-hero') as HTMLButtonElement;
@@ -4994,6 +5174,30 @@ export class Oakhaven3DExperience {
       this.toggleCameraMode();
       btnCam.innerText = `🎥 [C] CÁMARA: ${this.cameraMode === 'isometric' ? 'OBLICUA 3/4' : 'TERCERA PERSONA'}`;
     });
+
+    const btnLockOn = this.uiOverlay.querySelector('#btn-toggle-lockon') as HTMLButtonElement | null;
+    if (btnLockOn) {
+      btnLockOn.addEventListener('click', () => this.toggleLockOn());
+    }
+
+    const btnDbgColina = this.uiOverlay.querySelector('#btn-dbg-colina') as HTMLButtonElement | null;
+    if (btnDbgColina) {
+      btnDbgColina.addEventListener('click', () => {
+        this.dungeonAreaManager.exitToSurface();
+        this.setPlayerPosition(8.8, 2.2, 5.0);
+        this.playerGroup.rotation.y = -Math.PI / 2;
+        this.cameraYaw = -Math.PI / 2;
+        this.targetCameraYaw = -Math.PI / 2;
+        this.updateProximityInteractions();
+      });
+    }
+
+    const btnTriggerSiege = this.uiOverlay.querySelector('#btn-trigger-siege') as HTMLButtonElement | null;
+    if (btnTriggerSiege) {
+      btnTriggerSiege.addEventListener('click', () => {
+        this.triggerOakhavenMidnightSiege();
+      });
+    }
 
     // Crypts Inspection Debug Buttons
     const btnDbgPortal = this.uiOverlay.querySelector('#btn-dbg-portal') as HTMLButtonElement | null;
@@ -5198,6 +5402,7 @@ export class Oakhaven3DExperience {
   // =========================================================================
   public getInputContext(): InputContext {
     if (this.isPlayerDefeated) return 'defeated';
+    if (this.isMoralDilemmaOpen) return 'moralDilemma';
     if (this.isDesignsModalOpen) return 'designs';
     if (this.isCompendiumOpen) return 'compendium';
     if (this.isDialogueOpen) return 'dialogue';
@@ -5252,6 +5457,10 @@ export class Oakhaven3DExperience {
 
   private handlePointerDown = (e: PointerEvent): void => {
     if (e.target !== this.renderer?.domElement) return;
+    if (e.button === 2) {
+      this.toggleLockOn();
+      return;
+    }
     this.isPointerDragging = true;
     this.pointerDragStartX = e.clientX;
     this.lastManualOrbitTime = performance.now();
@@ -5324,6 +5533,18 @@ export class Oakhaven3DExperience {
     if (context === 'designs') {
       if (!e.repeat && (e.key === 'Escape' || key === 'v')) {
         this.toggleDesignsModal();
+      }
+      return;
+    }
+
+    // --- CONTEXT: CHAPTER XX MORAL DILEMMA MODAL ---
+    if (context === 'moralDilemma') {
+      if (!e.repeat && (key === '1' || e.key === 'Enter' || e.code === 'Space')) {
+        this.resolveChapter20MoralDilemma('canon');
+      } else if (!e.repeat && key === '2') {
+        this.resolveChapter20MoralDilemma('eclipse');
+      } else if (!e.repeat && e.key === 'Escape') {
+        this.closeMoralDilemmaModal();
       }
       return;
     }
@@ -5425,6 +5646,23 @@ export class Oakhaven3DExperience {
     }
     if (key === 'v' && !e.repeat) {
       this.toggleDesignsModal();
+      return;
+    }
+    if (key === 'r' && !e.repeat) {
+      this.toggleLockOn();
+      return;
+    }
+    if (key === 'y' && !e.repeat) {
+      this.dungeonAreaManager.exitToSurface();
+      this.setPlayerPosition(8.8, 2.2, 5.0);
+      this.playerGroup.rotation.y = -Math.PI / 2;
+      this.cameraYaw = -Math.PI / 2;
+      this.targetCameraYaw = -Math.PI / 2;
+      this.updateProximityInteractions();
+      return;
+    }
+    if (key === 'f' && !e.repeat) {
+      this.triggerOakhavenMidnightSiege();
       return;
     }
 
@@ -6720,13 +6958,58 @@ export class Oakhaven3DExperience {
     this.playerFistsGroup.visible = true;
     this.audio.playSfx('dodge');
 
-    // Create Dropped Sword in World (clamped to current zone bounds)
-    const forward = new THREE.Vector3(0, 0, -1).applyEuler(this.playerGroup.rotation);
+    // Create Dropped Sword in World (clamped to current zone bounds, aims at locked target if Lock-On is active)
+    let forward = new THREE.Vector3(0, 0, -1).applyEuler(this.playerGroup.rotation);
+    if (this.isLockOnActive && this.lockedTargetGroup) {
+      const toTarget = this.lockedTargetGroup.position.clone().sub(this.playerGroup.position);
+      toTarget.y = 0;
+      if (toTarget.lengthSq() > 0.1) {
+        forward = toTarget.normalize();
+      }
+    }
     const dropPos = this.playerGroup.position.clone().add(forward.multiplyScalar(4.5));
     const bounds = this.dungeonAreaManager.getBounds();
-    dropPos.x = THREE.MathUtils.clamp(dropPos.x, bounds.minX + 0.4, bounds.maxX - 0.4);
+    const maxAllowedX = (this.dungeonAreaManager.currentArea === 'surface' && dropPos.z >= 0.5 && dropPos.z <= 9.5) ? 12.0 : bounds.maxX - 0.4;
+    dropPos.x = THREE.MathUtils.clamp(dropPos.x, bounds.minX + 0.4, maxAllowedX);
     dropPos.z = THREE.MathUtils.clamp(dropPos.z, bounds.minZ + 0.5, bounds.maxZ - 0.5);
-    dropPos.y = 0.45;
+    dropPos.y = this.getTerrainHeightAt(dropPos.x, dropPos.z) + 0.45;
+
+    // Canonical Chapter IX Tactical Interaction: Jamming the Great Bronze Crucible Gear with Thomas's thrown sword!
+    if (
+      this.dungeonAreaManager.currentArea === 'belltower_summit' &&
+      !this.crucibleGuardianEncounter.isDefeated &&
+      !this.hasTriggeredCrucibleGearJam &&
+      (dropPos.distanceTo(new THREE.Vector3(0, 0, -214)) <= 6.5 || dropPos.distanceTo(this.crucibleGuardianGroup.position) <= 5.0)
+    ) {
+      this.hasTriggeredCrucibleGearJam = true;
+      const res = this.crucibleGuardianEncounter.takeDamage(120, true);
+      this.crucibleGuardianEncounter.setState('STUNNED');
+      this.crucibleTimer = 3.0;
+      this.audio.playFlaskExplosion?.();
+      this.triggerScreenShake(0.65);
+      this.visualDesigns.spawnVfxBillboard(
+        this.scene,
+        this.crucibleGuardianGroup.position.clone().add(new THREE.Vector3(0, 1.4, 0)),
+        2.8,
+        2.8,
+        '/assets/vfx/fx_explosion.png',
+        6,
+        18
+      );
+      this.spawnFloatingText(this.crucibleGuardianGroup.position, `🔥 ¡CRISOL TRABADO! -${res.actualDamage} & ATURDIDO (3s)`, '#ff7722');
+      this.setDialogueToast(
+        'Capítulo IX — El Gran Crisol',
+        '«¡Tu espada traba la cadena del Gran Crisol de Bronce! ¡El metal fundido se vuelca sobre el Guardián, agrietando su coraza!»',
+        '/assets/characters/portrait_thomas.png',
+        '#ff7722'
+      );
+      if (this.crucibleHpBarFill) {
+        this.crucibleHpBarFill.style.width = `${Math.max(0, (this.crucibleGuardianEncounter.health / this.crucibleGuardianEncounter.maxHealth) * 100)}%`;
+      }
+      if (res.defeated) {
+        this.handleCrucibleGuardianDefeat();
+      }
+    }
 
     this.droppedSwordGroup = new THREE.Group();
     this.droppedSwordGroup.position.copy(dropPos);
@@ -7145,7 +7428,211 @@ export class Oakhaven3DExperience {
       case 'black_sun_core':
         this.interactWithBlackSunCore();
         break;
+      case 'villager_gedeon':
+        this.interactWithVillagerGedeon();
+        break;
+      case 'villager_marta':
+        this.interactWithVillagerMarta();
+        break;
+      case 'oak_hill_bench':
+        this.interactWithElowen();
+        break;
+      case 'tri_hero_synergy':
+        this.executeTriHeroSynergyAgainstMalphas();
+        break;
     }
+  }
+
+  public interactWithVillagerGedeon(): void {
+    this.audio.playSfx('menu_select');
+    if (!this.hasHealedGedeon) {
+      this.hasHealedGedeon = true;
+      this.progression.addExp(25);
+      this.canonChapterManager.unlockChapter(1);
+      this.spawnFloatingText(this.villagerGedeonGroup.position, '🌿 +25 EXP • ALDEANO AUXILIADO (CAP. I)', '#a3ffc7');
+      this.showDialogueModal(
+        '🌿 GEDEÓN EL CANTERO — CAPÍTULO I: EL PESO DE LA CENIZA 🌿',
+        '«Thomas extiende el ungüento de mirto sobre las llagas grises del viejo cantero sin apartar la mirada. Gedeón le sujeta la muñeca con lágrimas en los ojos: "Los demás acólitos nos arrojan el pan desde lejos por miedo a nuestra ceniza, hermano Thomas... Tú eres el único que nos toca como a hombres. Sube a la Colina del Viejo Roble al este; Elowen te espera junto a las raíces."»',
+        '✦ RECOMPENSA: +25 EXP & BENDICIÓN DE LOS HUMILDES DE OAKHAVEN ✦'
+      );
+      this.updateHUD();
+    } else {
+      this.showDialogueModal(
+        '🌿 GEDEÓN EL CANTERO 🌿',
+        '«"El dolor ha amainado gracias a tus manos, hermano Thomas. Que San Jude te proteja de los tambores que suenan en el horizonte."»',
+        '✦ CAPÍTULO I: EL PESO DE LA CENIZA ✦'
+      );
+    }
+  }
+
+  public interactWithVillagerMarta(): void {
+    this.audio.playSfx('menu_select');
+    if (!this.hasHealedMarta) {
+      this.hasHealedMarta = true;
+      this.progression.addExp(25);
+      this.inventory.addItem(CANONICAL_MATERIALS.herb_silverleaf, 1);
+      this.spawnFloatingText(this.villagerMartaGroup.position, '🌿 +25 EXP & +1 HOJA DE PLATA (CAP. I)', '#a3ffc7');
+      this.showDialogueModal(
+        '🕯️ MARTA DEL VALLE — CAPÍTULO I: EL PESO DE LA CENIZA 🕯️',
+        '«Envuelves las manos temblorosas de Marta con lino limpio del atrio. Ella deposita una hoja de plata en tu palma: "La recogí al pie de la Colina del Viejo Roble antes de que bajara la niebla. Llévasela a Elowen allá arriba; ella sabe que tu corazón no pertenece a las tinieblas."»',
+        '✦ RECOMPENSA: +25 EXP & +1 HOJA DE PLATA DE OAKHAVEN ✦'
+      );
+      this.updateHUD();
+    } else {
+      this.showDialogueModal(
+        '🕯️ MARTA DEL VALLE 🕯️',
+        '«"Ve hacia el sendero de piedra al este del atrio, hijo. El Viejo Roble aún guarda la luz de la mañana."»',
+        '✦ CAPÍTULO I: EL PESO DE LA CENIZA ✦'
+      );
+    }
+  }
+
+  public triggerOakhavenMidnightSiege(): void {
+    if (this.oakhavenNarrativePhase === 'MIDNIGHT_SIEGE') {
+      this.spawnFloatingText(this.playerGroup.position, '🔥 El Asedio de las Antorchas Blancas ya está en curso', '#ff7722');
+      return;
+    }
+    this.oakhavenNarrativePhase = 'MIDNIGHT_SIEGE';
+    this.canonChapterManager.unlockChapter(2);
+    this.canonChapterManager.unlockChapter(3);
+    this.currentCanonChapterId = 3;
+
+    // 1. Dynamic Atmosphere Transition: Dawn Mist -> Midnight Ember Siege
+    this.scene.background = new THREE.Color(0x161228);
+    this.scene.fog = new THREE.FogExp2(0x18132c, 0.012);
+    if (this.ambientLightRef) {
+      this.ambientLightRef.color.setHex(0x524478);
+      this.ambientLightRef.intensity = 2.5;
+    }
+    if (this.hemiLightRef) {
+      this.hemiLightRef.color.setHex(0xa8c0f0);
+      this.hemiLightRef.groundColor.setHex(0x483860);
+    }
+    if (this.moonLightRef) {
+      this.moonLightRef.color.setHex(0xffb488);
+      this.moonLightRef.intensity = 2.7;
+    }
+    if (this.pyreLightRef) {
+      this.pyreLightRef.intensity = 7.5;
+    }
+    if (this.oakHillSunbeamMesh) {
+      (this.oakHillSunbeamMesh.material as THREE.MeshBasicMaterial).color.setHex(0xff5522);
+    }
+
+    // 2. Move Elowen to her Apothecary Cauldron shelter to aid Thomas during the siege
+    if (this.elowenGroup) {
+      this.elowenGroup.position.set(-3.2, 0, -1.0);
+      this.elowenGroup.rotation.y = Math.PI / 2;
+    }
+
+    // 3. Sound bronze horns and flash screen
+    this.audio.playBellToll?.();
+    this.audio.playSfx('warning');
+    this.triggerScreenShake(0.55);
+    this.spawnFloatingText(this.playerGroup.position, '📯 ¡CAPÍTULO III: LA MARCHA DE LAS ANTORCHAS BLANCAS!', '#ff4422');
+
+    this.setDialogueToast(
+      'Capítulo III — La Marcha de las Antorchas Blancas',
+      '«¡Cuernos de bronce retumban en la noche! Madre Morwenna y la Orden de la Vigilia irrumpen en la Plaza de la Gran Pira exigiendo a Elowen. ¡Defiende Oakhaven!»',
+      '/assets/characters/portrait_morwenna.png',
+      '#ff3344'
+    );
+  }
+
+  public executeTriHeroSynergyAgainstMalphas(): void {
+    if (this.dungeonAreaManager.currentArea !== 'londinium_citadel' || this.rexMalphasEncounter.isDefeated) return;
+    this.hasTriggeredTriHeroSynergy = true;
+    const res = this.rexMalphasEncounter.takeDamage(135);
+    this.rexMalphasEncounter.setState('STUNNED');
+    this.malphasTimer = 3.2;
+    this.audio.playHolyFlash?.();
+    this.triggerHolyFlash(0.95);
+    this.triggerScreenShake(0.7);
+    this.visualDesigns.spawnVfxBillboard(
+      this.scene,
+      this.rexMalphasGroup.position.clone().add(new THREE.Vector3(0, 1.5, 0)),
+      3.0,
+      3.0,
+      '/assets/vfx/fx_flame_pillar.png',
+      6,
+      18
+    );
+    this.spawnFloatingText(this.rexMalphasGroup.position, `⚡ ¡SINERGIA TRI-HÉROE! -${res.actualDamage} & LEY QUEBRADA`, '#cc44ff');
+    this.setDialogueToast(
+      'Capítulo XVII — Sinergia de Sangre y Sauce',
+      '«¡Khaterine traba las cuchillas solares con hilos del Sauce Negro, Shalem ciega el halo dorado con brasas carmesíes y Thomas hunde su filo en el pecho de Rex Malphas!»',
+      '/assets/characters/portrait_khaterine.png',
+      '#cc44ff'
+    );
+    if (this.malphasHpBarFill) {
+      this.malphasHpBarFill.style.width = `${Math.max(0, (this.rexMalphasEncounter.health / this.rexMalphasEncounter.maxHealth) * 100)}%`;
+    }
+    if (res.transitionedToPhase2) this.triggerRexMalphasPhase2();
+    else if (res.defeated) this.handleRexMalphasDefeat();
+    this.updateHUD();
+  }
+
+  public openMoralDilemmaModal(): void {
+    if (!this.moralDilemmaModalEl) return;
+    this.releaseAllInputs();
+    this.isMoralDilemmaOpen = true;
+    this.moralDilemmaModalEl.style.display = 'block';
+    this.audio.playCosmicChime?.();
+  }
+
+  public closeMoralDilemmaModal(): void {
+    this.isMoralDilemmaOpen = false;
+    if (this.moralDilemmaModalEl) {
+      this.moralDilemmaModalEl.style.display = 'none';
+    }
+  }
+
+  public resolveChapter20MoralDilemma(choice: 'canon' | 'eclipse'): void {
+    this.closeMoralDilemmaModal();
+    this.canonChapterManager.unlockChapter(19);
+    this.canonChapterManager.unlockChapter(20);
+    this.currentCanonChapterId = 20;
+
+    if (choice === 'canon') {
+      if (!this.hasForgedAlbaGris) {
+        this.forgeAlbaGrisSword();
+      }
+      // Transform the sky & lighting into the First Golden Dawn of Albion (Chapter XX Canonical Climax)
+      this.oakhavenNarrativePhase = 'FIRST_DAWN_EPILOGUE';
+      this.scene.background = new THREE.Color(0x3a2a4d);
+      this.scene.fog = new THREE.FogExp2(0x463258, 0.009);
+      if (this.ambientLightRef) {
+        this.ambientLightRef.color.setHex(0xffd8a8);
+        this.ambientLightRef.intensity = 3.1;
+      }
+      if (this.hemiLightRef) {
+        this.hemiLightRef.color.setHex(0xffe6b8);
+        this.hemiLightRef.groundColor.setHex(0x5c3e68);
+      }
+      if (this.moonLightRef) {
+        this.moonLightRef.color.setHex(0xffdd88);
+        this.moonLightRef.intensity = 3.2;
+      }
+      this.triggerHolyFlash(1.0);
+      this.spawnFloatingText(this.playerGroup.position, '🌅 ¡ALBA GRIS FORJADA & PACTO DE SHALEM QUEBRADO!', '#ffd700');
+      this.showDialogueModal(
+        '🌅 CAPÍTULO XX (CANON): LA LUZ EN LAS TINIEBLAS & EL SACRIFICIO DE SHALEM 🌅',
+        '«Thomas alza Alba Gris frente al Sol Negro: "¡Solo la Oscuridad que elija amar será la única Luz en las Tinieblas!" Shalem ruge adoptando su forma colosal de León de Brasas Carmesíes y quiebra su pacto milenario: "¡Yo renuncio a mi trono en el Abismo! ¡Vive como un simple gato a su lado, o arde conmigo, Astaroth!" La Gota de Luz y el Fuego Negro se funden en tu hoja (+100% Daño Crítico).»',
+        '✦ CANON ELEGIDO: ALBA GRIS CONSAGRADA • GOLPEA A ASTAROTH PARA ABRIR EL PRIMER AMANECER ✦'
+      );
+    } else {
+      // Alternative Dark Ending: Eclipse of Ash (with immediate ability to rewind or continue)
+      this.scene.background = new THREE.Color(0x0c0512);
+      this.scene.fog = new THREE.FogExp2(0x11061a, 0.015);
+      this.triggerDamageVignette(0.75);
+      this.spawnFloatingText(this.playerGroup.position, '🌑 DESENLACE ALTERNATIVO: EL ECLIPSE DE CENIZA', '#ff6699');
+      this.showDialogueModal(
+        '🌑 DESENLACE ALTERNATIVO: EL TRONO DEL SOL NEGRO (ECLIPSE DE CENIZA) 🌑',
+        '«Thomas toma la corona de brasas de Astaroth para silenciar a quienes persiguieron a Elowen y a Khaterine. El cielo de Albion queda suspendido en un crepúsculo perpetuo donde ningún inquisidor vuelve a alzar una pira, pero el calor del sol jamás regresa al Viejo Roble... (Puedes volver a interactuar con el Altar de la Comunión [E] para elegir el Canon del Primer Amanecer).»',
+        '⏳ PULSA [E] EN EL ALTAR DE LA COMUNIÓN PARA REVIVIR LA ELECCIÓN CANÓNICA ⏳'
+      );
+    }
+    this.updateHUD();
   }
 
   public interactWithElowenCell(): void {
@@ -7272,16 +7759,7 @@ export class Oakhaven3DExperience {
   }
 
   public interactWithDawnGreyAltar(): void {
-    if (!this.hasForgedAlbaGris) {
-      this.forgeAlbaGrisSword();
-    } else {
-      this.audio.playCosmicChime?.();
-      this.showDialogueModal(
-        '✨ ALTAR DE LA COMUNIÓN INMACULADA — ALBA GRIS ✨',
-        '«La Gota de Luz Divina de Elowen y el Fuego Negro de Thomas laten en perfecta armonía dentro de Alba Gris. Empúñala contra Astaroth: cada golpe inflige el doble de daño crítico al Sol del Abismo.»',
-        '✦ ALBA GRIS EQUIPADA (+100% DAÑO CRÍTICO CONTRA ASTAROTH) ✦'
-      );
-    }
+    this.openMoralDilemmaModal();
   }
 
   public interactWithBlackSunCore(): void {
@@ -7349,6 +7827,22 @@ export class Oakhaven3DExperience {
     this.audio.playSfx('menu_select');
     this.playerStats.health = Math.min(this.playerStats.maxHealth, this.playerStats.health + 35);
     this.playerStats.posture = this.playerStats.maxPosture;
+
+    if (!this.hasDeliveredBirdOnOakHill) {
+      this.hasDeliveredBirdOnOakHill = true;
+      this.progression.addExp(50);
+      this.canonChapterManager.unlockChapter(2);
+      this.spawnFloatingText(this.playerGroup.position, '🕊️ ¡PÁJARO DE SAUCE ENTREGADO A ELOWEN! (+50 EXP)', '#ffd700');
+      this.triggerOakhavenMidnightSiege();
+      this.showDialogueModal(
+        '🕊️ CAPÍTULO II: EL PÁJARO DE MADERA EN LA COLINA DEL VIEJO ROBLE 🕊️',
+        '«Bajo las hojas doradas del Viejo Roble, entregas a Elowen el pequeño pájaro tallado en madera de sauce. Sus dedos rozan tu muñeca sin temor al Sello de Ceniza: "No tiene jaula, Thomas... como nosotros algún día." En ese instante, el cielo se oscurece: ¡cuernos de bronce retumban en el valle y cien antorchas blancas de Madre Morwenna irrumpen en la Plaza de la Gran Pira!»',
+        '✦ CAPÍTULO II COMPLETADO (+50 EXP) • COMIENZA EL CAPÍTULO III: LA MARCHA DE LAS ANTORCHAS BLANCAS ✦'
+      );
+      this.updateHUD();
+      return;
+    }
+
     this.spawnFloatingText(this.playerGroup.position, '+35 SALUD RESTAURADA', '#88ffaa');
     this.updateHUD();
 
@@ -7689,13 +8183,38 @@ export class Oakhaven3DExperience {
       }
     }
 
-    // 4. Elowen
+    // 4. Elowen & Old Oak Hill Bench
     if (!targetFound) {
       const dist = pPos.distanceTo(this.elowenGroup.position);
       if (dist <= 3.8) {
         targetFound = 'elowen';
-        badgeText = this.hasTalkedToElowen3D ? '✦ [E] CONSULTAR A ELOWEN' : '✦ [E] HABLAR CON ELOWEN (DONCELLA)';
-        badgeColor = '#b5d4ff';
+        badgeText = !this.hasDeliveredBirdOnOakHill
+          ? '🕊️ [E] ENTREGAR PÁJARO DE MADERA DE SAUCE A ELOWEN (CAP. II)'
+          : (this.hasTalkedToElowen3D ? '✦ [E] CONSULTAR A ELOWEN' : '✦ [E] HABLAR CON ELOWEN (DONCELLA)');
+        badgeColor = !this.hasDeliveredBirdOnOakHill ? '#ffd700' : '#b5d4ff';
+      } else if (this.dungeonAreaManager.currentArea === 'surface' && pPos.distanceTo(new THREE.Vector3(9.8, 2.2, 5.0)) <= 3.2) {
+        targetFound = 'oak_hill_bench';
+        badgeText = !this.hasDeliveredBirdOnOakHill
+          ? '🕊️ [E] ENTREGAR PÁJARO DE SAUCE EN EL VIEJO ROBLE (CAP. II)'
+          : '🌳 [E] CONTEMPLAR EL VIEJO ROBLE DE OAKHAVEN';
+        badgeColor = '#b8ff99';
+      }
+    }
+
+    // 4b. Reactive Sick Villagers in Parish Atrium (Chapter I: El Peso de la Ceniza)
+    if (!targetFound && this.dungeonAreaManager.currentArea === 'surface') {
+      if (this.villagerGedeonGroup && pPos.distanceTo(this.villagerGedeonGroup.position) <= 2.4) {
+        targetFound = 'villager_gedeon';
+        badgeText = this.hasHealedGedeon
+          ? '🌿 [E] CONVERSAR CON GEDEÓN EL CANTERO'
+          : '🌿 [E] AUXILIAR A GEDEÓN EL CANTERO (CAP. I)';
+        badgeColor = '#a3ffc7';
+      } else if (this.villagerMartaGroup && pPos.distanceTo(this.villagerMartaGroup.position) <= 2.4) {
+        targetFound = 'villager_marta';
+        badgeText = this.hasHealedMarta
+          ? '🕯️ [E] CONVERSAR CON MARTA DEL VALLE'
+          : '🕯️ [E] AUXILIAR A MARTA DEL VALLE (CAP. I)';
+        badgeColor = '#a3ffc7';
       }
     }
 
@@ -7892,6 +8411,10 @@ export class Oakhaven3DExperience {
         targetFound = 'finisher';
         badgeText = '⚡ [E] ¡ASESTAR GOLPE REGICIDA A REX MALPHAS!';
         badgeColor = '#cc44ff';
+      } else if (!this.rexMalphasEncounter.isDefeated && !this.hasTriggeredTriHeroSynergy && pPos.distanceTo(this.rexMalphasGroup.position) <= 4.4) {
+        targetFound = 'tri_hero_synergy';
+        badgeText = '⚡ [E] ¡DESATAR SINERGIA TRI-HÉROE CONTRA LA LEY DEL DESEO!';
+        badgeColor = '#cc44ff';
       } else if (pPos.distanceTo(new THREE.Vector3(-7.0, 0, -320)) <= 3.8) {
         targetFound = 'mirror_gallery';
         badgeText = this.hasClearedMirrorGallery ? '🪞 [E] SALÓN DE LOS ESPEJOS (QUEBRADO)' : '🪞 [E] QUEBRAR EL ESPEJO MAESTRO (SALÓN DE ESPEJOS)';
@@ -7915,8 +8438,8 @@ export class Oakhaven3DExperience {
       } else if (pPos.distanceTo(new THREE.Vector3(0, 0, -378)) <= 3.6) {
         targetFound = 'dawn_grey_altar';
         badgeText = this.hasForgedAlbaGris
-          ? '✨ [E] ALTAR DE LA COMUNIÓN (ALBA GRIS FORJADA)'
-          : '✨ [E] RECIBIR LA GOTA DE LUZ & FORJAR ALBA GRIS';
+          ? '🌌 [E] ALTAR DE LA COMUNIÓN — DILEMA DEL SOL NEGRO (CAP. XX)'
+          : '🌌 [E] RECIBIR LA GOTA DE LUZ & ELEGIR EL DESTINO (CAP. XX)';
         badgeColor = '#88eeff';
       } else if (distAstarothHoriz <= 5.0 && this.astarothEncounter.isDefeated) {
         targetFound = 'black_sun_core';
@@ -8736,6 +9259,188 @@ export class Oakhaven3DExperience {
     }
   }
 
+  public toggleLockOn(): void {
+    const btnLock = this.uiOverlay?.querySelector('#btn-toggle-lockon') as HTMLButtonElement | null;
+    if (this.isLockOnActive) {
+      this.isLockOnActive = false;
+      this.lockedTargetGroup = undefined;
+      if (this.lockOnRingMesh) this.lockOnRingMesh.visible = false;
+      if (btnLock) {
+        btnLock.innerText = '🎯 [R] LOCK-ON: LIBRE';
+        btnLock.style.borderColor = '#d4af37';
+        btnLock.style.color = '#ffd700';
+      }
+      this.spawnFloatingText(this.playerGroup.position, '🎯 Cámara Libre Activada', '#cccccc');
+      this.audio.playSfx('menu_select');
+      return;
+    }
+
+    // Find closest active enemy or boss in current area
+    const candidates: Array<{ group: THREE.Object3D; name: string }> = [];
+    const area = this.dungeonAreaManager.currentArea;
+
+    if (area === 'surface') {
+      if (this.enemyState !== 'DEAD') candidates.push({ group: this.enemyGroup, name: 'Sabueso de Ceniza' });
+      if (this.cultistState !== 'DEAD') candidates.push({ group: this.cultistGroup, name: 'Cultista del Incensario' });
+      if (this.zealotState !== 'DEAD') candidates.push({ group: this.zealotGroup, name: 'Flagelante con Cadena' });
+      if (this.morwennaState !== 'DEAD') candidates.push({ group: this.morwennaGroup, name: 'Madre Morwenna' });
+      if (this.skeletonState !== 'DEAD') candidates.push({ group: this.skeletonGroup, name: 'Penitente de la Cripta' });
+    } else if (area === 'crypts_interior') {
+      if (!this.inquisitorEncounter.isDefeated) candidates.push({ group: this.inquisitorGroup, name: 'El Inquisidor Caído' });
+      if (this.cryptAmbushAwakened && !this.cryptAmbushDead) candidates.push({ group: this.cryptAmbushSkeletonGroup, name: 'Penitente Emboscado' });
+    } else if (area === 'black_willow_forest') {
+      if (!this.rootProwlerEncounter.isDefeated) candidates.push({ group: this.rootProwlerGroup, name: 'Acechador de Raíces' });
+    } else if (area === 'belltower_summit') {
+      if (!this.crucibleGuardianEncounter.isDefeated) candidates.push({ group: this.crucibleGuardianGroup, name: 'Guardián del Crisol' });
+    } else if (area === 'great_stone_bridge') {
+      if (!this.captainVaneEncounter.isDefeated) candidates.push({ group: this.captainVaneGroup, name: 'Capitán Áureo Vane' });
+    } else if (area === 'londinium_citadel') {
+      if (!this.rexMalphasEncounter.isDefeated) candidates.push({ group: this.rexMalphasGroup, name: 'Rex Malphas (Alaric)' });
+    } else if (area === 'inverted_cathedral') {
+      if (!this.astarothEncounter.isDefeated) candidates.push({ group: this.astarothGroup, name: 'Astaroth — Sol del Abismo' });
+    }
+
+    let best: { group: THREE.Object3D; name: string } | undefined;
+    let bestDist = 28.0;
+    for (const c of candidates) {
+      const d = this.playerGroup.position.distanceTo(c.group.position);
+      if (d < bestDist) {
+        bestDist = d;
+        best = c;
+      }
+    }
+
+    if (best) {
+      this.isLockOnActive = true;
+      this.lockedTargetGroup = best.group;
+      if (this.lockOnRingMesh) {
+        this.lockOnRingMesh.visible = true;
+        this.lockOnRingMesh.position.set(best.group.position.x, best.group.position.y + 0.08, best.group.position.z);
+      }
+      if (btnLock) {
+        btnLock.innerText = `🎯 [R] FIJADO: ${best.name.split(' ')[0].toUpperCase()}`;
+        btnLock.style.borderColor = '#ff4444';
+        btnLock.style.color = '#ffaaaa';
+      }
+      this.spawnFloatingText(best.group.position, `🎯 OBJETIVO FIJADO: ${best.name.toUpperCase()}`, '#ffd700');
+      this.audio.playSfx('menu_select');
+    } else {
+      this.spawnFloatingText(this.playerGroup.position, '🎯 Ningún enemigo cercano para fijar', '#ffaa66');
+    }
+  }
+
+  private updateLockOn(delta: number): void {
+    if (!this.isLockOnActive || !this.lockedTargetGroup) {
+      if (this.lockOnRingMesh) this.lockOnRingMesh.visible = false;
+      return;
+    }
+
+    // Pulse and rotate targeting ring under the locked enemy/boss
+    if (this.lockOnRingMesh) {
+      this.lockOnRingMesh.visible = true;
+      this.lockOnRingMesh.position.set(
+        this.lockedTargetGroup.position.x,
+        Math.max(0.06, this.lockedTargetGroup.position.y + 0.06),
+        this.lockedTargetGroup.position.z
+      );
+      this.lockOnRingMesh.rotation.z += delta * 2.5;
+      const pulse = 1.0 + Math.sin(this.clock.elapsedTime * 8) * 0.12;
+      this.lockOnRingMesh.scale.set(pulse, pulse, 1);
+    }
+
+    // Disengage if player teleports to another zone (> 35m away)
+    if (this.playerGroup.position.distanceTo(this.lockedTargetGroup.position) > 35) {
+      this.toggleLockOn();
+    }
+  }
+
+  private updateSectorCompassAndShalemGuide(delta: number): void {
+    const area = this.dungeonAreaManager.currentArea;
+    const pPos = this.playerGroup.position;
+    let sectorLabel = '📍 ATRIO DE SAN JUDE (CAP. I — ALBA DE NIEBLA)';
+    let guideLabel = '🐈‍⬛ Shalem guía → Sube a la Colina del Viejo Roble [Este +2.2m] o pulsa [Y]';
+    let shalemTargetPos: THREE.Vector3 | undefined;
+
+    if (area === 'surface') {
+      if (pPos.x > 4.6 && pPos.z >= 0.4 && pPos.z <= 9.6) {
+        sectorLabel = `📍 COLINA DEL VIEJO ROBLE (+${pPos.y.toFixed(1)}m — CAP. II)`;
+        guideLabel = !this.hasDeliveredBirdOnOakHill
+          ? '🐈‍⬛ Shalem guía → Entrega el Pájaro de Sauce a Elowen [E] junto al Viejo Roble'
+          : '🐈‍⬛ Shalem guía → Desciende a la Calle Mayor para enfrentar a Madre Morwenna';
+        shalemTargetPos = new THREE.Vector3(8.2, 2.15, 3.8);
+      } else if (pPos.z >= 0.5) {
+        sectorLabel = this.oakhavenNarrativePhase === 'DAWN_CALM'
+          ? '📍 ATRIO DE SAN JUDE (CAP. I — ALBA DE NIEBLA)'
+          : '📍 ATRIO DE SAN JUDE (CAP. III — BAJO ASEDIO)';
+        guideLabel = !this.hasDeliveredBirdOnOakHill
+          ? '🐈‍⬛ Shalem guía → Auxilia a los enfermos [E] y sube a la Colina del Viejo Roble [Este / Y]'
+          : '🐈‍⬛ Shalem guía → Avanza al norte hacia la Plaza de la Gran Pira (Z = -22)';
+        shalemTargetPos = !this.hasDeliveredBirdOnOakHill
+          ? new THREE.Vector3(4.2, 0.1, 4.8)
+          : new THREE.Vector3(2.8, 0, 1.2);
+      } else if (pPos.z > -23.5) {
+        sectorLabel = '📍 CALLE MAYOR & PLAZA DE LA GRAN PIRA (CAP. III)';
+        guideLabel = this.morwennaState !== 'DEAD'
+          ? '🐈‍⬛ Shalem guía → Derrota a Madre Morwenna en la Gran Pira (Usa [R] Lock-On)'
+          : '🐈‍⬛ Shalem guía → Cruza la Verja del Cementerio abierta al norte (Z = -24)';
+        shalemTargetPos = new THREE.Vector3(3.2, 0, -6.5);
+      } else {
+        sectorLabel = '📍 CEMENTERIO ANTIGUO DE OAKHAVEN (CAP. III–IV)';
+        guideLabel = '🐈‍⬛ Shalem guía → Desciende al Mausoleo de las Criptas de San Jude (Z = -44)';
+        shalemTargetPos = new THREE.Vector3(2.2, 0, -28.0);
+      }
+    } else if (area === 'crypts_interior') {
+      sectorLabel = '📍 CRIPTAS SUBTERRÁNEAS DE SAN JUDE (CAP. IV)';
+      guideLabel = !this.inquisitorEncounter.isDefeated
+        ? '🐈‍⬛ Shalem guía → Esquiva las trampas y derrota al Inquisidor Caído (Z = -102)'
+        : '🐈‍⬛ Shalem guía → Cruza el Portal Consagrado hacia el Bosque del Sauce Negro [E]';
+    } else if (area === 'black_willow_forest') {
+      sectorLabel = '📍 BOSQUE DEL SAUCE NEGRO (CAP. V–VI)';
+      guideLabel = !this.rootProwlerEncounter.isDefeated
+        ? '🐈‍⬛ Shalem guía → Usa fuego contra el Acechador de Raíces y reclama el Colmillo [E]'
+        : '🐈‍⬛ Shalem guía → Asciende por el sendero norte al Campanario del Sur (Acto II) [E]';
+    } else if (area === 'belltower_summit') {
+      sectorLabel = '📍 CAMPANARIO DEL SUR & GRAN CRISOL (ACTO II — CAP. VII–IX)';
+      guideLabel = !this.crucibleGuardianEncounter.isDefeated
+        ? '🐈‍⬛ Consejo Táctico → Lanza tu espada [T] al Gran Crisol para derramar bronce sobre el Guardián'
+        : '🐈‍⬛ Shalem guía → Avanza al norte del Crisol hacia el Gran Puente de Piedra (Acto III) [E]';
+    } else if (area === 'great_stone_bridge') {
+      sectorLabel = '📍 GRAN PUENTE DE PIEDRA (ACTO III — CAP. X–XIII)';
+      guideLabel = !this.captainVaneEncounter.isDefeated
+        ? '🐈‍⬛ Consejo Táctico → Libera a Martín y Tobías [E] y flanquea el escudo de Vane con Lock-On [R]'
+        : '🐈‍⬛ Shalem guía → Cruza el Portón hacia Londinium — La Ciudadela Dorada (Acto IV) [E]';
+    } else if (area === 'londinium_citadel') {
+      sectorLabel = '📍 LONDINIUM — CIUDADELA DORADA (ACTO IV — CAP. XIV–XVII)';
+      guideLabel = !this.rexMalphasEncounter.isDefeated
+        ? '🐈‍⬛ Consejo Táctico → Quiebra el Espejo Maestro [E] y desata la Sinergia Tri-Héroe [E] contra Malphas'
+        : '🐈‍⬛ Shalem guía → Desciende desde el Trono Astral a la Catedral Invertida (Acto V) [E]';
+    } else if (area === 'inverted_cathedral') {
+      sectorLabel = this.oakhavenNarrativePhase === 'FIRST_DAWN_EPILOGUE'
+        ? '📍 CATEDRAL INVERTIDA — EL PRIMER AMANECER (CAP. XX)'
+        : '📍 LA CATEDRAL INVERTIDA & EL SOL NEGRO (ACTO V — CAP. XVIII–XX)';
+      guideLabel = !this.hasForgedAlbaGris
+        ? '🐈‍⬛ Shalem guía → Interactúa con el Altar de la Comunión [E] para elegir en el Dilema del Sol Negro'
+        : (!this.astarothEncounter.isDefeated
+          ? '🐈‍⬛ Shalem guía → Derrota a Astaroth con Alba Gris (+100% Daño Crítico)'
+          : '🐈‍⬛ Epílogo Canónico → Pulsa [Y] para contemplar el Primer Amanecer en la Colina del Viejo Roble');
+    }
+
+    if (this.currentSubSectorLabel !== sectorLabel) {
+      this.currentSubSectorLabel = sectorLabel;
+      const nameEl = this.uiOverlay?.querySelector('#p3d-sector-name') as HTMLDivElement | null;
+      if (nameEl) nameEl.innerText = sectorLabel;
+    }
+    const guideEl = this.uiOverlay?.querySelector('#p3d-shalem-guide') as HTMLDivElement | null;
+    if (guideEl && guideEl.innerText !== guideLabel) {
+      guideEl.innerText = guideLabel;
+    }
+
+    // Diegetic Shalem Pathfinding on Surface: Shalem smoothly trots toward the active canonical guide point
+    if (shalemTargetPos && this.shalemGroup && area === 'surface') {
+      this.shalemGroup.position.lerp(shalemTargetPos, 1 - Math.exp(-2.2 * delta));
+    }
+  }
+
   // =========================================================================
   // MAIN LOOP & LOGIC
   // =========================================================================
@@ -8745,6 +9450,8 @@ export class Oakhaven3DExperience {
     const delta = Math.min(this.clock.getDelta(), 0.1);
 
     this.updatePlayer(delta);
+    this.updateLockOn(delta);
+    this.updateSectorCompassAndShalemGuide(delta);
     this.updateEnemy(delta);
     this.updateCultist(delta);
     this.updateZealot(delta);
@@ -9070,14 +9777,18 @@ export class Oakhaven3DExperience {
       this.playerVelocity.z = inputDir.z * speed;
 
       // Target yaw with local forward = (0, 0, -1)
-      const targetAngle = Math.atan2(-inputDir.x, -inputDir.z);
+      let targetAngle = Math.atan2(-inputDir.x, -inputDir.z);
+      if (this.isLockOnActive && this.lockedTargetGroup) {
+        const toTarget = this.lockedTargetGroup.position.clone().sub(this.playerGroup.position);
+        targetAngle = Math.atan2(-toTarget.x, -toTarget.z);
+      }
       const currentAngle = this.playerGroup.rotation.y;
       // Shortest angular arc difference
       const angleDiff = Math.atan2(Math.sin(targetAngle - currentAngle), Math.cos(targetAngle - currentAngle));
       const turnAlpha = 1 - Math.exp(-14.0 * delta);
       this.playerGroup.rotation.y = currentAngle + angleDiff * turnAlpha;
 
-      if (this.cameraMode === 'third_person') {
+      if (this.cameraMode === 'third_person' && !this.isLockOnActive) {
         this.targetCameraYaw = targetAngle;
       }
 
@@ -9089,15 +9800,63 @@ export class Oakhaven3DExperience {
       this.playerVelocity.x *= friction;
       this.playerVelocity.z *= friction;
       this.playerBody.rotation.z = 0;
+
+      if (this.isLockOnActive && this.lockedTargetGroup) {
+        const toTarget = this.lockedTargetGroup.position.clone().sub(this.playerGroup.position);
+        const targetAngle = Math.atan2(-toTarget.x, -toTarget.z);
+        const currentAngle = this.playerGroup.rotation.y;
+        const angleDiff = Math.atan2(Math.sin(targetAngle - currentAngle), Math.cos(targetAngle - currentAngle));
+        this.playerGroup.rotation.y = currentAngle + angleDiff * (1 - Math.exp(-14.0 * delta));
+      }
     }
 
-    // Apply movement & boundaries along the street
+    // Apply movement & boundaries along the street (plus eastern expansion to Old Oak Hill on surface)
     this.playerGroup.position.x += this.playerVelocity.x * delta;
     this.playerGroup.position.z += this.playerVelocity.z * delta;
 
     const bounds = this.dungeonAreaManager.getBounds();
-    this.playerGroup.position.x = THREE.MathUtils.clamp(this.playerGroup.position.x, bounds.minX, bounds.maxX);
+    const isOakHillCorridor =
+      this.dungeonAreaManager.currentArea === 'surface' &&
+      this.playerGroup.position.z >= 0.4 &&
+      this.playerGroup.position.z <= 9.6;
+    const effectiveMaxX = isOakHillCorridor ? 12.2 : bounds.maxX;
+    this.playerGroup.position.x = THREE.MathUtils.clamp(this.playerGroup.position.x, bounds.minX, effectiveMaxX);
     this.playerGroup.position.z = THREE.MathUtils.clamp(this.playerGroup.position.z, bounds.minZ, bounds.maxZ);
+
+    // Smooth Terrain Elevation (Colina del Viejo Roble +2.2m & steps)
+    const targetGroundY = this.getTerrainHeightAt(this.playerGroup.position.x, this.playerGroup.position.z);
+    this.playerGroup.position.y = THREE.MathUtils.lerp(
+      this.playerGroup.position.y,
+      targetGroundY,
+      1 - Math.exp(-16.0 * delta)
+    );
+
+    // Auto-trigger Chapter III Midnight Siege if marching north down Oakhaven street past z <= -2.5
+    if (
+      this.dungeonAreaManager.currentArea === 'surface' &&
+      this.oakhavenNarrativePhase === 'DAWN_CALM' &&
+      this.playerGroup.position.z <= -2.5
+    ) {
+      this.triggerOakhavenMidnightSiege();
+    }
+
+    // Update OpenLara Hierarchical Articulated 3D Rigs (Lower-Body Stride + Upper-Body Combat Layer)
+    const planarSpeed = Math.hypot(this.playerVelocity.x, this.playerVelocity.z);
+    const isMovingNow = planarSpeed > 0.25;
+    const rigInput = {
+      delta,
+      elapsedTime: this.clock.elapsedTime,
+      planarSpeed,
+      isMoving: isMovingNow,
+      isDodging: this.playerStats.isDodging,
+      isGuarding: this.playerStats.isGuarding,
+      isAttacking: this.isPlayerAttacking,
+      isHeavyAttack: this.attackCooldown > 0.3,
+      isArmed: this.playerStats.isArmed,
+      isDefeated: this.isPlayerDefeated
+    };
+    if (this.thomasRig) this.thomasRig.update(rigInput);
+    if (this.khaterineRig) this.khaterineRig.update(rigInput);
 
     // Timers
     if (this.dodgeTimer > 0) this.dodgeTimer -= delta;
@@ -10592,39 +11351,57 @@ export class Oakhaven3DExperience {
         this.playerGroup.position.z
       );
     } else {
-      // Third Person Follow Camera
+      // Third Person Close Follow Camera (OpenLara & Vice City Architecture)
+      // If Combat Lock-On is active, align targetCameraYaw toward the locked enemy/boss
+      if (this.isLockOnActive && this.lockedTargetGroup) {
+        const toTarget = this.lockedTargetGroup.position.clone().sub(this.playerGroup.position);
+        if (toTarget.lengthSq() > 0.1) {
+          this.targetCameraYaw = Math.atan2(-toTarget.x, -toTarget.z);
+        }
+      }
+
       // Smooth recentering towards targetCameraYaw if not actively orbiting with pointer
       const isOrbiting = this.isPointerDragging || (performance.now() - this.lastManualOrbitTime < 900);
-      if (!isOrbiting) {
+      if (!isOrbiting || this.isLockOnActive) {
         const yawDiff = Math.atan2(
           Math.sin(this.targetCameraYaw - this.cameraYaw),
           Math.cos(this.targetCameraYaw - this.cameraYaw)
         );
-        const recenterAlpha = 1 - Math.exp(-3.5 * safeDelta);
+        const recenterAlpha = 1 - Math.exp((this.isLockOnActive ? -7.5 : -3.5) * safeDelta);
         this.cameraYaw += yawDiff * recenterAlpha;
       }
 
-      // Look target with forward anticipation (look-ahead)
-      const lookAheadDist = 0.5;
+      // Look target with forward anticipation (look-ahead) or Lock-On midpoint framing
+      const lookAheadDist = 0.55;
       const lookAheadX = THREE.MathUtils.clamp(this.playerVelocity.x * 0.12, -lookAheadDist, lookAheadDist);
       const lookAheadZ = THREE.MathUtils.clamp(this.playerVelocity.z * 0.12, -lookAheadDist, lookAheadDist);
-      this.targetCameraLook.set(
-        this.playerGroup.position.x + lookAheadX,
-        this.playerGroup.position.y + 1.35,
-        this.playerGroup.position.z + lookAheadZ
-      );
+      if (this.isLockOnActive && this.lockedTargetGroup) {
+        this.targetCameraLook.set(
+          THREE.MathUtils.lerp(this.playerGroup.position.x, this.lockedTargetGroup.position.x, 0.28),
+          this.playerGroup.position.y + 1.35,
+          THREE.MathUtils.lerp(this.playerGroup.position.z, this.lockedTargetGroup.position.z, 0.28)
+        );
+      } else {
+        this.targetCameraLook.set(
+          this.playerGroup.position.x + lookAheadX,
+          this.playerGroup.position.y + 1.35,
+          this.playerGroup.position.z + lookAheadZ
+        );
+      }
 
-      // Desired camera position behind player at cameraYaw
-      const cameraDist = 4.0;
-      const cameraHeight = 2.4;
+      // Context-adaptive camera distance & height (~40% character screen height)
+      const area = this.dungeonAreaManager.currentArea;
+      const isOnOakHill = area === 'surface' && this.playerGroup.position.x > 4.6;
+      const cameraDist = this.isLockOnActive ? 4.6 : area === 'crypts_interior' ? 3.35 : isOnOakHill ? 4.3 : 3.85;
+      const cameraHeight = this.isLockOnActive ? 2.55 : area === 'crypts_interior' ? 2.0 : isOnOakHill ? 2.48 : 2.3;
       let camX = this.playerGroup.position.x + Math.sin(this.cameraYaw) * cameraDist;
       let camY = this.playerGroup.position.y + cameraHeight;
       let camZ = this.playerGroup.position.z + Math.cos(this.cameraYaw) * cameraDist;
 
       // Obstacle & Street/Crypt boundary resolution (traceClip pullback)
       const bounds = this.dungeonAreaManager.getBounds();
-      const maxStreetX = bounds.camMaxX;
-      if (Math.abs(camX) > maxStreetX) {
+      const maxStreetX = isOnOakHill ? 12.6 : bounds.camMaxX;
+      if (Math.abs(camX) > maxStreetX && !(isOnOakHill && camX > 0)) {
         const boundX = Math.sign(camX) * maxStreetX;
         if (Math.abs(this.targetCameraLook.x) < maxStreetX) {
           const t = THREE.MathUtils.clamp((boundX - this.targetCameraLook.x) / (camX - this.targetCameraLook.x), 0.15, 0.95);
@@ -11050,6 +11827,36 @@ export class Oakhaven3DExperience {
           bless: { url: '/assets/characters/cedric_bless.png', frames: 6, fps: 8, loop: true }
         },
         true
+      );
+    }
+
+    if (this.villagerGedeonGroup) {
+      this.visualDesigns.attachAnimatedBillboard(
+        'npc_villager_gedeon',
+        this.villagerGedeonGroup,
+        1.35,
+        1.35,
+        0.78,
+        'idle',
+        {
+          idle: { url: '/assets/characters/cedric_idle.png', frames: 4, fps: 5, loop: true }
+        },
+        false
+      );
+    }
+
+    if (this.villagerMartaGroup) {
+      this.visualDesigns.attachAnimatedBillboard(
+        'npc_villager_marta',
+        this.villagerMartaGroup,
+        1.3,
+        1.3,
+        0.75,
+        'idle',
+        {
+          idle: { url: '/assets/characters/elowen_idle.png', frames: 4, fps: 5, loop: true }
+        },
+        false
       );
     }
 

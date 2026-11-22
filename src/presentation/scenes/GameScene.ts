@@ -29,6 +29,8 @@ export class GameScene extends Phaser.Scene {
 
   // Visual Sprites & Ground Shadows
   private bgImage!: Phaser.GameObjects.Image;
+  private bgImageEast!: Phaser.GameObjects.Image;
+  private sectorBannerText?: Phaser.GameObjects.Text;
   private playerSprite!: Phaser.GameObjects.Sprite;
   private playerShadow!: Phaser.GameObjects.Ellipse;
   private allySprite!: Phaser.GameObjects.Sprite;
@@ -249,8 +251,9 @@ export class GameScene extends Phaser.Scene {
     this.isTransitioningAct = false;
     this.isActCleared = false;
 
-    // 1. Background image (640x360)
+    // 1. Wide Scrolling 2.5D Multi-Sector Background (1180x360 across 4 connected canonical sub-sectors)
     this.bgImage = this.add.image(320, 180, 'bg_oakhaven').setDisplaySize(640, 360).setDepth(0);
+    this.bgImageEast = this.add.image(900, 180, 'bg_oakhaven').setDisplaySize(640, 360).setFlipX(true).setDepth(0);
 
     // 2. Atmospheric Fog Particles
     this.add.particles(320, 270, 'particle_fog', {
@@ -275,8 +278,8 @@ export class GameScene extends Phaser.Scene {
     // 4. Setup audio BGM
     this.audio.playBgm('bgm_oakhaven_night');
 
-    // 4.1 Atmospheric Vignette
-    this.add.image(320, 180, 'fx_vignette').setDisplaySize(640, 360).setDepth(350).setAlpha(0.6);
+    // 4.1 Atmospheric Vignette (Fixed to camera viewport)
+    this.add.image(320, 180, 'fx_vignette').setDisplaySize(640, 360).setDepth(350).setAlpha(0.6).setScrollFactor(0);
 
     // 4.2 Register All Multi-Frame Animations from the Visual Pack
     registerVisualPackAnimations(this);
@@ -297,6 +300,21 @@ export class GameScene extends Phaser.Scene {
       playerOriginY
     ).setDepth(initY);
     this.playAnimSafe(this.playerSprite, playerTex);
+
+    // Configure 2.5D Scrolling Camera Follow across the 1180x360 multi-sector world
+    this.cameras.main.setBounds(0, 0, 1180, 360);
+    this.cameras.main.startFollow(this.playerSprite, true, 0.12, 0.12);
+
+    // 5.1 Compact Tactical Sub-Sector & Shalem Compass Banner (Fixed to camera)
+    this.add.rectangle(320, 56, 390, 16, 0x120a1f, 0.88)
+      .setStrokeStyle(1, 0xd4af37)
+      .setDepth(342)
+      .setScrollFactor(0);
+    this.sectorBannerText = this.add.text(320, 56, '📍 ATRIO DE SAN JUDE (CAP. I) • 🐈‍⬛ Sube a la Colina del Viejo Roble', {
+      fontFamily: 'Cinzel, monospace',
+      fontSize: '7.5px',
+      color: '#ffd700'
+    }).setOrigin(0.5).setDepth(343).setScrollFactor(0);
 
     // 6. Ally Companion (Walking alongside in 2.5D)
     const allyInitX = 65;
@@ -337,17 +355,18 @@ export class GameScene extends Phaser.Scene {
       padding: { x: 5, y: 2 }
     }).setOrigin(0.5).setDepth(340).setVisible(false);
 
-    // 9. Shalem Dialogue Balloon
+    // 9. Shalem Dialogue Balloon (Fixed to camera viewport)
     this.shalemBalloonBg = this.add.rectangle(320, 310, 540, 24, 0x140f21, 0.94)
       .setStrokeStyle(1, 0xd4af37)
       .setDepth(345)
+      .setScrollFactor(0)
       .setVisible(false);
 
     this.shalemBalloonText = this.add.text(320, 310, '', {
       fontFamily: 'Cinzel, sans-serif',
       fontSize: '9px',
       color: '#ffd700'
-    }).setOrigin(0.5).setDepth(346).setVisible(false);
+    }).setOrigin(0.5).setDepth(346).setScrollFactor(0).setVisible(false);
 
     // 10. Setup Inputs
     if (this.input.keyboard) {
@@ -591,7 +610,7 @@ export class GameScene extends Phaser.Scene {
           onComplete: () => ghost.destroy()
         });
 
-        const targetX = Phaser.Math.Clamp(this.playerSprite.x + dashDir * 60, 35, 605);
+        const targetX = Phaser.Math.Clamp(this.playerSprite.x + dashDir * 60, 35, 1145);
         this.tweens.add({
           targets: this.playerSprite,
           x: targetX,
@@ -654,7 +673,7 @@ export class GameScene extends Phaser.Scene {
       this.executeContextInteraction();
     }
 
-    // 2.5D Movement (A / D / W / S or Arrows)
+    // 2.5D Movement (A / D / W / S or Arrows) across 1180x360 Multi-Sector World
     let moveX = 0;
     let moveY = 0;
 
@@ -676,8 +695,10 @@ export class GameScene extends Phaser.Scene {
       const vx = normX * baseSpeed * 1.05 * (delta / 1000);
       const vy = normY * baseSpeed * 0.72 * (delta / 1000);
 
-      const nextX = Phaser.Math.Clamp(this.playerSprite.x + vx, 35, 605);
-      const nextY = Phaser.Math.Clamp(this.playerSprite.y + vy, 205, 315);
+      const nextX = Phaser.Math.Clamp(this.playerSprite.x + vx, 35, 1145);
+      // Allow climbing the elevated Colina del Viejo Roble terrace (y down to 178) when in x: 225..425
+      const minY = (this.currentScenario === 1 && nextX >= 225 && nextX <= 425) ? 178 : 205;
+      const nextY = Phaser.Math.Clamp(this.playerSprite.y + vy, minY, 315);
 
       this.playerSprite.setPosition(nextX, nextY);
       this.player.position = new Vector2(nextX, nextY);
@@ -709,6 +730,47 @@ export class GameScene extends Phaser.Scene {
           : 'khaterine_idle';
         this.playAnimSafe(this.playerSprite, idleAnim);
       }
+    }
+
+    this.update2DSectorCompass();
+  }
+
+  private update2DSectorCompass(): void {
+    if (!this.sectorBannerText) return;
+    const px = this.playerSprite.x;
+    const py = this.playerSprite.y;
+    let label = '';
+
+    if (this.currentScenario === 1) {
+      if (px < 225) {
+        label = '📍 ATRIO DE SAN JUDE (CAP. I) • 🐈‍⬛ Habla con Padre Cedric [E] o sube al Roble';
+      } else if (px <= 425 && py < 215) {
+        label = '📍 COLINA DEL VIEJO ROBLE (ELEVADA — CAP. II) • 🐈‍⬛ Entrega el Pájaro a Elowen [E]';
+      } else if (px <= 760) {
+        label = '📍 PLAZA DE LA GRAN PIRA (CAP. III) • 🐈‍⬛ Derrota a Madre Morwenna y sus cohortes';
+      } else {
+        label = '📍 CEMENTERIO ANTIGUO Y CRIPTAS (CAP. IV–VI) • 🐈‍⬛ Avanza al Mausoleo oriental';
+      }
+    } else if (this.currentScenario === 2) {
+      label = px < 380
+        ? '📍 CELDA DE SAL DE ELOWEN (CAP. VII) • 🐈‍⬛ Habla con Elowen [E] para el Pájaro de Sauce'
+        : '📍 GRAN CRISOL DEL CAMPANARIO (CAP. VIII–IX) • 🐈‍⬛ Derrota al Guardián del Crisol';
+    } else if (this.currentScenario === 3) {
+      label = px < 350
+        ? '📍 CONVOY DE REFUGIADOS EN EL GRAN PUENTE (CAP. X–XI) • 🐈‍⬛ Protege a Elowen y los aldeanos'
+        : '📍 ARCO CENTRAL DEL GRAN PUENTE (CAP. XII–XIII) • 🐈‍⬛ Quiebra el escudo del Capitán Vane [K]';
+    } else if (this.currentScenario === 4) {
+      label = px < 360
+        ? '📍 SALÓN DE LOS ESPEJOS DE LONDINIUM (CAP. XIV–XV) • 🐈‍⬛ Libera a Elowen de las ilusiones'
+        : '📍 TRONO ASTRAL DE REX MALPHAS (CAP. XVI–XVII) • 🐈‍⬛ Derrota al Rey Demonio Alaric';
+    } else {
+      label = px < 340
+        ? '📍 ALTAR DE LA COMUNIÓN (CAP. XVIII–XIX) • 🐈‍⬛ Recibe la Gota de Luz para forjar Alba Gris [E]'
+        : '📍 EL SOL DEL ABISMO (CAP. XX) • 🐈‍⬛ Derrota a Astaroth para traer el Primer Amanecer';
+    }
+
+    if (this.sectorBannerText.text !== label) {
+      this.sectorBannerText.setText(label);
     }
   }
 
@@ -3424,17 +3486,36 @@ export class GameScene extends Phaser.Scene {
     };
 
     if (scenarioIndex === 1) {
-      // Act I: Oakhaven Village Props from Visual Pack
+      // Act I: Oakhaven 4-Subsector Multi-Zone Props (Atrio -> Colina del Viejo Roble -> Gran Pira -> Cementerio y Criptas)
+      // Elevated Colina del Viejo Roble Mossy Terrace (x: 245..410, y: 175..210)
+      const hillBase = this.add.ellipse(320, 198, 175, 42, 0x263829, 0.92).setStrokeStyle(2, 0x4b5c47).setDepth(175);
+      const hillStep1 = this.add.rectangle(242, 206, 22, 10, 0x4a5248, 0.95).setStrokeStyle(1, 0x6c7868).setDepth(176);
+      const hillStep2 = this.add.rectangle(262, 198, 22, 10, 0x4a5248, 0.95).setStrokeStyle(1, 0x6c7868).setDepth(176);
+      const oakTrunk = this.add.rectangle(348, 162, 18, 56, 0x3b2416, 0.98).setDepth(182);
+      const oakCanopy = this.add.ellipse(348, 128, 105, 52, 0x6e4720, 0.92).setStrokeStyle(2, 0xd49a37).setDepth(183);
+      const hillLabel = this.add.text(320, 165, '🌳 COLINA DEL VIEJO ROBLE (CAP. II)', {
+        fontFamily: 'Cinzel, monospace',
+        fontSize: '7px',
+        color: '#b8ff99',
+        backgroundColor: 'rgba(14, 24, 16, 0.85)',
+        padding: { x: 4, y: 1 }
+      }).setOrigin(0.5).setDepth(185);
+      this.scenarioProps.push(hillBase, hillStep1, hillStep2, oakTrunk, oakCanopy, hillLabel);
+
       addProp('prop_sanctuary_cross', 125, 222, 48, 80, true);
       addProp('prop_sanctuary_altar', 188, 224, 64, 48, true);
       addProp('prop_street_lamp', 85, 212, 32, 96, true);
-      addProp('prop_street_lamp', 310, 212, 32, 96, true);
+      addProp('prop_street_lamp', 435, 212, 32, 96, true);
       addProp('prop_barrel', 235, 224, 32, 48, false);
       addProp('prop_parish_crate', 258, 225, 32, 32, false);
       addProp('prop_great_pyre', 555, 232, 96, 96, true);
-      addProp('prop_cemetery_gate', 610, 222, 64, 96, false);
+      addProp('prop_cemetery_gate', 680, 222, 64, 96, false);
+      addProp('prop_celtic_gravestone', 785, 226, 32, 48, false);
+      addProp('prop_celtic_gravestone', 880, 224, 32, 48, false);
+      addProp('prop_soul_brazier', 965, 226, 32, 48, true);
+      addProp('prop_mausoleum_facade', 1075, 218, 96, 128, true);
     } else if (scenarioIndex === 2) {
-      // Act II: Belltower & Cemetery Crypt Entrance Props
+      // Act II: Belltower & Cemetery Crypt Entrance Props across 1180px
       addProp('prop_mausoleum_facade', 565, 215, 96, 128, true);
       addProp('prop_celtic_gravestone', 140, 222, 32, 48, false);
       addProp('prop_celtic_gravestone', 320, 220, 32, 48, false);
@@ -3442,27 +3523,35 @@ export class GameScene extends Phaser.Scene {
       addProp('prop_soul_brazier', 195, 224, 32, 48, true);
       addProp('prop_soul_brazier', 485, 224, 32, 48, true);
       addProp('prop_barrel', 90, 232, 32, 48, false);
+      addProp('prop_great_pyre', 820, 232, 96, 96, true);
+      addProp('prop_cemetery_gate', 1040, 222, 64, 96, false);
     } else if (scenarioIndex === 3) {
-      // Act III: Great Stone Bridge Props
+      // Act III: Great Stone Bridge Props across 1180px
       addProp('prop_street_lamp', 110, 212, 32, 96, true);
       addProp('prop_street_lamp', 290, 212, 32, 96, true);
       addProp('prop_street_lamp', 470, 212, 32, 96, true);
       addProp('prop_cemetery_gate', 595, 222, 64, 96, false);
       addProp('prop_parish_crate', 145, 245, 32, 32, false);
       addProp('prop_barrel', 168, 246, 32, 48, false);
+      addProp('prop_street_lamp', 760, 212, 32, 96, true);
+      addProp('prop_mausoleum_facade', 1060, 218, 96, 128, true);
     } else if (scenarioIndex === 4) {
-      // Act IV: Londinium Citadel Props
+      // Act IV: Londinium Citadel Props across 1180px
       addProp('prop_sanctuary_altar', 310, 222, 64, 48, true);
       addProp('prop_soul_brazier', 240, 224, 32, 48, true);
       addProp('prop_soul_brazier', 380, 224, 32, 48, true);
       addProp('prop_mausoleum_facade', 575, 215, 96, 128, true);
+      addProp('prop_soul_brazier', 820, 224, 32, 48, true);
+      addProp('prop_sanctuary_cross', 1020, 222, 48, 80, true);
     } else {
-      // Act V: Inverted Cathedral Props
+      // Act V: Inverted Cathedral Props across 1180px
       addProp('prop_sanctuary_cross', 150, 235, 48, 80, true);
       addProp('prop_sanctuary_altar', 200, 238, 64, 48, true);
       addProp('prop_soul_brazier', 270, 225, 32, 48, true);
       addProp('prop_soul_brazier', 450, 225, 32, 48, true);
       addProp('prop_great_pyre', 540, 235, 96, 96, true);
+      addProp('prop_soul_brazier', 840, 225, 32, 48, true);
+      addProp('prop_sanctuary_altar', 1020, 235, 64, 48, true);
     }
   }
 
@@ -3597,18 +3686,19 @@ export class GameScene extends Phaser.Scene {
     const introLines = this.dialogues.getScenarioIntro(this.currentScenario);
 
     if (scenarioIndex === 1) {
-      // Oakhaven
+      // Oakhaven (4 Sub-Sectors: Atrio -> Colina del Viejo Roble -> Gran Pira -> Cementerio y Criptas)
       this.bgImage.setTexture('bg_oakhaven');
+      if (this.bgImageEast) this.bgImageEast.setTexture('bg_oakhaven');
       this.audio.playBgm('bgm_oakhaven_night');
-      this.emberParticles.setPosition(280, 255);
+      this.emberParticles.setPosition(540, 240);
       this.emberParticles.start();
 
-      // Spawn Elowen NPC near the garden fence (Animated 48x48 elowen_idle sprite sheet)
-      this.elowenShadow = this.add.ellipse(270, 225, 24, 7, 0x000000, 0.45).setDepth(224);
-      this.elowenSprite = this.normalizeSprite(this.add.sprite(270, 225, 'elowen_idle', 0), 54, 54, 0.5, 0.9).setDepth(225);
+      // Spawn Elowen NPC atop the elevated Colina del Viejo Roble (Chapter II: El Pájaro de Madera)
+      this.elowenShadow = this.add.ellipse(315, 196, 24, 7, 0x000000, 0.45).setDepth(195);
+      this.elowenSprite = this.normalizeSprite(this.add.sprite(315, 196, 'elowen_idle', 0), 54, 54, 0.5, 0.9).setDepth(196);
       this.playAnimSafe(this.elowenSprite, 'elowen_idle');
 
-      // Spawn Padre Cedric NPC holding lantern (Animated 48x48 cedric_idle sprite sheet)
+      // Spawn Padre Cedric NPC holding lantern in the Parish Atrium (Chapter I: El Peso de la Ceniza)
       this.cedricShadow = this.add.ellipse(160, 225, 24, 7, 0x000000, 0.45).setDepth(224);
       this.cedricSprite = this.normalizeSprite(this.add.sprite(160, 225, 'cedric_idle', 0), 54, 54, 0.5, 0.9).setDepth(225);
       this.playAnimSafe(this.cedricSprite, 'cedric_idle');
@@ -3623,6 +3713,7 @@ export class GameScene extends Phaser.Scene {
     } else if (scenarioIndex === 2) {
       // El Campanario y Granero del Sur (Caps VII-IX)
       this.bgImage.setTexture('bg_belltower');
+      if (this.bgImageEast) this.bgImageEast.setTexture('bg_belltower');
       this.audio.playBgm('bgm_oakhaven_night');
       this.emberParticles.stop();
 
@@ -3661,6 +3752,7 @@ export class GameScene extends Phaser.Scene {
     } else if (scenarioIndex === 3) {
       // El Gran Puente de Piedra y Camino de los Herejes (Caps X-XIII)
       this.bgImage.setTexture('bg_bridge');
+      if (this.bgImageEast) this.bgImageEast.setTexture('bg_bridge');
       this.audio.playBgm('bgm_londinium_city');
       this.emberParticles.stop();
 
@@ -3699,6 +3791,7 @@ export class GameScene extends Phaser.Scene {
     } else if (scenarioIndex === 4) {
       // Londinium — La Ciudadela Dorada (Caps XIV-XVII)
       this.bgImage.setTexture('bg_londinium');
+      if (this.bgImageEast) this.bgImageEast.setTexture('bg_londinium');
       this.audio.playBgm('bgm_londinium_city');
       this.emberParticles.stop();
 
@@ -3728,6 +3821,7 @@ export class GameScene extends Phaser.Scene {
     } else {
       // Catedral Invertida — El Sol del Abismo (Caps XVIII-XX)
       this.bgImage.setTexture('bg_cathedral');
+      if (this.bgImageEast) this.bgImageEast.setTexture('bg_cathedral');
       this.audio.playBgm('bgm_cathedral_abyss');
       this.emberParticles.setPosition(320, 180);
       this.emberParticles.start();

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
+import { GothicArticulatedRig3D, ClipEventType3D } from '../../src/presentation/three/GothicArticulatedRig3D';
 
 describe('Camera & Input Architecture (Vice City & OpenLara Solution)', () => {
   describe('Shortest Angular Arc & Turning Math', () => {
@@ -189,6 +190,67 @@ describe('Camera & Input Architecture (Vice City & OpenLara Solution)', () => {
 
     it('defaults to gameplay context when all modal flags are false', () => {
       expect(resolveInputContext({})).toBe('gameplay');
+    });
+  });
+
+  describe('OpenLara Hierarchical 3D Articulated Rig (GothicArticulatedRig3D)', () => {
+    it('constructs full hierarchical joint tree for Thomas and Khaterine', () => {
+      const thomasRig = new GothicArticulatedRig3D('thomas');
+      const khaterineRig = new GothicArticulatedRig3D('khaterine');
+
+      expect(thomasRig.nodes.pelvis.parent).toBe(thomasRig.nodes.root);
+      expect(thomasRig.nodes.torso.parent).toBe(thomasRig.nodes.pelvis);
+      expect(thomasRig.nodes.shoulderR.parent).toBe(thomasRig.nodes.torso);
+      expect(thomasRig.nodes.forearmR.parent).toBe(thomasRig.nodes.shoulderR);
+      expect(thomasRig.nodes.weaponSocketR.parent).toBe(thomasRig.nodes.forearmR);
+      expect(thomasRig.nodes.shinL.parent).toBe(thomasRig.nodes.hipL);
+
+      expect(khaterineRig.nodes.weaponSocketL.parent).toBe(khaterineRig.nodes.forearmL);
+    });
+
+    it('separates lower-body stride locomotion from upper-body sword slash & emits ClipEvents', () => {
+      const rig = new GothicArticulatedRig3D('thomas');
+      const emittedEvents: ClipEventType3D[] = [];
+      rig.onClipEvent(ev => emittedEvents.push(ev));
+
+      // Simulate running while executing a heavy sword cleave
+      for (let i = 1; i <= 15; i++) {
+        rig.update({
+          delta: 0.05,
+          elapsedTime: i * 0.05,
+          planarSpeed: 4.8,
+          isMoving: true,
+          isDodging: false,
+          isGuarding: false,
+          isAttacking: true,
+          isHeavyAttack: true,
+          isArmed: true,
+          isDefeated: false
+        });
+      }
+
+      expect(rig.getLowerState()).toBe('run');
+      expect(rig.getUpperState()).toBe('slash_heavy');
+      expect(emittedEvents).toContain('weaponContact');
+      expect(emittedEvents.some(e => e === 'footLeft' || e === 'footRight')).toBe(true);
+    });
+  });
+
+  describe('Multi-Sector Oakhaven Terrain Elevation (Colina del Viejo Roble +2.2m)', () => {
+    function getTerrainHeightAt(x: number, z: number): number {
+      if (x > 4.5 && z >= 0.4 && z <= 9.6) {
+        const t = THREE.MathUtils.clamp((x - 4.5) / 3.9, 0, 1);
+        const smooth = t * t * (3 - 2 * t);
+        return smooth * 2.2;
+      }
+      return 0;
+    }
+
+    it('returns 0m on the main Oakhaven street and rises smoothly to +2.2m on Old Oak Hill', () => {
+      expect(getTerrainHeightAt(0, 4.0)).toBe(0);
+      expect(getTerrainHeightAt(4.5, 5.0)).toBe(0);
+      expect(getTerrainHeightAt(6.45, 5.0)).toBeCloseTo(1.1, 2);
+      expect(getTerrainHeightAt(9.5, 5.0)).toBeCloseTo(2.2, 4);
     });
   });
 });
