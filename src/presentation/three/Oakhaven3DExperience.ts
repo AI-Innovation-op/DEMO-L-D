@@ -1,5 +1,10 @@
 import * as THREE from 'three';
 import { WebAudioSoundAdapter } from '../../infrastructure/audio/WebAudioSoundAdapter';
+import {
+  resolveDynamic3DSoundscape,
+  ACT_SOUNDSCAPE_CATALOG,
+  SoundscapeTrackId
+} from '../../domain/audio/ActSoundscapeCatalog';
 import { Inventory, CANONICAL_WILLOW_RELIC } from '../../domain/inventory/Inventory';
 import { Progression } from '../../domain/progression/Progression';
 import { HeroType } from '../../domain/progression/Skill';
@@ -553,6 +558,11 @@ export class Oakhaven3DExperience {
   private sectorCompassEl?: HTMLDivElement;
   private dialogueToastContainerEl?: HTMLDivElement;
 
+  // Dynamic Act Soundscape & Adaptive Boss Music Director
+  private activeSoundscapeTrack: SoundscapeTrackId | null = null;
+  private soundscapeTitleEl?: HTMLDivElement;
+  private soundscapeAtmosEl?: HTMLDivElement;
+
   // Arsenal & Munitions Manager
   private arsenalManager: ArsenalManager = new ArsenalManager();
   private activeBurnEffects: Array<{ targetId: string; ticksLeft: number; dmgPerTick: number; timer: number }> = [];
@@ -672,8 +682,8 @@ export class Oakhaven3DExperience {
     // 7. Bind Inputs
     this.bindInputs();
 
-    // 8. Start Atmospheric BGM & Sequential Campaign Entry
-    this.audio.playBgm('bgm_oakhaven_night');
+    // 8. Start Dynamic Atmospheric Soundscape & Sequential Campaign Entry
+    this.syncDynamicSoundscape();
     this.syncCampaignSequence(0.016);
     if (!hadExistingSave) {
       this.openPrologueModal(0);
@@ -6045,6 +6055,36 @@ export class Oakhaven3DExperience {
     }
   }
 
+  private syncDynamicSoundscape(): void {
+    const nextTrack = resolveDynamic3DSoundscape({
+      currentArea: this.dungeonAreaManager.currentArea,
+      narrativePhase: this.oakhavenNarrativePhase,
+      morwennaActive: this.morwennaState !== 'DORMANT' && this.morwennaState !== 'DEAD',
+      inquisitorActive: !this.inquisitorEncounter.isDefeated && this.inquisitorEncounter.state !== 'DORMANT',
+      rootProwlerActive: !this.rootProwlerEncounter.isDefeated && this.rootProwlerEncounter.state !== 'PATROL',
+      crucibleActive: !this.crucibleGuardianEncounter.isDefeated && this.crucibleGuardianEncounter.state !== 'DORMANT',
+      vaneActive: !this.captainVaneEncounter.isDefeated && this.captainVaneEncounter.state !== 'GUARDING',
+      malphasActive: !this.rexMalphasEncounter.isDefeated && this.rexMalphasEncounter.state !== 'ASTRAL_IDLE',
+      astarothActive: !this.astarothEncounter.isDefeated && this.astarothEncounter.state !== 'COSMIC_DAWN'
+    });
+
+    if (nextTrack === this.activeSoundscapeTrack) {
+      return;
+    }
+
+    this.activeSoundscapeTrack = nextTrack;
+    this.audio.playBgm(nextTrack);
+
+    const spec = ACT_SOUNDSCAPE_CATALOG[nextTrack];
+    if (this.soundscapeTitleEl) {
+      this.soundscapeTitleEl.innerText = `🎼 ${spec.displayLabel}`;
+      this.soundscapeTitleEl.style.color = spec.isBoss ? '#ff99aa' : '#ffd700';
+    }
+    if (this.soundscapeAtmosEl) {
+      this.soundscapeAtmosEl.innerText = spec.atmosphereTag;
+    }
+  }
+
   private updateActSecondaryEnemies(delta: number): void {
     const area = this.dungeonAreaManager.currentArea;
     const pPos = this.playerGroup.position;
@@ -6559,6 +6599,14 @@ export class Oakhaven3DExperience {
                 🎯 [R] LOCK-ON: LIBRE
               </button>
             </div>
+            <div style="background: rgba(24, 14, 38, 0.72); border: 1px solid rgba(155, 89, 182, 0.35); border-radius: 3px; padding: 3px 6px;">
+              <div id="p3d-soundscape-title" style="font-family: monospace; font-size: 6.5px; font-weight: bold; color: #ffd700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                🎼 Acto I · Alba de Niebla en Oakhaven
+              </div>
+              <div id="p3d-soundscape-atmos" style="font-family: Georgia, serif; font-size: 6.3px; font-style: italic; color: #bfb2d6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                Brisa matinal y laúd de San Jude
+              </div>
+            </div>
 
             <div style="font-size: 6.8px; font-weight: bold; color: #88ccff; letter-spacing: 0.9px; border-bottom: 1px solid rgba(59,107,153,0.35); padding-bottom: 2px; margin-top: 1px;">
               ✦ SANTUARIO & MODOS
@@ -7016,6 +7064,11 @@ export class Oakhaven3DExperience {
 
     const btnAudio = this.uiOverlay.querySelector('#btn-toggle-audio') as HTMLButtonElement;
     if (btnAudio) {
+      const initiallyMuted = this.audio.getIsMuted();
+      btnAudio.innerText = initiallyMuted ? '🔇 [M] AUDIO: MUDO' : '🎵 [M] AUDIO: ACTIVO';
+      btnAudio.style.background = initiallyMuted ? '#2b1010' : '#142a1f';
+      btnAudio.style.color = initiallyMuted ? '#ff9999' : '#a3ffc7';
+      btnAudio.style.borderColor = initiallyMuted ? '#c0392b' : '#27ae60';
       btnAudio.addEventListener('click', () => this.toggleAudio());
     }
 
@@ -7081,6 +7134,8 @@ export class Oakhaven3DExperience {
     this.controlsBarEl = this.uiOverlay.querySelector('#p3d-controls-bar') as HTMLDivElement;
     this.sectorCompassEl = this.uiOverlay.querySelector('#p3d-sector-compass') as HTMLDivElement;
     this.dialogueToastContainerEl = this.uiOverlay.querySelector('#p3d-dialogue-toast-container') as HTMLDivElement;
+    this.soundscapeTitleEl = this.uiOverlay.querySelector('#p3d-soundscape-title') as HTMLDivElement;
+    this.soundscapeAtmosEl = this.uiOverlay.querySelector('#p3d-soundscape-atmos') as HTMLDivElement;
 
     const btnCompactMenu = this.uiOverlay.querySelector('#btn-toggle-compact-menu') as HTMLButtonElement | null;
     if (btnCompactMenu) {
@@ -7475,6 +7530,7 @@ export class Oakhaven3DExperience {
   };
 
   private handlePointerDown = (e: PointerEvent): void => {
+    this.audio.unlockAndResumeIfNeeded();
     if (e.target !== this.renderer?.domElement) return;
     if (e.button === 2) {
       this.toggleLockOn();
@@ -7507,6 +7563,7 @@ export class Oakhaven3DExperience {
       if (!e.repeat) this.toggleAudio();
       return;
     }
+    this.audio.unlockAndResumeIfNeeded();
 
     // --- CONTEXT: PROLOGUE CUTSCENE MODAL ---
     if (context === 'prologue') {
@@ -11946,6 +12003,7 @@ export class Oakhaven3DExperience {
     this.updateLockOn(delta);
     this.updateSectorCompassAndShalemGuide(delta);
     this.syncCampaignSequence(delta);
+    this.syncDynamicSoundscape();
     if (this.hudCompactController.tick(delta)) {
       this.syncCompactHudUI();
     }
@@ -14947,6 +15005,7 @@ export class Oakhaven3DExperience {
     }
 
     this.visualDesigns.dispose();
+    this.audio.stopBgm(true);
 
     this.releaseAllInputs();
 

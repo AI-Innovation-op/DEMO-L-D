@@ -1,8 +1,13 @@
 import { IAudioPort } from '../../application/ports/IAudioPort';
+import {
+  ActSoundscapeSpec,
+  resolveSoundscapeSpec
+} from '../../domain/audio/ActSoundscapeCatalog';
 
 /**
- * Procedural WebAudio sound generator with full Mute / Unmute capability.
- * Produces crisp arcade / medieval fantasy SFX without requiring external audio files.
+ * Procedural WebAudio sound & adaptive dark-gothic soundscape generator
+ * with full Mute / Unmute capability, smooth BGM crossfades, LFO-modulated
+ * atmospheric noise beds (wind, forge, hearth, abyss) and dynamic boss themes.
  */
 export class WebAudioSoundAdapter implements IAudioPort {
   private static instance: WebAudioSoundAdapter;
@@ -11,8 +16,12 @@ export class WebAudioSoundAdapter implements IAudioPort {
   private bgmInterval: number | null = null;
   private bellInterval: number | null = null;
   private droneOscs: OscillatorNode[] = [];
+  private ambientSources: AudioScheduledSourceNode[] = [];
+  private bgmMasterGain: GainNode | null = null;
+  private pinkNoiseBuffer: AudioBuffer | null = null;
   private isMuted: boolean = false;
-  private lastTrackKey: string = 'bgm_oakhaven_night';
+  private isBgmPlaying: boolean = false;
+  private lastTrackKey: string = 'bgm_oakhaven_dawn';
 
   constructor() {
     // Restore mute preference from localStorage if available
@@ -29,6 +38,28 @@ export class WebAudioSoundAdapter implements IAudioPort {
       WebAudioSoundAdapter.instance = new WebAudioSoundAdapter();
     }
     return WebAudioSoundAdapter.instance;
+  }
+
+  public getCurrentTrackKey(): string {
+    return this.lastTrackKey;
+  }
+
+  public getCurrentTrackSpec(): ActSoundscapeSpec {
+    return resolveSoundscapeSpec(this.lastTrackKey);
+  }
+
+  public unlockAndResumeIfNeeded(): void {
+    if (this.isMuted) return;
+    try {
+      const ctx = this.initContext();
+      if (!ctx) return;
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+      if (!this.isBgmPlaying && this.lastTrackKey) {
+        this.playBgm(this.lastTrackKey, true);
+      }
+    } catch {}
   }
 
   public toggleMute(): boolean {
@@ -53,105 +84,361 @@ export class WebAudioSoundAdapter implements IAudioPort {
     if (this.isMuted) return null;
     if (!this.ctx) {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (!AudioCtx) return null;
       this.ctx = new AudioCtx();
     }
     if (this.ctx.state === 'suspended') {
-      this.ctx.resume();
+      this.ctx.resume().catch(() => {});
     }
     return this.ctx;
   }
 
+  private getOrCreatePinkNoiseBuffer(ctx: AudioContext): AudioBuffer | null {
+    if (this.pinkNoiseBuffer && this.pinkNoiseBuffer.sampleRate === ctx.sampleRate) {
+      return this.pinkNoiseBuffer;
+    }
+    try {
+      const durationSec = 3.0;
+      const bufferSize = Math.floor(ctx.sampleRate * durationSec);
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const output = buffer.getChannelData(0);
+      // Paul Kellet's refined pink-noise filter for warm, organic wind/fire/void ambience
+      let b0 = 0;
+      let b1 = 0;
+      let b2 = 0;
+      let b3 = 0;
+      let b4 = 0;
+      let b5 = 0;
+      let b6 = 0;
+      for (let i = 0; i < bufferSize; i++) {
+        const white = Math.random() * 2 - 1;
+        b0 = 0.99886 * b0 + white * 0.0555179;
+        b1 = 0.99332 * b1 + white * 0.0750759;
+        b2 = 0.96900 * b2 + white * 0.1538520;
+        b3 = 0.86650 * b3 + white * 0.3104856;
+        b4 = 0.55000 * b4 + white * 0.5329522;
+        b5 = -0.7616 * b5 - white * 0.0168980;
+        output[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.11;
+        b6 = white * 0.115926;
+      }
+      this.pinkNoiseBuffer = buffer;
+      return buffer;
+    } catch {
+      return null;
+    }
+  }
+
   public playBgm(trackKey: string, _loop: boolean = true): void {
-    this.lastTrackKey = trackKey;
+    const spec = resolveSoundscapeSpec(trackKey);
+    const normalizedKey = spec.id;
+
+    // Idempotent guard: avoid restarting active track when area/boss polling re-checks
+    if (this.isBgmPlaying && this.lastTrackKey === normalizedKey && !this.isMuted) {
+      return;
+    }
+
+    this.lastTrackKey = normalizedKey;
     if (this.isMuted) return;
 
     try {
-      this.stopBgm();
+      this.stopBgm(true);
       const ctx = this.initContext();
       if (!ctx) return;
 
-      const isBoss = trackKey.includes('boss');
+      const now = ctx.currentTime;
 
-      // 1. Polyphonic Cathedral Organ Drone (lowpass filtered open fifths)
-      const filter = ctx.createBiquadFilter();
-      filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(isBoss ? 260 : 380, ctx.currentTime);
-      filter.connect(ctx.destination);
+      // Dedicated Master Bus per track with smooth 0.75s fade-in
+      const masterBus = ctx.createGain();
+      masterBus.gain.setValueAtTime(0.0001, now);
+      masterBus.gain.linearRampToValueAtTime(1.0, now + 0.75);
+      masterBus.connect(ctx.destination);
+      this.bgmMasterGain = masterBus;
+      this.isBgmPlaying = true;
+
+      // 1. Polyphonic Gothic Harmonic Drone (lowpass filtered, optional eerie detune for Londinium/Abyss)
+      const droneFilter = ctx.createBiquadFilter();
+      droneFilter.type = 'lowpass';
+      droneFilter.frequency.setValueAtTime(spec.droneFilterHz, now);
+      droneFilter.connect(masterBus);
 
       const droneGain = ctx.createGain();
-      droneGain.gain.setValueAtTime(0.04, ctx.currentTime);
-      droneGain.connect(filter);
+      droneGain.gain.setValueAtTime(spec.droneGain, now);
+      droneGain.connect(droneFilter);
 
-      const droneFreqs = isBoss ? [73.4, 110.0, 146.8] : [110.0, 164.8, 220.0];
-      droneFreqs.forEach(freq => {
+      spec.droneFreqs.forEach((freq, idx) => {
         const osc = ctx.createOscillator();
-        osc.type = isBoss ? 'sawtooth' : 'triangle';
-        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        osc.type = spec.droneWave;
+        osc.frequency.setValueAtTime(freq, now);
+        if (spec.detuneCents && idx > 0) {
+          osc.detune.setValueAtTime(idx % 2 === 1 ? spec.detuneCents : -spec.detuneCents, now);
+        }
         osc.connect(droneGain);
-        osc.start();
+        osc.start(now);
         this.droneOscs.push(osc);
       });
 
-      // 2. Arpeggiated melody line (medieval fantasy mode)
-      const noteSeq = isBoss
-        ? [146.8, 155.6, 146.8, 174.6, 130.8, 146.8, 174.6, 220.0]
-        : [220.0, 246.9, 261.6, 293.7, 329.6, 293.7, 261.6, 196.0];
+      // 2. LFO-Modulated Atmospheric Noise Bed (wind gusts, forge heat, hearth fire, subterranean hum, abyss void)
+      const noiseBuffer = this.getOrCreatePinkNoiseBuffer(ctx);
+      if (noiseBuffer) {
+        const noiseSrc = ctx.createBufferSource();
+        noiseSrc.buffer = noiseBuffer;
+        noiseSrc.loop = true;
 
+        const noiseFilter = ctx.createBiquadFilter();
+        noiseFilter.type = spec.noiseFilterType;
+        noiseFilter.frequency.setValueAtTime(spec.noiseBaseFreqHz, now);
+        noiseFilter.Q.setValueAtTime(spec.noiseFilterType === 'bandpass' ? 2.4 : 0.9, now);
+
+        const noiseGain = ctx.createGain();
+        noiseGain.gain.setValueAtTime(spec.noiseGain, now);
+
+        // Slow LFO sweeps the filter frequency to create organic gusts / breathing abyss
+        const lfoOsc = ctx.createOscillator();
+        const lfoGain = ctx.createGain();
+        lfoOsc.type = 'sine';
+        lfoOsc.frequency.setValueAtTime(spec.noiseLfoRateHz, now);
+        lfoGain.gain.setValueAtTime(spec.noiseLfoDepthHz, now);
+        lfoOsc.connect(lfoGain);
+        lfoGain.connect(noiseFilter.frequency);
+
+        noiseSrc.connect(noiseFilter);
+        noiseFilter.connect(noiseGain);
+        noiseGain.connect(masterBus);
+
+        noiseSrc.start(now);
+        lfoOsc.start(now);
+        this.ambientSources.push(noiseSrc, lfoOsc);
+      }
+
+      // 3. Adaptive Melodic Arpeggiator + Dynamic Percussion Layer
       let step = 0;
+      const melodyFilter = ctx.createBiquadFilter();
+      melodyFilter.type = 'lowpass';
+      melodyFilter.frequency.setValueAtTime(spec.isBoss ? 1450 : 1200, now);
+      melodyFilter.connect(masterBus);
+
       this.bgmInterval = window.setInterval(() => {
-        if (!this.ctx || this.isMuted) return;
-        const now = this.ctx.currentTime;
+        if (!this.ctx || this.isMuted || this.bgmMasterGain !== masterBus) return;
+        const t = this.ctx.currentTime;
+        const freq = spec.melodyFreqs[step % spec.melodyFreqs.length];
+
+        // Primary melody voice
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
+        osc.type = spec.melodyWave;
+        osc.frequency.setValueAtTime(freq, t);
+        if (spec.detuneCents && step % 3 === 0) {
+          osc.detune.setValueAtTime(spec.detuneCents * 0.7, t);
+        }
 
-        osc.type = isBoss ? 'sawtooth' : 'triangle';
-        osc.frequency.setValueAtTime(noteSeq[step % noteSeq.length], now);
-
-        const vol = isBoss ? 0.05 : 0.045;
-        gain.gain.setValueAtTime(vol, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + (isBoss ? 0.28 : 0.38));
+        gain.gain.setValueAtTime(0.001, t);
+        gain.gain.linearRampToValueAtTime(spec.noteGain, t + 0.025);
+        gain.gain.exponentialRampToValueAtTime(0.0008, t + spec.noteDurationSec);
 
         osc.connect(gain);
-        gain.connect(this.ctx.destination);
+        gain.connect(melodyFilter);
+        osc.start(t);
+        osc.stop(t + spec.noteDurationSec + 0.02);
 
-        osc.start(now);
-        osc.stop(now + (isBoss ? 0.29 : 0.39));
+        // Climax boss harmonic choir upper-fifth shimmer on accented beats
+        if (spec.id === 'bgm_boss_final_eclipse' && step % 4 === 0) {
+          const choir = this.ctx.createOscillator();
+          const choirGain = this.ctx.createGain();
+          choir.type = 'triangle';
+          choir.frequency.setValueAtTime(freq * 1.5, t);
+          choirGain.gain.setValueAtTime(0.001, t);
+          choirGain.gain.linearRampToValueAtTime(0.024, t + 0.05);
+          choirGain.gain.exponentialRampToValueAtTime(0.0008, t + 0.42);
+          choir.connect(choirGain);
+          choirGain.connect(melodyFilter);
+          choir.start(t);
+          choir.stop(t + 0.44);
+        }
+
+        // Rhythmic percussion synthesis per Act / Boss pattern
+        this.triggerStepPercussion(spec.percussionPattern, step, t, masterBus);
+
         step++;
-      }, isBoss ? 280 : 380);
+      }, spec.stepMs);
 
-      // 3. Cathedral Bell Chime (every 12 seconds in normal mode)
-      if (!isBoss) {
+      // 4. Periodic Environmental & Musical Accents (bells, cavern drips, venetian glass, dawn harp, abyss pulse)
+      if (spec.accentChimeIntervalMs > 0 && spec.accentChimeKind !== 'none') {
         this.bellInterval = window.setInterval(() => {
-          if (!this.ctx || this.isMuted) return;
-          this.triggerCathedralBell();
-        }, 12000);
+          if (!this.ctx || this.isMuted || this.bgmMasterGain !== masterBus) return;
+          this.triggerSoundscapeAccent(spec.accentChimeKind, masterBus);
+        }, spec.accentChimeIntervalMs);
       }
     } catch {}
   }
 
-  private triggerCathedralBell(): void {
-    if (!this.ctx || this.isMuted) return;
-    const now = this.ctx.currentTime;
-    const bellPartials = [440, 880, 1320];
-    bellPartials.forEach((freq, idx) => {
-      const osc = this.ctx!.createOscillator();
-      const gain = this.ctx!.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, now);
+  private triggerStepPercussion(
+    pattern: ActSoundscapeSpec['percussionPattern'],
+    step: number,
+    now: number,
+    dest: AudioNode
+  ): void {
+    if (!this.ctx || pattern === 'none') return;
 
-      const amp = 0.035 / (idx + 1);
-      gain.gain.setValueAtTime(amp, now);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 3.8);
-
+    if (pattern === 'anvil' && step % 8 === 0) {
+      // Distant resonant bronze forge strike in Act II Belltower
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(520, now);
+      osc.frequency.exponentialRampToValueAtTime(340, now + 0.22);
+      gain.gain.setValueAtTime(0.028, now);
+      gain.gain.exponentialRampToValueAtTime(0.0005, now + 0.24);
       osc.connect(gain);
-      gain.connect(this.ctx!.destination);
-
+      gain.connect(dest);
       osc.start(now);
-      osc.stop(now + 3.9);
-    });
+      osc.stop(now + 0.25);
+      return;
+    }
+
+    if (pattern === 'march' && step % 4 === 0) {
+      // Subtle heroic bridge march drum
+      const drum = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      drum.type = 'sine';
+      drum.frequency.setValueAtTime(105, now);
+      drum.frequency.exponentialRampToValueAtTime(48, now + 0.14);
+      gain.gain.setValueAtTime(0.048, now);
+      gain.gain.exponentialRampToValueAtTime(0.0008, now + 0.16);
+      drum.connect(gain);
+      gain.connect(dest);
+      drum.start(now);
+      drum.stop(now + 0.17);
+      return;
+    }
+
+    if (pattern === 'war_timpani' && (step % 4 === 0 || step % 4 === 2)) {
+      const strong = step % 4 === 0;
+      const drum = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      drum.type = 'sine';
+      drum.frequency.setValueAtTime(strong ? 118 : 92, now);
+      drum.frequency.exponentialRampToValueAtTime(42, now + 0.16);
+      gain.gain.setValueAtTime(strong ? 0.085 : 0.055, now);
+      gain.gain.exponentialRampToValueAtTime(0.0008, now + 0.18);
+      drum.connect(gain);
+      gain.connect(dest);
+      drum.start(now);
+      drum.stop(now + 0.19);
+      return;
+    }
+
+    if (pattern === 'eclipse_cataclysm' && (step % 2 === 0)) {
+      const downbeat = step % 4 === 0;
+      const drum = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      drum.type = downbeat ? 'triangle' : 'sine';
+      drum.frequency.setValueAtTime(downbeat ? 128 : 88, now);
+      drum.frequency.exponentialRampToValueAtTime(36, now + 0.15);
+      gain.gain.setValueAtTime(downbeat ? 0.095 : 0.052, now);
+      gain.gain.exponentialRampToValueAtTime(0.0008, now + 0.17);
+      drum.connect(gain);
+      gain.connect(dest);
+      drum.start(now);
+      drum.stop(now + 0.18);
+    }
   }
 
-  public stopBgm(): void {
+  private triggerSoundscapeAccent(
+    kind: ActSoundscapeSpec['accentChimeKind'],
+    dest: AudioNode
+  ): void {
+    if (!this.ctx || this.isMuted) return;
+    const now = this.ctx.currentTime;
+
+    if (kind === 'cathedral_bell' || kind === 'bronze_bell') {
+      const base = kind === 'bronze_bell' ? 146.83 : 440;
+      const partials = kind === 'bronze_bell' ? [base, base * 2.42, base * 3.1] : [base, base * 2, base * 3];
+      partials.forEach((freq, idx) => {
+        const osc = this.ctx!.createOscillator();
+        const gain = this.ctx!.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, now);
+        const amp = (kind === 'bronze_bell' ? 0.042 : 0.03) / (idx + 1);
+        gain.gain.setValueAtTime(amp, now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 3.4);
+        osc.connect(gain);
+        gain.connect(dest);
+        osc.start(now);
+        osc.stop(now + 3.5);
+      });
+      return;
+    }
+
+    if (kind === 'crystal_drip') {
+      // Echoing subterranean water drop in San Jude Crypts
+      [0, 0.24].forEach((delay, idx) => {
+        const osc = this.ctx!.createOscillator();
+        const gain = this.ctx!.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1180, now + delay);
+        osc.frequency.exponentialRampToValueAtTime(1680, now + delay + 0.06);
+        gain.gain.setValueAtTime(idx === 0 ? 0.032 : 0.014, now + delay);
+        gain.gain.exponentialRampToValueAtTime(0.0002, now + delay + 0.14);
+        osc.connect(gain);
+        gain.connect(dest);
+        osc.start(now + delay);
+        osc.stop(now + delay + 0.15);
+      });
+      return;
+    }
+
+    if (kind === 'venetian_glass') {
+      // Shimmering gilded glass overtones in Londinium
+      [784, 1175, 1480].forEach((freq, idx) => {
+        const osc = this.ctx!.createOscillator();
+        const gain = this.ctx!.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, now + idx * 0.07);
+        gain.gain.setValueAtTime(0.022, now + idx * 0.07);
+        gain.gain.exponentialRampToValueAtTime(0.0002, now + idx * 0.07 + 1.4);
+        osc.connect(gain);
+        gain.connect(dest);
+        osc.start(now + idx * 0.07);
+        osc.stop(now + idx * 0.07 + 1.45);
+      });
+      return;
+    }
+
+    if (kind === 'dawn_harp') {
+      // Gentle ascending sacred harp shimmer for Oakhaven Dawn / Black Willow / First Dawn Epilogue
+      [392, 493.88, 587.33, 783.99].forEach((freq, idx) => {
+        const osc = this.ctx!.createOscillator();
+        const gain = this.ctx!.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, now + idx * 0.09);
+        gain.gain.setValueAtTime(0.024, now + idx * 0.09);
+        gain.gain.exponentialRampToValueAtTime(0.0002, now + idx * 0.09 + 1.5);
+        osc.connect(gain);
+        gain.connect(dest);
+        osc.start(now + idx * 0.09);
+        osc.stop(now + idx * 0.09 + 1.55);
+      });
+      return;
+    }
+
+    if (kind === 'abyss_pulse') {
+      // Deep Black Sun gravity resonance pulse
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(78, now);
+      osc.frequency.exponentialRampToValueAtTime(42, now + 1.6);
+      gain.gain.setValueAtTime(0.058, now);
+      gain.gain.exponentialRampToValueAtTime(0.0003, now + 1.65);
+      osc.connect(gain);
+      gain.connect(dest);
+      osc.start(now);
+      osc.stop(now + 1.7);
+    }
+  }
+
+  public stopBgm(fadeOut: boolean = false): void {
+    this.isBgmPlaying = false;
     if (this.bgmInterval) {
       clearInterval(this.bgmInterval);
       this.bgmInterval = null;
@@ -160,13 +447,48 @@ export class WebAudioSoundAdapter implements IAudioPort {
       clearInterval(this.bellInterval);
       this.bellInterval = null;
     }
-    this.droneOscs.forEach(osc => {
-      try {
-        osc.stop();
-        osc.disconnect();
-      } catch {}
-    });
+
+    const oldDrones = this.droneOscs;
+    const oldAmbients = this.ambientSources;
+    const oldMaster = this.bgmMasterGain;
     this.droneOscs = [];
+    this.ambientSources = [];
+    this.bgmMasterGain = null;
+
+    const cleanupNodes = (): void => {
+      oldDrones.forEach(osc => {
+        try {
+          osc.stop();
+          osc.disconnect();
+        } catch {}
+      });
+      oldAmbients.forEach(src => {
+        try {
+          src.stop();
+          src.disconnect();
+        } catch {}
+      });
+      if (oldMaster) {
+        try {
+          oldMaster.disconnect();
+        } catch {}
+      }
+    };
+
+    if (fadeOut && this.ctx && oldMaster) {
+      try {
+        const now = this.ctx.currentTime;
+        oldMaster.gain.cancelScheduledValues(now);
+        oldMaster.gain.setValueAtTime(Math.max(0.0001, oldMaster.gain.value), now);
+        oldMaster.gain.linearRampToValueAtTime(0.0001, now + 0.35);
+        window.setTimeout(cleanupNodes, 380);
+      } catch {
+        cleanupNodes();
+      }
+    } else {
+      cleanupNodes();
+    }
+
     if (this.currentBgmOsc) {
       try {
         this.currentBgmOsc.stop();
