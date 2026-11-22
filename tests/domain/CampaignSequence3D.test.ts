@@ -4,6 +4,11 @@ import {
   CAMPAIGN_PROLOGUE_SLIDES,
   CampaignWorldSnapshot3D
 } from '../../src/domain/story/CampaignSequence3D';
+import {
+  ACT_SECONDARY_ENEMY_SPECS_3D,
+  ACT_COMPANION_ANCHORS_3D,
+  CINEMATIC_CAMERA_BEATS_3D
+} from '../../src/domain/story/ActEncountersAndLore3D';
 import { GameSaveManager } from '../../src/infrastructure/storage/GameSaveManager';
 
 function createInitialSnapshot(overrides: Partial<CampaignWorldSnapshot3D> = {}): CampaignWorldSnapshot3D {
@@ -249,5 +254,72 @@ describe('3D Sequential Story Campaign Director (Prologue -> Caps. I-XX -> First
     const loaded = GameSaveManager.loadGame();
     expect(loaded?.world.unlockedChapterIds).toEqual([1, 2, 3, 4, 5, 6, 7]);
     expect(loaded?.world.currentChapterId).toBe(7);
+  });
+
+  it('defines secondary patrol enemies across Acts II, IV, and V with valid combat specs', () => {
+    expect(ACT_SECONDARY_ENEMY_SPECS_3D).toHaveLength(6);
+
+    const byArea = new Map<string, number>();
+    const ids = new Set<string>();
+    for (const enemy of ACT_SECONDARY_ENEMY_SPECS_3D) {
+      expect(ids.has(enemy.id)).toBe(false);
+      ids.add(enemy.id);
+      expect(enemy.maxHp).toBeGreaterThan(0);
+      expect(enemy.attackDamage).toBeGreaterThan(0);
+      expect(enemy.expReward).toBeGreaterThan(0);
+      expect(enemy.moveSpeed).toBeGreaterThan(0);
+      byArea.set(enemy.area, (byArea.get(enemy.area) ?? 0) + 1);
+    }
+
+    expect(byArea.get('belltower_summit')).toBe(2);
+    expect(byArea.get('londinium_citadel')).toBe(2);
+    expect(byArea.get('inverted_cathedral')).toBe(2);
+  });
+
+  it('defines safe-alcove companion anchors across Acts II-V with branching canonical lore', () => {
+    expect(ACT_COMPANION_ANCHORS_3D).toHaveLength(4);
+
+    const coveredAreas = ACT_COMPANION_ANCHORS_3D.map(anchor => anchor.area);
+    expect(coveredAreas).toEqual([
+      'belltower_summit',
+      'great_stone_bridge',
+      'londinium_citadel',
+      'inverted_cathedral'
+    ]);
+
+    for (const anchor of ACT_COMPANION_ANCHORS_3D) {
+      expect(anchor.greeting.length).toBeGreaterThan(20);
+      expect(anchor.branches.length).toBeGreaterThanOrEqual(2);
+      const branchIds = new Set<string>();
+      for (const branch of anchor.branches) {
+        expect(branchIds.has(branch.id)).toBe(false);
+        branchIds.add(branch.id);
+        expect(branch.label.length).toBeGreaterThan(5);
+        expect(branch.response.length).toBeGreaterThan(20);
+      }
+    }
+  });
+
+  it('defines all 8 canonical 3D cinematic camera beats with positive durations and captions', () => {
+    const expectedIds = [
+      'morwenna_awaken',
+      'crucible_awaken',
+      'crucible_jam',
+      'vane_awaken',
+      'master_mirror_shatter',
+      'malphas_awaken',
+      'shalem_lion_awaken',
+      'first_dawn_epilogue'
+    ] as const;
+
+    expect(Object.keys(CINEMATIC_CAMERA_BEATS_3D).sort()).toEqual([...expectedIds].sort());
+
+    for (const id of expectedIds) {
+      const beat = CINEMATIC_CAMERA_BEATS_3D[id];
+      expect(beat.id).toBe(id);
+      expect(beat.durationSec).toBeGreaterThan(1.0);
+      expect(beat.caption.length).toBeGreaterThan(10);
+      expect(beat.lookOffsetY).toBeGreaterThan(0);
+    }
   });
 });

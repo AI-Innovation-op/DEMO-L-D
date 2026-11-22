@@ -20,6 +20,15 @@ import {
   CAMPAIGN_PROLOGUE_SLIDES,
   CampaignObjective3D
 } from '../../domain/story/CampaignSequence3D';
+import {
+  ACT_SECONDARY_ENEMY_SPECS_3D,
+  ACT_COMPANION_ANCHORS_3D,
+  CINEMATIC_CAMERA_BEATS_3D,
+  ActEnemySpawnSpec3D,
+  ActCompanionAnchorSpec3D,
+  CinematicBeatSpec3D,
+  LoreChoiceBranch3D
+} from '../../domain/story/ActEncountersAndLore3D';
 import { ArsenalManager, ArrowType } from '../../domain/combat/ArsenalManager';
 import { ThreeVisualDesignSystem } from './ThreeVisualDesignSystem';
 import { VISUAL_PACK_3D_CONCEPTS } from '../assets/VisualPackCatalog';
@@ -422,7 +431,7 @@ export class Oakhaven3DExperience {
   private hasClearedMirrorGallery: boolean = false;
 
   // 3D Proximity Interactions & Modals
-  private activeInteractTarget?: 'elowen' | 'cauldron' | 'cedric' | 'shalem' | 'khaterine' | 'thomas' | 'sword' | 'finisher' | 'cemetery_gate' | 'crypt_entrance' | 'crypt_exit' | 'crypt_sarcophagus_loot' | 'crypt_sarcophagus_ambush' | 'crypt_to_forest' | 'forest_to_crypt' | 'sister_altar' | 'forest_to_belltower' | 'belltower_to_forest' | 'elowen_cell' | 'burned_barn_slab' | 'crucible_furnace' | 'belltower_to_bridge' | 'refugees_cart' | 'vane_gate' | 'mirror_gallery' | 'astral_throne' | 'dawn_grey_altar' | 'black_sun_core' | 'villager_gedeon' | 'villager_marta' | 'oak_hill_bench' | 'tri_hero_synergy';
+  private activeInteractTarget?: 'elowen' | 'cauldron' | 'cedric' | 'shalem' | 'khaterine' | 'thomas' | 'sword' | 'finisher' | 'cemetery_gate' | 'crypt_entrance' | 'crypt_exit' | 'crypt_sarcophagus_loot' | 'crypt_sarcophagus_ambush' | 'crypt_to_forest' | 'forest_to_crypt' | 'sister_altar' | 'forest_to_belltower' | 'belltower_to_forest' | 'elowen_cell' | 'burned_barn_slab' | 'crucible_furnace' | 'belltower_to_bridge' | 'refugees_cart' | 'vane_gate' | 'mirror_gallery' | 'astral_throne' | 'dawn_grey_altar' | 'black_sun_core' | 'villager_gedeon' | 'villager_marta' | 'oak_hill_bench' | 'tri_hero_synergy' | 'act_companion';
   private proximityBadgeEl?: HTMLDivElement;
   private dialogueModalEl?: HTMLDivElement;
   private inventoryModalEl?: HTMLDivElement;
@@ -497,6 +506,41 @@ export class Oakhaven3DExperience {
     light: THREE.PointLight;
     isUnlocked: () => boolean;
   }> = [];
+
+  // Acts II, IV & V Secondary Enemies, Safe-Alcove Lore Companions & 3D Cinematic Camera Director
+  private actEnemies: Array<{
+    spec: ActEnemySpawnSpec3D;
+    group: THREE.Group;
+    rig: GothicArticulatedRig3D;
+    warningMesh: THREE.Mesh;
+    hp: number;
+    maxHp: number;
+    state: 'PATROL' | 'CHASE' | 'WINDUP' | 'STUNNED' | 'DEAD';
+    timer: number;
+  }> = [];
+  private actEnemyHpBarContainer?: HTMLDivElement;
+  private actEnemyHpBarTitle?: HTMLDivElement;
+  private actEnemyHpBarFill?: HTMLDivElement;
+  private actCompanions: Array<{ spec: ActCompanionAnchorSpec3D; group: THREE.Group }> = [];
+  private activeCompanionAnchor?: ActCompanionAnchorSpec3D;
+  private cinematicCam: {
+    active: boolean;
+    elapsed: number;
+    duration: number;
+    focusPos: THREE.Vector3;
+    cameraOffset: THREE.Vector3;
+    lookOffsetY: number;
+  } = {
+    active: false,
+    elapsed: 0,
+    duration: 0,
+    focusPos: new THREE.Vector3(),
+    cameraOffset: new THREE.Vector3(),
+    lookOffsetY: 1.6
+  };
+  private cinematicTopBarEl?: HTMLDivElement;
+  private cinematicBottomBarEl?: HTMLDivElement;
+  private cinematicCaptionEl?: HTMLDivElement;
 
   // Arsenal & Munitions Manager
   private arsenalManager: ArsenalManager = new ArsenalManager();
@@ -605,6 +649,8 @@ export class Oakhaven3DExperience {
     this.createAstarothBoss();
     this.createStoryWaypointBeacon();
     this.createActTransitionPortals();
+    this.createActSecondaryEnemies3D();
+    this.createActCompanionAnchors3D();
     this.setupOfficial3DVisualDesigns();
 
     // 6. Build 3D UI Overlay
@@ -3891,6 +3937,7 @@ export class Oakhaven3DExperience {
 
     setTimeout(() => {
       // Hide all enemy & boss HUDs upon area transition
+      this.endCinematicCameraBeat();
       [
         this.enemyHpBarContainer,
         this.cultistHpBarContainer,
@@ -3902,7 +3949,8 @@ export class Oakhaven3DExperience {
         this.crucibleHpBarContainer,
         this.vaneHpBarContainer,
         this.malphasHpBarContainer,
-        this.astarothHpBarContainer
+        this.astarothHpBarContainer,
+        this.actEnemyHpBarContainer
       ].forEach(hud => {
         if (hud) hud.style.display = 'none';
       });
@@ -4472,6 +4520,7 @@ export class Oakhaven3DExperience {
     if (this.crucibleGuardianEncounter.state === 'DORMANT') {
       if (pPos.z <= -191) {
         this.crucibleGuardianEncounter.setState('CHASE');
+        this.triggerCinematicCameraBeat('crucible_awaken', this.crucibleGuardianGroup.position);
         this.audio.playBellToll?.();
         this.audio.playSfx('warning');
         this.spawnFloatingText(gPos, '🔨 ¡EL GUARDIÁN DEL CRISOL DESPIERTA!', '#ff7722');
@@ -4651,6 +4700,7 @@ export class Oakhaven3DExperience {
       if (pPos.z <= -248) {
         this.captainVaneEncounter.setState('CHASE');
         this.unlockAndAdvanceCanonChapter(12);
+        this.triggerCinematicCameraBeat('vane_awaken', this.captainVaneGroup.position);
         this.audio.playShieldCrush?.();
         this.audio.playSfx('warning');
         this.spawnFloatingText(vPos, '🛡️ ¡EL CAPITÁN ÁUREO VANE ALZA SU ESCUDO!', '#ffd700');
@@ -5082,6 +5132,7 @@ export class Oakhaven3DExperience {
       if (pPos.z <= -310) {
         this.rexMalphasEncounter.setState('CHASE');
         this.unlockAndAdvanceCanonChapter(16);
+        this.triggerCinematicCameraBeat('malphas_awaken', this.rexMalphasGroup.position);
         this.audio.playAstralDistortion?.();
         this.audio.playSfx('warning');
         this.spawnFloatingText(mPos, '👑 ¡REX MALPHAS DESCIENDE DEL TRONO!', '#cc44ff');
@@ -5465,6 +5516,7 @@ export class Oakhaven3DExperience {
     this.shalemLionGroup.position.set(2.5, 2.0, -392);
     this.isShalemLionActive = true;
     this.shalemLionAttackTimer = 1.6;
+    this.triggerCinematicCameraBeat('shalem_lion_awaken', this.shalemLionGroup.position);
     this.audio.playBossPhaseChangeSound?.();
     this.spawnFloatingText(this.shalemLionGroup.position, '🦁 ¡SHALEM: EL LEÓN DE BRASAS CARMESÍES DESPIERTA!', '#ff6622');
   }
@@ -5488,7 +5540,8 @@ export class Oakhaven3DExperience {
       this.cultistHpBarContainer,
       this.zealotHpBarContainer,
       this.skeletonHpBarContainer,
-      this.morwennaHpBarContainer
+      this.morwennaHpBarContainer,
+      this.actEnemyHpBarContainer
     ].forEach(hud => {
       if (hud) hud.style.display = 'none';
     });
@@ -5586,6 +5639,7 @@ export class Oakhaven3DExperience {
     this.playerGroup.rotation.y = -Math.PI / 2;
     this.cameraYaw = -Math.PI / 2;
     this.targetCameraYaw = -Math.PI / 2;
+    this.triggerCinematicCameraBeat('first_dawn_epilogue', new THREE.Vector3(9.6, 2.2, 5.0));
     this.audio.playCosmicChime?.();
     this.triggerHolyFlash(1.1);
     this.spawnFloatingText(this.playerGroup.position, '🌅 ¡EL PRIMER AMANECER DE OAKHAVEN!', '#ffd700');
@@ -5727,6 +5781,317 @@ export class Oakhaven3DExperience {
     });
   }
 
+  // =========================================================================
+  // ACTS II, IV & V SECONDARY ENEMIES, COMPANION LORE ANCHORS & CINEMATIC CAMERA
+  // =========================================================================
+  private createActSecondaryEnemies3D(): void {
+    const metalBump = GothicMaterialLibrary3D.getSurfaceTexture('forged_metal', 1, 1);
+    const steelMat = new THREE.MeshStandardMaterial({
+      color: 0xc5ccd6,
+      metalness: 0.9,
+      roughness: 0.25,
+      ...(metalBump ? { bumpMap: metalBump, bumpScale: 0.04 } : {})
+    });
+    const shaftMat = new THREE.MeshStandardMaterial({ color: 0x3b2416, roughness: 0.85 });
+
+    for (const spec of ACT_SECONDARY_ENEMY_SPECS_3D) {
+      const group = new THREE.Group();
+      group.position.set(spec.spawnPos.x, spec.spawnPos.y, spec.spawnPos.z);
+
+      const rig = new GothicArticulatedRig3D(spec.archetype);
+      rig.nodes.root.rotation.y = Math.PI;
+
+      // Mount custom weapon in articulated right hand socket
+      const weapon = new THREE.Group();
+      const glowMat = new THREE.MeshBasicMaterial({ color: spec.accentColorHex });
+      if (spec.weaponKind === 'flail' || spec.weaponKind === 'censer') {
+        const chain = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.7, 6), steelMat);
+        chain.position.y = 0.35;
+        const head = new THREE.Mesh(new THREE.OctahedronGeometry(0.18, 0), glowMat);
+        head.position.y = 0.78;
+        weapon.add(chain, head);
+      } else if (spec.weaponKind === 'halberd') {
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.85, 6), shaftMat);
+        pole.position.y = 0.7;
+        const tip = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.36, 5), steelMat);
+        tip.position.y = 1.68;
+        weapon.add(pole, tip);
+      } else {
+        const blade = new THREE.Mesh(new THREE.BoxGeometry(0.09, 1.35, 0.04), spec.weaponKind === 'void_claymore' ? glowMat : steelMat);
+        blade.position.y = 0.65;
+        const guard = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.06, 0.06), glowMat);
+        guard.position.y = 0.02;
+        weapon.add(blade, guard);
+      }
+      weapon.rotation.x = Math.PI / 6;
+      rig.nodes.weaponSocketR.add(weapon);
+      group.add(rig.nodes.root);
+
+      const accentLight = new THREE.PointLight(spec.accentColorHex, 1.5, 6);
+      accentLight.position.set(0, 1.5, 0.2);
+      group.add(accentLight);
+
+      const warningMesh = new THREE.Mesh(
+        new THREE.RingGeometry(0.65, 1.45, 20),
+        new THREE.MeshBasicMaterial({ color: spec.accentColorHex, transparent: true, opacity: 0.7, side: THREE.DoubleSide })
+      );
+      warningMesh.rotation.x = -Math.PI / 2;
+      warningMesh.position.y = 0.05;
+      warningMesh.visible = false;
+      warningMesh.name = 'WarningMesh';
+      group.add(warningMesh);
+
+      this.scene.add(group);
+      this.actEnemies.push({
+        spec,
+        group,
+        rig,
+        warningMesh,
+        hp: spec.maxHp,
+        maxHp: spec.maxHp,
+        state: 'PATROL',
+        timer: 1.2
+      });
+    }
+  }
+
+  private createActCompanionAnchors3D(): void {
+    for (const spec of ACT_COMPANION_ANCHORS_3D) {
+      const group = new THREE.Group();
+      group.position.set(spec.position.x, spec.position.y, spec.position.z);
+
+      if (spec.roleArchetype === 'shalem') {
+        const furMat = new THREE.MeshStandardMaterial({ color: 0x150d1d, roughness: 0.7 });
+        const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffd700 });
+        const body = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.24, 0.5), furMat);
+        body.position.y = 0.22;
+        const head = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 10), furMat);
+        head.position.set(0, 0.36, 0.24);
+        const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 6), eyeMat);
+        eyeL.position.set(-0.05, 0.38, 0.37);
+        const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 6), eyeMat);
+        eyeR.position.set(0.05, 0.38, 0.37);
+        group.add(body, head, eyeL, eyeR);
+      } else if (spec.roleArchetype === 'elowen') {
+        const clothBump = GothicMaterialLibrary3D.getSurfaceTexture('woven_cloth');
+        const dressMat = new THREE.MeshStandardMaterial({
+          color: 0x26395e,
+          emissive: 0x182b4a,
+          emissiveIntensity: 0.45,
+          roughness: 0.65,
+          ...(clothBump ? { bumpMap: clothBump, bumpScale: 0.03 } : {})
+        });
+        const skinMat = new THREE.MeshStandardMaterial({ color: 0xf2dac4, roughness: 0.5 });
+        const haloMat = new THREE.MeshBasicMaterial({ color: 0x88eeff });
+        const robe = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.42, 1.35, 14), dressMat);
+        robe.position.y = 0.68;
+        const head = new THREE.Mesh(new THREE.SphereGeometry(0.19, 12, 12), skinMat);
+        head.position.y = 1.52;
+        const diadem = new THREE.Mesh(new THREE.TorusGeometry(0.19, 0.025, 6, 16), haloMat);
+        diadem.rotation.x = Math.PI / 2;
+        diadem.position.y = 1.64;
+        group.add(robe, head, diadem);
+      } else {
+        const rig = new GothicArticulatedRig3D(spec.roleArchetype === 'khaterine' ? 'khaterine' : 'thomas');
+        rig.nodes.root.rotation.y = spec.position.x < 0 ? 0.55 : -0.55;
+        group.add(rig.nodes.root);
+      }
+
+      const auraRing = new THREE.Mesh(
+        new THREE.RingGeometry(0.45, 0.72, 20),
+        new THREE.MeshBasicMaterial({
+          color: new THREE.Color(spec.badgeColor).getHex(),
+          transparent: true,
+          opacity: 0.45,
+          side: THREE.DoubleSide
+        })
+      );
+      auraRing.rotation.x = -Math.PI / 2;
+      auraRing.position.y = 0.04;
+      group.add(auraRing);
+
+      const auraLight = new THREE.PointLight(new THREE.Color(spec.badgeColor).getHex(), 1.6, 5.5);
+      auraLight.position.set(0, 1.4, 0.2);
+      group.add(auraLight);
+
+      this.scene.add(group);
+      this.actCompanions.push({ spec, group });
+    }
+  }
+
+  public triggerCinematicCameraBeat(beatId: CinematicBeatSpec3D['id'], focusTarget: THREE.Vector3): void {
+    const spec = CINEMATIC_CAMERA_BEATS_3D[beatId];
+    if (!spec) return;
+
+    this.cinematicCam.active = true;
+    this.cinematicCam.elapsed = 0;
+    this.cinematicCam.duration = spec.durationSec;
+    this.cinematicCam.focusPos.copy(focusTarget);
+    this.cinematicCam.cameraOffset.set(spec.cameraOffset.x, spec.cameraOffset.y, spec.cameraOffset.z);
+    this.cinematicCam.lookOffsetY = spec.lookOffsetY;
+
+    if (this.cinematicTopBarEl) this.cinematicTopBarEl.style.height = '26px';
+    if (this.cinematicBottomBarEl) this.cinematicBottomBarEl.style.height = '26px';
+    if (this.cinematicCaptionEl) {
+      this.cinematicCaptionEl.innerText = spec.caption;
+      this.cinematicCaptionEl.style.opacity = '1';
+    }
+  }
+
+  private endCinematicCameraBeat(): void {
+    this.cinematicCam.active = false;
+    if (this.cinematicTopBarEl) this.cinematicTopBarEl.style.height = '0px';
+    if (this.cinematicBottomBarEl) this.cinematicBottomBarEl.style.height = '0px';
+    if (this.cinematicCaptionEl) this.cinematicCaptionEl.style.opacity = '0';
+  }
+
+  private updateActSecondaryEnemies(delta: number): void {
+    const area = this.dungeonAreaManager.currentArea;
+    const pPos = this.playerGroup.position;
+    let closestLiving: typeof this.actEnemies[number] | undefined;
+    let closestDist = 14.0;
+
+    for (const enemy of this.actEnemies) {
+      if (enemy.spec.area !== area) continue;
+
+      if (enemy.state === 'DEAD') {
+        enemy.warningMesh.visible = false;
+        enemy.group.position.y = computeWorldTerrainHeight(area, enemy.group.position.x, enemy.group.position.z) - 0.35;
+        enemy.rig.update({
+          delta, elapsedTime: this.clock.elapsedTime, planarSpeed: 0,
+          isMoving: false, isDodging: false, isGuarding: false, isAttacking: false,
+          isHeavyAttack: false, isArmed: true, isDefeated: true
+        });
+        continue;
+      }
+
+      const toPlayer = pPos.clone().sub(enemy.group.position);
+      toPlayer.y = 0;
+      const dist = toPlayer.length();
+      if (dist < closestDist) {
+        closestDist = dist;
+        closestLiving = enemy;
+      }
+
+      if (!this.isGameplayActive()) continue;
+
+      // Ground height sync (crucial for Act V floating marble steps!)
+      const groundY = computeWorldTerrainHeight(area, enemy.group.position.x, enemy.group.position.z);
+      enemy.group.position.y = THREE.MathUtils.lerp(enemy.group.position.y, groundY, 1 - Math.exp(-10 * delta));
+
+      if (dist <= 11.5 && dist > 0.1) {
+        const targetAngle = Math.atan2(toPlayer.x, toPlayer.z);
+        enemy.group.rotation.y = THREE.MathUtils.lerp(enemy.group.rotation.y, targetAngle, 0.1);
+      }
+
+      let isMoving = false;
+      let isAttacking = false;
+
+      if (enemy.state === 'STUNNED') {
+        enemy.warningMesh.visible = false;
+        enemy.timer -= delta;
+        if (enemy.timer <= 0) {
+          enemy.state = 'CHASE';
+        }
+      } else if (enemy.state === 'PATROL') {
+        enemy.warningMesh.visible = false;
+        if (dist <= 8.0) {
+          enemy.state = 'CHASE';
+        }
+      } else if (enemy.state === 'CHASE') {
+        enemy.warningMesh.visible = false;
+        if (dist > 2.25) {
+          toPlayer.normalize();
+          enemy.group.position.addScaledVector(toPlayer, enemy.spec.moveSpeed * delta);
+          const bounds = this.dungeonAreaManager.getBounds();
+          enemy.group.position.x = THREE.MathUtils.clamp(enemy.group.position.x, bounds.minX + 0.6, bounds.maxX - 0.6);
+          enemy.group.position.z = THREE.MathUtils.clamp(enemy.group.position.z, bounds.minZ + 1.0, bounds.maxZ - 1.0);
+          isMoving = true;
+        } else {
+          enemy.state = 'WINDUP';
+          enemy.timer = 0.6;
+          enemy.warningMesh.visible = true;
+          this.audio.playSfx('warning');
+        }
+      } else if (enemy.state === 'WINDUP') {
+        enemy.timer -= delta;
+        enemy.warningMesh.rotation.z += delta * 6;
+        enemy.warningMesh.visible = Math.floor(this.clock.elapsedTime * 18) % 2 === 0;
+        isAttacking = true;
+
+        if (enemy.timer <= 0) {
+          enemy.warningMesh.visible = false;
+          if (dist <= 2.75 && !this.playerStats.isDodging) {
+            const parryWindow = 280 + this.inventory.getParryBonusMs();
+            const isParry = this.playerStats.isGuarding && (performance.now() - this.lastGuardTime) <= parryWindow;
+            if (isParry) {
+              this.audio.playSfx('parry');
+              this.triggerHolyFlash(0.6);
+              enemy.state = 'STUNNED';
+              enemy.timer = 2.0 * this.getStaggerMultiplier();
+              this.spawnFloatingText(pPos, '⚡ ¡PARRY PERFECTO!', '#66ccff');
+              this.spawnFloatingText(enemy.group.position, '⚡ ¡ATURDIDO! [E] ¡REMATAR!', '#ffd700');
+            } else {
+              const dmg = this.calculateIncomingDamage(enemy.spec.attackDamage, Math.max(4, Math.round(enemy.spec.attackDamage * 0.35)));
+              this.playerStats.health = Math.max(0, this.playerStats.health - dmg);
+              this.audio.playCombatHit(false);
+              this.spawnFloatingText(pPos, `-${dmg} (${enemy.spec.name.toUpperCase()})`, '#ff6677');
+              if (this.playerStats.health <= 0) {
+                this.handlePlayerDefeatAndRespawn();
+                return;
+              }
+              this.updateHUD();
+              enemy.state = 'CHASE';
+            }
+          } else {
+            if (this.playerStats.isDodging && dist <= 2.75) {
+              this.spawnFloatingText(pPos, '⚡ ¡ESQUIVADO!', '#00e5ff');
+            }
+            enemy.state = 'CHASE';
+          }
+        }
+      }
+
+      enemy.rig.update({
+        delta,
+        elapsedTime: this.clock.elapsedTime,
+        planarSpeed: isMoving ? enemy.spec.moveSpeed : 0,
+        isMoving,
+        isDodging: false,
+        isGuarding: false,
+        isAttacking,
+        isHeavyAttack: false,
+        isArmed: true,
+        isDefeated: false
+      });
+    }
+
+    // Update unified secondary enemy HUD bar (cleanly positioned below main boss HUD)
+    if (this.actEnemyHpBarContainer && this.actEnemyHpBarTitle && this.actEnemyHpBarFill) {
+      if (closestLiving) {
+        this.actEnemyHpBarContainer.style.display = 'block';
+        this.actEnemyHpBarTitle.innerText = `⚔ ${closestLiving.spec.name.toUpperCase()} ⚔`;
+        this.actEnemyHpBarFill.style.width = `${Math.max(0, (closestLiving.hp / closestLiving.maxHp) * 100)}%`;
+      } else {
+        this.actEnemyHpBarContainer.style.display = 'none';
+      }
+    }
+  }
+
+  public interactWithActCompanion(): void {
+    const anchor = this.activeCompanionAnchor;
+    if (!anchor) return;
+    this.audio.playSfx('menu_select');
+    this.playerStats.posture = this.playerStats.maxPosture;
+    this.showDialogueModal(
+      anchor.title,
+      anchor.greeting,
+      '💬 ELIGE UNA PREGUNTA DE LORE CANÓNICO O PULSA [E / ESPACIO] PARA CONTINUAR',
+      anchor.branches
+    );
+    this.updateHUD();
+  }
+
   public unlockAndAdvanceCanonChapter(chapterId: number, announce: boolean = true): void {
     const clamped = Math.max(1, Math.min(20, Math.floor(chapterId)));
     const wasAlreadyUnlocked = this.canonChapterManager.isChapterUnlocked(clamped);
@@ -5838,6 +6203,13 @@ export class Oakhaven3DExperience {
     this.hasTriggeredTriHeroSynergy = false;
     this.hasForgedAlbaGris = false;
     this.isShalemLionActive = false;
+    this.endCinematicCameraBeat();
+    for (const actEnemy of this.actEnemies) {
+      actEnemy.hp = actEnemy.maxHp;
+      actEnemy.state = 'PATROL';
+      actEnemy.warningMesh.visible = false;
+      actEnemy.group.position.set(actEnemy.spec.spawnPos.x, actEnemy.spec.spawnPos.y, actEnemy.spec.spawnPos.z);
+    }
     if (this.shalemLionGroup) this.shalemLionGroup.visible = false;
     if (this.epilogueFlowersGroup) this.epilogueFlowersGroup.visible = false;
 
@@ -6197,7 +6569,7 @@ export class Oakhaven3DExperience {
       <!-- Boss Act IV: Rex Malphas 3D Target HUD -->
       <div id="p3d-rex-malphas-hud" style="position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(28, 8, 28, 0.95); border: 1.2px solid #cc44ff; border-radius: 4px; padding: 4px 12px; width: 235px; text-align: center; box-shadow: 0 4px 20px rgba(204, 68, 255, 0.45); display: none;">
         <div style="font-size: 7.5px; font-weight: bold; color: #eeddff; margin-bottom: 2px; letter-spacing: 0.5px;">
-          👑 REX MALPHAS — EL DESPOTA ASTRAL (ALARIC) 👑
+          👑 REX MALPHAS — EL DÉSPOTA ASTRAL (ALARIC) 👑
         </div>
         <div style="width: 100%; height: 6px; background: #260a2b; border: 1px solid #7c1d8c; border-radius: 2px; overflow: hidden;">
           <div id="p3d-rex-malphas-hp-fill" style="width: 100%; height: 100%; background: #cc44ff; transition: width 0.15s ease;"></div>
@@ -6214,15 +6586,32 @@ export class Oakhaven3DExperience {
         </div>
       </div>
 
+      <!-- Unified Act II, IV & V Secondary Enemy 3D Target HUD -->
+      <div id="p3d-act-enemy-hud" style="position: absolute; top: 52px; left: 50%; transform: translateX(-50%); background: rgba(20, 10, 26, 0.94); border: 1.2px solid #cc66ff; border-radius: 4px; padding: 3px 10px; width: 205px; text-align: center; box-shadow: 0 4px 14px rgba(0,0,0,0.85); display: none;">
+        <div id="p3d-act-enemy-title" style="font-size: 7px; font-weight: bold; color: #f0ccff; margin-bottom: 2px;">
+          ⚔ CENTINELA ⚔
+        </div>
+        <div style="width: 100%; height: 5px; background: #26102e; border: 1px solid #7d2e99; border-radius: 2px; overflow: hidden;">
+          <div id="p3d-act-enemy-hp-fill" style="width: 100%; height: 100%; background: #cc55ff; transition: width 0.12s ease;"></div>
+        </div>
+      </div>
+
+      <!-- 3D Cinematic Camera Director Letterbox Bars & Caption -->
+      <div id="p3d-cinematic-top" style="position: absolute; top: 0; left: 0; width: 100%; height: 0px; background: #050208; border-bottom: 1px solid rgba(212,175,55,0.55); transition: height 0.45s ease; pointer-events: none; z-index: 65;"></div>
+      <div id="p3d-cinematic-bottom" style="position: absolute; bottom: 0; left: 0; width: 100%; height: 0px; background: #050208; border-top: 1px solid rgba(212,175,55,0.55); transition: height 0.45s ease; pointer-events: none; z-index: 65; display: flex; align-items: center; justify-content: center;">
+        <div id="p3d-cinematic-caption" style="font-family: 'Cinzel', Georgia, serif; font-size: 8.5px; font-weight: bold; color: #ffd700; letter-spacing: 1px; opacity: 0; transition: opacity 0.4s ease; text-shadow: 0 2px 6px #000;"></div>
+      </div>
+
       <!-- Floating Proximity Action Pill (Interactive [E]) -->
       <div id="p3d-proximity-badge" style="position: absolute; bottom: 106px; left: 50%; transform: translateX(-50%); background: rgba(18, 9, 32, 0.96); border: 1.5px solid #ffd700; border-radius: 4px; padding: 4px 14px; font-family: monospace; font-size: 8.5px; font-weight: bold; color: #ffd700; display: none; box-shadow: 0 4px 20px rgba(0,0,0,0.85); z-index: 50; cursor: pointer; pointer-events: auto; text-align: center; letter-spacing: 0.5px;">
         [E] INTERACTUAR
       </div>
 
-      <!-- Gothic 3D Dialogue Modal -->
-      <div id="p3d-dialogue-modal" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(14, 8, 24, 0.98); border: 2px solid #d4af37; border-radius: 6px; padding: 14px 18px; max-width: 480px; width: 88%; box-shadow: 0 10px 40px rgba(0,0,0,0.95); display: none; z-index: 100; pointer-events: auto; text-align: center;">
+      <!-- Gothic 3D Dialogue Modal (with optional Branching Lore Choices) -->
+      <div id="p3d-dialogue-modal" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(14, 8, 24, 0.98); border: 2px solid #d4af37; border-radius: 6px; padding: 14px 18px; max-width: 495px; width: 90%; box-shadow: 0 10px 40px rgba(0,0,0,0.95); display: none; z-index: 100; pointer-events: auto; text-align: center;">
         <div id="p3d-modal-header" style="font-size: 9.5px; font-weight: bold; color: #ffd700; letter-spacing: 0.8px; margin-bottom: 6px; border-bottom: 1px solid #482f5e; padding-bottom: 5px;"></div>
         <div id="p3d-modal-text" style="font-family: serif; font-size: 10px; color: #ede6f5; font-style: italic; line-height: 1.48; margin-bottom: 10px;"></div>
+        <div id="p3d-modal-choices" style="display: none; flex-direction: column; gap: 5px; margin-bottom: 10px;"></div>
         <div id="p3d-modal-reward" style="font-family: monospace; font-size: 8px; color: #88ffaa; margin-bottom: 10px; font-weight: bold;"></div>
         <button id="p3d-modal-close" style="background: #2a1440; color: #ffd700; border: 1px solid #d4af37; padding: 4px 14px; border-radius: 3px; font-family: monospace; font-size: 8px; cursor: pointer; font-weight: bold;">[E / ESPACIO / CLIC] CONTINUAR</button>
       </div>
@@ -6430,8 +6819,8 @@ export class Oakhaven3DExperience {
       </div>
 
       <!-- Bottom Controls Bar -->
-      <div style="position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); background: rgba(8, 4, 14, 0.95); border: 1px solid #3d2852; border-radius: 3px; padding: 2px 10px; font-family: monospace; font-size: 7px; color: #c5b4db; white-space: nowrap;">
-        WASD: Moverse 3D | R: Lock-On | Y: Colina Roble | F: Asedio Cap. III | TAB: Héroe | N: Compendio | I: Bolsa | B: Botica | H: Habilidades | J/K: Ataque | L: Guardia | Espacio: Esquivar | T: Lanzar | E: Interactuar | C: Cámara
+      <div style="position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); max-width: 96%; background: rgba(8, 4, 14, 0.95); border: 1px solid #3d2852; border-radius: 3px; padding: 2px 8px; font-family: monospace; font-size: 6.8px; color: #c5b4db; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+        WASD: Mover | J/K: Ataque | L: Guardia | Espacio: Esquivar | E: Interactuar | T: Lanzar | R: Fijar | TAB: Héroe | C: Cámara | I/B/N/V: Menús
       </div>
     `;
 
@@ -6719,6 +7108,12 @@ export class Oakhaven3DExperience {
     this.malphasHpBarFill = this.uiOverlay.querySelector('#p3d-rex-malphas-hp-fill') as HTMLDivElement;
     this.astarothHpBarContainer = this.uiOverlay.querySelector('#p3d-astaroth-hud') as HTMLDivElement;
     this.astarothHpBarFill = this.uiOverlay.querySelector('#p3d-astaroth-hp-fill') as HTMLDivElement;
+    this.actEnemyHpBarContainer = this.uiOverlay.querySelector('#p3d-act-enemy-hud') as HTMLDivElement;
+    this.actEnemyHpBarTitle = this.uiOverlay.querySelector('#p3d-act-enemy-title') as HTMLDivElement;
+    this.actEnemyHpBarFill = this.uiOverlay.querySelector('#p3d-act-enemy-hp-fill') as HTMLDivElement;
+    this.cinematicTopBarEl = this.uiOverlay.querySelector('#p3d-cinematic-top') as HTMLDivElement;
+    this.cinematicBottomBarEl = this.uiOverlay.querySelector('#p3d-cinematic-bottom') as HTMLDivElement;
+    this.cinematicCaptionEl = this.uiOverlay.querySelector('#p3d-cinematic-caption') as HTMLDivElement;
 
     this.zoneTransitionOverlay = this.uiOverlay.querySelector('#p3d-zone-transition') as HTMLDivElement;
     this.zoneTitleEl = this.uiOverlay.querySelector('#p3d-zone-title') as HTMLDivElement;
@@ -6986,6 +7381,12 @@ export class Oakhaven3DExperience {
     }
 
     // --- CONTEXT: GAMEPLAY ---
+    // Allow skipping an active 3D cinematic camera beat immediately with [Escape]
+    if (!e.repeat && e.key === 'Escape' && this.cinematicCam.active) {
+      this.endCinematicCameraBeat();
+      return;
+    }
+
     // Toggle Hero with [TAB] (single-pulse only, ignores e.repeat)
     if (e.key === 'Tab') {
       e.preventDefault();
@@ -7619,6 +8020,36 @@ export class Oakhaven3DExperience {
       }
     }
 
+    // Hit Detection against Acts II, IV & V Secondary Patrol Enemies
+    const currentAreaForMelee = this.dungeonAreaManager.currentArea;
+    for (const actEnemy of this.actEnemies) {
+      if (actEnemy.spec.area !== currentAreaForMelee || actEnemy.state === 'DEAD') continue;
+      const distToActEnemy = this.playerGroup.position.distanceTo(actEnemy.group.position);
+      if (distToActEnemy <= reach + 0.55) {
+        const baseDmg = this.playerStats.isArmed ? (this.hasForgedAlbaGris ? (isHeavy ? 54 : 34) : (isHeavy ? 42 : 25)) : (isHeavy ? 22 : 13);
+        const skillBonus = 1.0 + (this.progression.getDamageBonusPct(this.activeHero) / 100);
+        const dmg = Math.round(baseDmg * this.attackBuffMultiplier * skillBonus);
+        actEnemy.hp = Math.max(0, actEnemy.hp - dmg);
+        this.spawnFloatingText(actEnemy.group.position, `-${dmg}`, isHeavy ? '#ffd700' : '#e699ff');
+        this.audio.playCombatHit(isHeavy);
+
+        if (isHeavy && actEnemy.hp > 0) {
+          actEnemy.state = 'STUNNED';
+          actEnemy.timer = 1.35 * this.getStaggerMultiplier();
+          this.spawnFloatingText(actEnemy.group.position, '⚡ ¡ATURDIDO! [E] ¡REMATAR!', '#ffaa44');
+        }
+        if (actEnemy.hp <= 0) {
+          actEnemy.state = 'DEAD';
+          actEnemy.warningMesh.visible = false;
+          this.progression.addExp(actEnemy.spec.expReward);
+          this.inventory.addItem(CANONICAL_MATERIALS.ash_purified, 1);
+          this.audio.playFinisherSound(true);
+          this.spawnFloatingText(actEnemy.group.position, `⚔ ¡${actEnemy.spec.name.toUpperCase()} PURIFICADO! (+${actEnemy.spec.expReward} EXP)`, '#ffd700');
+        }
+        this.updateHUD();
+      }
+    }
+
     // Hit Detection against Act II Boss: Crucible Guardian
     if (this.dungeonAreaManager.currentArea === 'belltower_summit' && !this.crucibleGuardianEncounter.isDefeated) {
       const distToGuardian = this.playerGroup.position.distanceTo(this.crucibleGuardianGroup.position);
@@ -8141,6 +8572,40 @@ export class Oakhaven3DExperience {
         }
       }
 
+      // 8b-0. Check Acts II, IV & V Secondary Enemies collision
+      if (!collided) {
+        const curArea = this.dungeonAreaManager.currentArea;
+        for (const actEnemy of this.actEnemies) {
+          if (actEnemy.spec.area !== curArea || actEnemy.state === 'DEAD') continue;
+          const dAct = p.mesh.position.distanceTo(actEnemy.group.position.clone().add(new THREE.Vector3(0, 1.1, 0)));
+          if (dAct <= 1.55) {
+            collided = true;
+            if (p.isThrownFlask) {
+              this.explodeHolyFireFlask(p.mesh.position.clone(), p.damage);
+            } else {
+              actEnemy.hp = Math.max(0, actEnemy.hp - p.damage);
+              this.spawnFloatingText(actEnemy.group.position, `-${p.damage}`, p.isHeavy ? '#ffd700' : '#d999ff');
+              this.audio.playCombatHit(p.isHeavy);
+              if ((p.isHeavy || p.arrowType === 'silver') && actEnemy.hp > 0) {
+                actEnemy.state = 'STUNNED';
+                actEnemy.timer = 1.5;
+                this.spawnFloatingText(actEnemy.group.position, '⚡ ¡ATURDIDO! [E] ¡REMATAR!', '#ffaa44');
+              }
+              if (actEnemy.hp <= 0) {
+                actEnemy.state = 'DEAD';
+                actEnemy.warningMesh.visible = false;
+                this.progression.addExp(actEnemy.spec.expReward);
+                this.inventory.addItem(CANONICAL_MATERIALS.ash_purified, 1);
+                this.audio.playFinisherSound(true);
+                this.spawnFloatingText(actEnemy.group.position, `⚔ ¡PURIFICADO! (+${actEnemy.spec.expReward} EXP)`, '#ffd700');
+              }
+              this.updateHUD();
+            }
+            break;
+          }
+        }
+      }
+
       // 8b. Check Act II Boss: Crucible Guardian collision
       if (!collided && this.dungeonAreaManager.currentArea === 'belltower_summit' && !this.crucibleGuardianEncounter.isDefeated) {
         const dGuard = p.mesh.position.distanceTo(this.crucibleGuardianGroup.position.clone().add(new THREE.Vector3(0, 1.3, 0)));
@@ -8535,6 +9000,7 @@ export class Oakhaven3DExperience {
       const res = this.crucibleGuardianEncounter.takeDamage(120, true);
       this.crucibleGuardianEncounter.setState('STUNNED');
       this.crucibleTimer = 3.0;
+      this.triggerCinematicCameraBeat('crucible_jam', this.crucibleGuardianGroup.position);
       this.audio.playFlaskExplosion?.();
       this.triggerScreenShake(0.65);
       this.visualDesigns.spawnVfxBillboard(
@@ -8841,6 +9307,24 @@ export class Oakhaven3DExperience {
       }
     }
 
+    // Check Acts II, IV & V Secondary Enemies for Holy Fire Flask splash
+    const curFlaskArea = this.dungeonAreaManager.currentArea;
+    for (const actEnemy of this.actEnemies) {
+      if (actEnemy.spec.area !== curFlaskArea || actEnemy.state === 'DEAD') continue;
+      if (pos.distanceTo(actEnemy.group.position) <= radius + 0.5) {
+        actEnemy.hp = Math.max(0, actEnemy.hp - dmg);
+        this.spawnFloatingText(actEnemy.group.position, `-${dmg} (FRASCO FATUO)`, '#ff5500');
+        if (actEnemy.hp > 0) {
+          actEnemy.state = 'STUNNED';
+          actEnemy.timer = 1.4;
+        } else {
+          actEnemy.state = 'DEAD';
+          actEnemy.warningMesh.visible = false;
+          this.progression.addExp(actEnemy.spec.expReward);
+        }
+      }
+    }
+
     // Check Act II - V Canonical Bosses for Holy Fire Flask splash
     if (this.dungeonAreaManager.currentArea === 'belltower_summit' && !this.crucibleGuardianEncounter.isDefeated && pos.distanceTo(this.crucibleGuardianGroup.position) <= radius + 0.5) {
       const hitRes = this.crucibleGuardianEncounter.takeDamage(dmg, this.crucibleGuardianEncounter.state === 'STUNNED');
@@ -9011,6 +9495,9 @@ export class Oakhaven3DExperience {
         break;
       case 'tri_hero_synergy':
         this.executeTriHeroSynergyAgainstMalphas();
+        break;
+      case 'act_companion':
+        this.interactWithActCompanion();
         break;
     }
   }
@@ -9340,6 +9827,7 @@ export class Oakhaven3DExperience {
         this.hasClearedMirrorGallery = true;
         this.progression.addExp(90);
         this.unlockAndAdvanceCanonChapter(15);
+        this.triggerCinematicCameraBeat('master_mirror_shatter', new THREE.Vector3(-7.0, 0, -320));
         this.triggerHolyFlash(0.65);
         this.spawnFloatingText(this.playerGroup.position, '🪞 ¡ESPEJO MAESTRO QUEBRADO (3/3)! (+90 EXP)', '#ffd700');
         this.showDialogueModal(
@@ -9709,6 +10197,22 @@ export class Oakhaven3DExperience {
       }
     }
 
+    // Check if any Act II, IV & V secondary enemy is stunned
+    const areaFin = this.dungeonAreaManager.currentArea;
+    for (const actEnemy of this.actEnemies) {
+      if (actEnemy.spec.area === areaFin && actEnemy.state === 'STUNNED' && this.playerGroup.position.distanceTo(actEnemy.group.position) <= 3.5) {
+        actEnemy.hp = 0;
+        actEnemy.state = 'DEAD';
+        actEnemy.warningMesh.visible = false;
+        this.audio.playFinisherSound(true);
+        const bonusExp = actEnemy.spec.expReward + 45;
+        this.progression.addExp(bonusExp);
+        this.spawnFloatingText(actEnemy.group.position, `⚡ ¡${actEnemy.spec.name.toUpperCase()} REMATADO! (+${bonusExp} EXP)`, '#ffd700');
+        this.updateHUD();
+        return;
+      }
+    }
+
     // Check if Astaroth Titan is stunned
     if (this.dungeonAreaManager.currentArea === 'inverted_cathedral' && this.astarothEncounter.state === 'STUNNED') {
       const distHoriz = new THREE.Vector2(
@@ -9731,7 +10235,12 @@ export class Oakhaven3DExperience {
     }
   }
 
-  public showDialogueModal(header: string, text: string, rewardText?: string): void {
+  public showDialogueModal(
+    header: string,
+    text: string,
+    rewardText?: string,
+    branches?: readonly LoreChoiceBranch3D[]
+  ): void {
     this.releaseAllInputs();
     this.isDialogueOpen = true;
     if (this.proximityBadgeEl) {
@@ -9740,6 +10249,7 @@ export class Oakhaven3DExperience {
     if (this.dialogueModalEl) {
       const headerEl = this.dialogueModalEl.querySelector('#p3d-modal-header') as HTMLDivElement;
       const textEl = this.dialogueModalEl.querySelector('#p3d-modal-text') as HTMLDivElement;
+      const choicesEl = this.dialogueModalEl.querySelector('#p3d-modal-choices') as HTMLDivElement | null;
       const rewardEl = this.dialogueModalEl.querySelector('#p3d-modal-reward') as HTMLDivElement;
 
       if (headerEl) headerEl.innerText = header;
@@ -9747,6 +10257,42 @@ export class Oakhaven3DExperience {
       if (rewardEl) {
         rewardEl.innerText = rewardText || '';
         rewardEl.style.display = rewardText ? 'block' : 'none';
+      }
+      if (choicesEl) {
+        choicesEl.innerHTML = '';
+        if (branches && branches.length > 0) {
+          choicesEl.style.display = 'flex';
+          branches.forEach(branch => {
+            const btn = document.createElement('button');
+            btn.innerText = branch.label;
+            btn.style.cssText = `
+              background: #231438;
+              color: #e6ccff;
+              border: 1px solid #9955cc;
+              border-radius: 4px;
+              padding: 5px 10px;
+              font-family: monospace;
+              font-size: 8px;
+              font-weight: bold;
+              cursor: pointer;
+              text-align: left;
+              transition: background 0.15s ease;
+            `;
+            btn.addEventListener('click', () => {
+              this.audio.playSfx('menu_select');
+              if (textEl) textEl.innerText = `${branch.speaker}: ${branch.response}`;
+              if (rewardEl && branch.rewardNote) {
+                rewardEl.innerText = branch.rewardNote;
+                rewardEl.style.display = 'block';
+              }
+              btn.style.borderColor = '#ffd700';
+              btn.style.color = '#ffd700';
+            });
+            choicesEl.appendChild(btn);
+          });
+        } else {
+          choicesEl.style.display = 'none';
+        }
       }
       this.dialogueModalEl.style.display = 'block';
     }
@@ -10110,6 +10656,32 @@ export class Oakhaven3DExperience {
       }
     }
 
+    // 15b. Stunned Acts II, IV & V Secondary Enemies Finisher + Safe-Alcove Companion Lore Anchors
+    if (!targetFound) {
+      const curArea = this.dungeonAreaManager.currentArea;
+      for (const actEnemy of this.actEnemies) {
+        if (actEnemy.spec.area === curArea && actEnemy.state === 'STUNNED' && pPos.distanceTo(actEnemy.group.position) <= 3.5) {
+          targetFound = 'finisher';
+          badgeText = `⚡ [E] ¡REMATAR A ${actEnemy.spec.name.toUpperCase()}!`;
+          badgeColor = '#ffd700';
+          break;
+        }
+      }
+    }
+
+    if (!targetFound) {
+      const curArea = this.dungeonAreaManager.currentArea;
+      for (const comp of this.actCompanions) {
+        if (comp.spec.area === curArea && pPos.distanceTo(comp.group.position) <= 3.2) {
+          targetFound = 'act_companion';
+          this.activeCompanionAnchor = comp.spec;
+          badgeText = `💬 [E] CONVERSAR CON ${comp.spec.name.toUpperCase()} (LORE & CONSEJOS DEL ACTO)`;
+          badgeColor = comp.spec.badgeColor;
+          break;
+        }
+      }
+    }
+
     this.activeInteractTarget = targetFound;
     if (this.proximityBadgeEl) {
       if (targetFound) {
@@ -10137,6 +10709,7 @@ export class Oakhaven3DExperience {
       if (this.playerGroup.position.z <= -8) {
         this.morwennaState = 'CHASE';
         this.unlockAndAdvanceCanonChapter(5);
+        this.triggerCinematicCameraBeat('morwenna_awaken', this.morwennaGroup.position);
         if (this.morwennaHpBarContainer) {
           this.morwennaHpBarContainer.style.display = 'block';
         }
@@ -10969,6 +11542,12 @@ export class Oakhaven3DExperience {
       if (!this.astarothEncounter.isDefeated) candidates.push({ group: this.astarothGroup, name: 'Astaroth — Sol del Abismo' });
     }
 
+    for (const actEnemy of this.actEnemies) {
+      if (actEnemy.spec.area === area && actEnemy.state !== 'DEAD') {
+        candidates.push({ group: actEnemy.group, name: actEnemy.spec.name });
+      }
+    }
+
     let best: { group: THREE.Object3D; name: string } | undefined;
     let bestDist = 28.0;
     for (const c of candidates) {
@@ -11151,6 +11730,7 @@ export class Oakhaven3DExperience {
     this.updateRootProwler(delta);
     this.updateCrucibleGuardian(delta);
     this.updateBridgeGuardsAndAllies(delta);
+    this.updateActSecondaryEnemies(delta);
     this.updateCaptainVane(delta);
     this.updateRexMalphas(delta);
     this.updateAstarothTitan(delta);
@@ -13046,6 +13626,38 @@ export class Oakhaven3DExperience {
 
   private updateCamera(delta: number): void {
     const safeDelta = Math.min(delta, 0.1);
+
+    // 3D Cinematic Camera Director Override (smooth letterboxed dramatic sweep on boss/story beats)
+    if (this.cinematicCam.active) {
+      this.cinematicCam.elapsed += safeDelta;
+      const t = THREE.MathUtils.clamp(this.cinematicCam.elapsed / Math.max(0.1, this.cinematicCam.duration), 0, 1);
+      const orbitAngle = (t - 0.5) * 0.48;
+      const cosA = Math.cos(orbitAngle);
+      const sinA = Math.sin(orbitAngle);
+      const offX = this.cinematicCam.cameraOffset.x * cosA - this.cinematicCam.cameraOffset.z * sinA;
+      const offZ = this.cinematicCam.cameraOffset.x * sinA + this.cinematicCam.cameraOffset.z * cosA;
+
+      this.targetCameraPos.set(
+        this.cinematicCam.focusPos.x + offX,
+        this.cinematicCam.focusPos.y + this.cinematicCam.cameraOffset.y,
+        this.cinematicCam.focusPos.z + offZ
+      );
+      this.targetCameraLook.set(
+        this.cinematicCam.focusPos.x,
+        this.cinematicCam.focusPos.y + this.cinematicCam.lookOffsetY,
+        this.cinematicCam.focusPos.z
+      );
+
+      const cineAlpha = 1 - Math.exp(-5.0 * safeDelta);
+      this.camera.position.lerp(this.targetCameraPos, cineAlpha);
+      this.currentCameraLook.lerp(this.targetCameraLook, cineAlpha);
+      this.camera.lookAt(this.currentCameraLook);
+
+      if (this.cinematicCam.elapsed >= this.cinematicCam.duration) {
+        this.endCinematicCameraBeat();
+      }
+      return;
+    }
 
     if (this.cameraMode === 'isometric') {
       this.targetCameraPos.set(
