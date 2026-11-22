@@ -2983,6 +2983,14 @@ export class GameScene extends Phaser.Scene {
       if (this.currentBoss.id === 'madre_morwenna') {
         const strikeAnim = this.currentBoss.phase === BossPhaseType.PHASE_2 ? 'morwenna_phase2_whirlwind' : 'morwenna_swing_crucible';
         this.playAnimSafe(this.bossSprite, strikeAnim, true);
+      } else if (this.currentBoss.id === 'guardian_crisol') {
+        this.playAnimSafe(this.bossSprite, 'zealot_heavy_slam', true);
+      } else if (this.currentBoss.id === 'capitan_aureo') {
+        this.playAnimSafe(this.bossSprite, 'skeleton_claymore_slash', true);
+      } else if (this.currentBoss.id === 'rex_malphas') {
+        this.playAnimSafe(this.bossSprite, 'morwenna_phase2_lunge', true);
+      } else if (this.currentBoss.id === 'astaroth') {
+        this.playAnimSafe(this.bossSprite, 'morwenna_phase2_whirlwind', true);
       }
 
       if (dist < 85) {
@@ -3682,7 +3690,8 @@ export class GameScene extends Phaser.Scene {
       // Boss Capitán Áureo Vane
       this.currentBoss = Boss.createCapitanAureo();
       this.bossShadow = this.add.ellipse(520, 260, 32, 9, 0x000000, 0.5).setDepth(259);
-      this.bossSprite = this.normalizeSprite(this.add.sprite(520, 260, 'boss_capitan_aureo'), 76, 88, 0.5, 0.95).setDepth(260);
+      this.bossSprite = this.normalizeSprite(this.add.sprite(520, 260, 'skeleton_patrol', 0), 84, 84, 0.5, 0.9).setDepth(260).setTint(0xffe066);
+      this.playAnimSafe(this.bossSprite, 'skeleton_patrol');
       this.createBossMarker('Capitán Áureo Vane', 520, 260);
 
       const introText = introLines[0] ? `${introLines[0].speaker}: ${introLines[0].text}` : "Shalem: «Acto III: El Gran Puente de Piedra»";
@@ -3705,7 +3714,8 @@ export class GameScene extends Phaser.Scene {
       // Boss Rex Malphas
       this.currentBoss = Boss.createRexMalphas();
       this.bossShadow = this.add.ellipse(520, 260, 32, 9, 0x000000, 0.5).setDepth(259);
-      this.bossSprite = this.normalizeSprite(this.add.sprite(520, 260, 'boss_malphas'), 76, 88, 0.5, 0.95).setDepth(260);
+      this.bossSprite = this.normalizeSprite(this.add.sprite(520, 260, 'morwenna_levitate_idle', 0), 96, 96, 0.5, 0.9).setDepth(260).setTint(0xdd99ff);
+      this.playAnimSafe(this.bossSprite, 'morwenna_levitate_idle');
       this.createBossMarker('Rex Malphas', 520, 260);
 
       const introText = introLines[0] ? `${introLines[0].speaker}: ${introLines[0].text}` : "Shalem: «Acto IV: Londinium»";
@@ -3734,7 +3744,8 @@ export class GameScene extends Phaser.Scene {
       // Boss Astaroth (Entidad Primordial del Abismo)
       this.currentBoss = Boss.createAstaroth();
       this.bossShadow = this.add.ellipse(520, 260, 48, 12, 0x000000, 0.6).setDepth(259);
-      this.bossSprite = this.normalizeSprite(this.add.sprite(520, 260, 'boss_astaroth'), 96, 110, 0.5, 0.95).setDepth(260);
+      this.bossSprite = this.normalizeSprite(this.add.sprite(520, 260, 'morwenna_phase2_idle', 0), 120, 120, 0.5, 0.9).setDepth(260).setTint(0xff66bb);
+      this.playAnimSafe(this.bossSprite, 'morwenna_phase2_idle');
       this.createBossMarker('Astaroth', 520, 260);
 
       this.tweens.add({

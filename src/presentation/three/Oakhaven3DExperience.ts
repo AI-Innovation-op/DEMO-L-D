@@ -5691,6 +5691,19 @@ export class Oakhaven3DExperience {
     this.attackCooldown = isHeavy ? 0.45 : 0.28;
     this.audio.playCombatHit(isHeavy);
 
+    // Spawn official animated slash VFX billboard in front of Thomas
+    const slashForward = new THREE.Vector3(0, 0, -1).applyEuler(this.playerGroup.rotation).normalize();
+    const slashPos = this.playerGroup.position.clone().add(new THREE.Vector3(0, 1.15, 0)).add(slashForward.multiplyScalar(1.1));
+    this.visualDesigns.spawnVfxBillboard(
+      this.scene,
+      slashPos,
+      isHeavy ? 2.2 : 1.7,
+      isHeavy ? 2.2 : 1.7,
+      isHeavy || this.hasForgedAlbaGris ? '/assets/vfx/fx_slash_gold.png' : '/assets/vfx/fx_slash_abyss.png',
+      5,
+      20
+    );
+
     // Visual Slash Animation on weapon
     if (this.playerStats.isArmed) {
       this.playerSwordMesh.rotation.set(isHeavy ? -1.2 : -0.8, isHeavy ? 0.8 : -0.6, 0);
@@ -6600,6 +6613,15 @@ export class Oakhaven3DExperience {
     this.scene.remove(prop.mesh);
     this.audio.playWoodBreak();
     this.createDebrisExplosion(prop.position);
+    this.visualDesigns.spawnVfxBillboard(
+      this.scene,
+      prop.position.clone().add(new THREE.Vector3(0, 0.7, 0)),
+      1.9,
+      1.9,
+      '/assets/vfx/fx_bone_shatter.png',
+      6,
+      18
+    );
     this.progression.addExp(15);
     this.spawnFloatingText(prop.position, `+15 EXP (${prop.name})`, '#ffd700');
 
@@ -8995,6 +9017,17 @@ export class Oakhaven3DExperience {
   public triggerHolyFlash(intensity = 0.9): void {
     this.holyFlashOpacity = Math.max(this.holyFlashOpacity, intensity);
     this.audio.playHolyFlash?.();
+    if (this.playerGroup) {
+      this.visualDesigns.spawnVfxBillboard(
+        this.scene,
+        this.playerGroup.position.clone().add(new THREE.Vector3(0, 1.3, 0)),
+        1.8,
+        1.8,
+        '/assets/vfx/fx_parry_spark.png',
+        5,
+        20
+      );
+    }
   }
 
   public triggerScreenShake(trauma = 0.5): void {
@@ -11251,6 +11284,81 @@ export class Oakhaven3DExperience {
         false
       );
     }
+
+    // 7. Attach the 11 Official Animated Prop Sprite Sheets to 3D Destructibles & Landmarks
+    this.destructibles.forEach(prop => {
+      if (prop.id.startsWith('barrel')) {
+        this.visualDesigns.attachAnimatedBillboard(
+          `prop_${prop.id}`,
+          prop.mesh,
+          1.15,
+          1.55,
+          0.35,
+          'idle',
+          { idle: { url: '/assets/props/prop_barrel.png', frames: 4, fps: 6, loop: false } },
+          false
+        );
+      } else if (prop.id.startsWith('crate')) {
+        this.visualDesigns.attachAnimatedBillboard(
+          `prop_${prop.id}`,
+          prop.mesh,
+          1.1,
+          1.1,
+          0.25,
+          'idle',
+          { idle: { url: '/assets/props/prop_parish_crate.png', frames: 4, fps: 6, loop: false } },
+          false
+        );
+      } else if (prop.id.startsWith('grave')) {
+        this.visualDesigns.attachAnimatedBillboard(
+          `prop_${prop.id}`,
+          prop.mesh,
+          1.15,
+          1.55,
+          0.35,
+          'idle',
+          { idle: { url: '/assets/props/prop_celtic_gravestone.png', frames: 3, fps: 6, loop: false } },
+          false
+        );
+      } else if (prop.id.startsWith('sarcophagus')) {
+        this.visualDesigns.attachAnimatedBillboard(
+          `prop_${prop.id}`,
+          prop.mesh,
+          1.9,
+          1.9,
+          0.55,
+          'idle',
+          { idle: { url: '/assets/props/prop_monumental_sarcophagus.png', frames: 3, fps: 6, loop: false } },
+          false
+        );
+      }
+    });
+
+    // Attach animated prop billboards to key 3D landmarks (Sanctuary Cross, Altar, Great Pyre, Soul Braziers, Mausoleum)
+    const landmarkProps = [
+      { id: 'landmark_cross', x: -4.2, y: 1.5, z: 5.5, w: 1.6, h: 2.6, url: '/assets/props/prop_sanctuary_cross.png', frames: 4, fps: 6, loop: true },
+      { id: 'landmark_altar', x: -2.4, y: 1.0, z: 5.8, w: 1.8, h: 1.35, url: '/assets/props/prop_sanctuary_altar.png', frames: 4, fps: 6, loop: true },
+      { id: 'landmark_great_pyre', x: 0, y: 2.3, z: -22, w: 3.4, h: 3.4, url: '/assets/props/prop_great_pyre.png', frames: 6, fps: 10, loop: true },
+      { id: 'landmark_brazier_l', x: -2.5, y: 1.3, z: -31, w: 1.2, h: 1.8, url: '/assets/props/prop_soul_brazier.png', frames: 4, fps: 8, loop: true },
+      { id: 'landmark_brazier_r', x: 2.5, y: 1.3, z: -31, w: 1.2, h: 1.8, url: '/assets/props/prop_soul_brazier.png', frames: 4, fps: 8, loop: true },
+      { id: 'landmark_mausoleum', x: 0, y: 2.6, z: -43.6, w: 3.8, h: 4.8, url: '/assets/props/prop_mausoleum_facade.png', frames: 4, fps: 6, loop: true }
+    ];
+
+    landmarkProps.forEach(lp => {
+      const anchor = new THREE.Group();
+      anchor.position.set(lp.x, 0, lp.z);
+      this.scene.add(anchor);
+      this.visualDesigns.attachAnimatedBillboard(
+        lp.id,
+        anchor,
+        lp.w,
+        lp.h,
+        lp.y,
+        'idle',
+        { idle: { url: lp.url, frames: lp.frames, fps: lp.fps, loop: lp.loop } },
+        false
+      );
+    });
   }
 
   private updateOfficial3DVisualStates(): void {

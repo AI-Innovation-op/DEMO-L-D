@@ -21,14 +21,27 @@ interface ActiveBillboard {
   hideProceduralChildren: boolean;
 }
 
+interface TransientVfxBillboard {
+  mesh: THREE.Mesh;
+  scene: THREE.Scene;
+  baseTexture: THREE.Texture;
+  ownTexture: THREE.Texture;
+  frames: number;
+  fps: number;
+  currentFrame: number;
+  frameTimer: number;
+  finished: boolean;
+}
+
 /**
- * Integrates Kevin's official visual designs (65 animation sprite strips, 11 props,
+ * Integrates Kevin's official visual designs (65 animation sprite strips, 11 props, 11 VFX,
  * character/boss illustrations, and panoramic loading vistas) directly into the Three.js 3D world.
  */
 export class ThreeVisualDesignSystem {
   private loader = new THREE.TextureLoader();
   private textureCache: Map<string, THREE.Texture> = new Map();
   private billboards: Map<string, ActiveBillboard> = new Map();
+  private transientVfx: TransientVfxBillboard[] = [];
   private vistaMeshes: THREE.Mesh[] = [];
   public isEnabled: boolean = true;
 
@@ -192,6 +205,50 @@ export class ThreeVisualDesignSystem {
     }
   }
 
+  /**
+   * Spawns a one-shot animated VFX sprite strip billboard in 3D space (e.g., slash, parry spark, explosion, flame pillar, bone shatter).
+   */
+  public spawnVfxBillboard(
+    scene: THREE.Scene,
+    worldPos: THREE.Vector3,
+    width: number,
+    height: number,
+    url: string,
+    frames: number,
+    fps: number = 18
+  ): void {
+    if (!this.isEnabled) return;
+    const baseTex = this.loadStripTexture(url, frames);
+    const ownTex = this.createOwnInstanceTexture(baseTex, frames);
+
+    const geo = new THREE.PlaneGeometry(width, height);
+    const mat = new THREE.MeshBasicMaterial({
+      map: ownTex,
+      transparent: true,
+      alphaTest: 0.05,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending
+    });
+
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.copy(worldPos);
+    mesh.renderOrder = 10;
+    scene.add(mesh);
+
+    this.transientVfx.push({
+      mesh,
+      scene,
+      baseTexture: baseTex,
+      ownTexture: ownTex,
+      frames,
+      fps,
+      currentFrame: 0,
+      frameTimer: 0,
+      finished: false
+    });
+  }
+
   public toggleVisualStyle(): boolean {
     this.isEnabled = !this.isEnabled;
     for (const b of this.billboards.values()) {
@@ -255,9 +312,49 @@ export class ThreeVisualDesignSystem {
       }
       b.mesh.rotation.set(0, worldAngleY - parentRotY, 0);
     }
+
+    // Update transient one-shot VFX billboards
+    for (let i = this.transientVfx.length - 1; i >= 0; i--) {
+      const fx = this.transientVfx[i];
+      if (fx.baseTexture.image && fx.ownTexture.image !== fx.baseTexture.image) {
+        fx.ownTexture.image = fx.baseTexture.image;
+        fx.ownTexture.needsUpdate = true;
+      }
+
+      fx.frameTimer += delta;
+      const frameDuration = 1 / Math.max(1, fx.fps);
+      if (fx.frameTimer >= frameDuration) {
+        fx.frameTimer -= frameDuration;
+        fx.currentFrame++;
+        if (fx.currentFrame >= fx.frames) {
+          fx.finished = true;
+        }
+      }
+
+      if (fx.finished) {
+        fx.scene.remove(fx.mesh);
+        fx.mesh.geometry.dispose();
+        (fx.mesh.material as THREE.Material).dispose();
+        fx.ownTexture.dispose();
+        this.transientVfx.splice(i, 1);
+        continue;
+      }
+
+      fx.ownTexture.repeat.set(1 / fx.frames, 1);
+      fx.ownTexture.offset.set(fx.currentFrame / fx.frames, 0);
+
+      const dx = camPos.x - fx.mesh.position.x;
+      const dz = camPos.z - fx.mesh.position.z;
+      fx.mesh.rotation.set(0, Math.atan2(dx, dz), 0);
+    }
   }
 
   public dispose(): void {
+    for (const fx of this.transientVfx) {
+      fx.scene.remove(fx.mesh);
+      fx.ownTexture.dispose();
+    }
+    this.transientVfx = [];
     for (const b of this.billboards.values()) {
       b.ownTexture.dispose();
     }

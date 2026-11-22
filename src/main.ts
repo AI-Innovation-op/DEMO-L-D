@@ -34,7 +34,12 @@ export function launch3DPrototype(): void {
     instructionsEl.style.display = 'none';
   }
 
+  let activeHeroFrom2D: 'thomas' | 'khaterine' | null = null;
   if (phaserGame) {
+    const gameScene = phaserGame.scene.getScene('GameScene') as GameScene | undefined;
+    if (gameScene && gameScene.player) {
+      activeHeroFrom2D = gameScene.player.id === 'khaterine' ? 'khaterine' : 'thomas';
+    }
     phaserGame.scene.scenes.forEach(s => {
       if (s.scene.isActive() && s.scene.key !== 'BootScene') {
         s.scene.pause();
@@ -60,10 +65,24 @@ export function launch3DPrototype(): void {
   });
   (window as unknown as { three3dExperience: Oakhaven3DExperience | null }).three3dExperience = three3dExperience;
   three3dExperience.init();
+  if (activeHeroFrom2D && three3dExperience.activeHero !== activeHeroFrom2D) {
+    three3dExperience.party.switchHero(activeHeroFrom2D);
+    three3dExperience.updateHeroVisuals();
+  }
 }
 
-export function exit3DPrototype(startDirect2D: boolean = false, scenarioIndex: number = 1): void {
-  const activeHeroFrom3D = three3dExperience ? (three3dExperience as unknown as { activeHero?: 'thomas' | 'khaterine' }).activeHero || 'thomas' : 'thomas';
+export function exit3DPrototype(startDirect2D: boolean = false, scenarioIndex?: number): void {
+  const activeHeroFrom3D = three3dExperience ? three3dExperience.activeHero : 'thomas';
+  let resolvedScenario = scenarioIndex || 1;
+  if (!scenarioIndex && three3dExperience) {
+    const areaMgr = (three3dExperience as unknown as { dungeonAreaManager?: { currentArea?: string } }).dungeonAreaManager;
+    const area = areaMgr?.currentArea || 'surface';
+    if (area === 'belltower_summit') resolvedScenario = 2;
+    else if (area === 'great_stone_bridge') resolvedScenario = 3;
+    else if (area === 'londinium_citadel') resolvedScenario = 4;
+    else if (area === 'inverted_cathedral') resolvedScenario = 5;
+    else resolvedScenario = 1;
+  }
 
   const threeWrapper = document.getElementById('three-wrapper');
   if (threeWrapper) {
@@ -113,7 +132,7 @@ export function exit3DPrototype(startDirect2D: boolean = false, scenarioIndex: n
       });
       phaserGame.scene.start('GameScene', {
         characterId: activeHeroFrom3D,
-        scenarioIndex
+        scenarioIndex: resolvedScenario
       });
     } else if (!anyResumed) {
       phaserGame.scene.start('TitleScene');

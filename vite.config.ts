@@ -16,6 +16,15 @@ export default defineConfig({
   },
   build: {
     assetsInlineLimit: 0,
-    target: 'es2022'
+    target: 'es2022',
+    chunkSizeWarningLimit: 1800,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          phaser: ['phaser'],
+          three: ['three']
+        }
+      }
+    }
   }
 });
