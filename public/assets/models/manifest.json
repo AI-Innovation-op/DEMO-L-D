@@ -1,0 +1,26 @@
+{
+  "version": "1.0.0",
+  "description": "Manifiesto de modelos 3D (.glb) para The Light in the Darkness (Camino B). Agrega el ID del personaje o jefe en 'enabledModels' cuando coloques su archivo .glb en public/assets/models/.",
+  "enabledModels": [],
+  "slots": {
+    "thomas": { "file": "/assets/models/thomas.glb", "targetHeight": 1.82, "category": "hero" },
+    "khaterine": { "file": "/assets/models/khaterine.glb", "targetHeight": 1.78, "category": "hero" },
+    "shalem": { "file": "/assets/models/shalem.glb", "targetHeight": 0.55, "category": "companion" },
+    "shalem_lion": { "file": "/assets/models/shalem_lion.glb", "targetHeight": 2.25, "category": "companion" },
+    "elowen": { "file": "/assets/models/elowen.glb", "targetHeight": 1.72, "category": "npc" },
+    "cedric": { "file": "/assets/models/cedric.glb", "targetHeight": 1.78, "category": "npc" },
+    "martin_ally": { "file": "/assets/models/martin_ally.glb", "targetHeight": 1.80, "category": "ally" },
+    "tobias_ally": { "file": "/assets/models/tobias_ally.glb", "targetHeight": 1.84, "category": "ally" },
+    "hound": { "file": "/assets/models/hound.glb", "targetHeight": 1.15, "category": "enemy" },
+    "cultist": { "file": "/assets/models/cultist.glb", "targetHeight": 1.78, "category": "enemy" },
+    "zealot": { "file": "/assets/models/zealot.glb", "targetHeight": 1.88, "category": "enemy" },
+    "skeleton": { "file": "/assets/models/skeleton.glb", "targetHeight": 1.86, "category": "enemy" },
+    "morwenna": { "file": "/assets/models/morwenna.glb", "targetHeight": 2.25, "category": "boss" },
+    "inquisitor": { "file": "/assets/models/inquisitor.glb", "targetHeight": 2.18, "category": "boss" },
+    "root_prowler": { "file": "/assets/models/root_prowler.glb", "targetHeight": 1.65, "category": "boss" },
+    "crucible_guardian": { "file": "/assets/models/crucible_guardian.glb", "targetHeight": 2.45, "category": "boss" },
+    "captain_vane": { "file": "/assets/models/captain_vane.glb", "targetHeight": 2.30, "category": "boss" },
+    "rex_malphas": { "file": "/assets/models/rex_malphas.glb", "targetHeight": 2.35, "category": "boss" },
+    "astaroth": { "file": "/assets/models/astaroth.glb", "targetHeight": 4.20, "category": "boss" }
+  }
+}

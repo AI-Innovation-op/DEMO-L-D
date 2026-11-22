@@ -43,3 +43,17 @@ El mundo de **Albion** no es un simple decorado de combate; es la expresión esp
    - **Dilema Moral Interactivo**:
      - **Opción 1 (Canónica — *La Luz en las Tinieblas*)**: *«¡Solo la Oscuridad que elija amar será la única Luz en las Tinieblas!»* -> Shalem rompe su contrato demoníaco manifestando su aura de León de Brasas, Elowen y Khaterine sellan las alas del titán, y tras el golpe final de *Alba Gris*, el cielo se transforma en el **Primer Amanecer Dorado** sobre la Colina del Viejo Roble.
      - **Opción 2 (Alternativa — *Eclipse de Ceniza*)**: Ceder al odio y consumir las almas de Albion muestra el epílogo oscuro *What-If*, permitiendo luego regresar al Altar de la Comunión para conquistar el Final Verdadero.
+
+---
+
+## 4. Hoja de Ruta y Estado de Implementación (Camino B + Camino C)
+
+| Fase / Hito | Estado | Archivos Clave |
+| :--- | :--- | :--- |
+| **Fase 1**: Rig 3D Articulado, Cámara 3ª Persona + Lock-On `[R]`, Colina del Viejo Roble (`+2.2m`), Alba → Asedio, Brújula Táctica y Dilema Cap. XX | ✅ Completado | `GothicArticulatedRig3D.ts`, `Oakhaven3DExperience.ts`, `GameScene.ts` |
+| **Fase 2**: Acto II (Granero Quemado, Celda de Sal `+2.8m`, Trampa Crisol `[T]`), Acto III (Barandillas rotas con caída al abismo `[K]`, aliados Martín y Tobías), Acto IV (3 Braseros Narcóticos, ciudadanos en trance y 3 Espejos de Culpa) | ✅ Completado | `Oakhaven3DExperience.ts`, `GameScene.ts` |
+| **Fase 3**: Acto V (Escalada flotante `+2.4m` + Impulso Astral `[ESPACIO]`, Shalem León Colosal de Brasas Carmesíes y Epílogo Jugable del Primer Amanecer con 16 flores blancas y diálogos de cierre) | ✅ Completado | `Oakhaven3DExperience.ts`, `GameScene.ts` |
+| **Fase 4 & Director de Campaña 3D**: Secuencia continua de 20 capítulos (`CampaignSequence3D.ts`), Prólogo interactivo de 3 escenas (`#p3d-prologue-modal`), Carteles Cinematográficos (`#p3d-chapter-banner`), Rastreador de Misión (`#p3d-quest-tracker`), Baliza 3D y Portales entre Actos | ✅ Completado | `CampaignSequence3D.ts`, `Oakhaven3DExperience.ts`, `GameSaveManager.ts` |
+| **Camino B (Pipeline `.GLB` / `.GLTF` y Relieve PBR Gótico)**: Cargador automático y hot-swap en vivo de modelos `.glb` (`GothicModelLoader3D.ts`, `public/assets/models/manifest.json`) + texturas PBR con bump maps (`GothicMaterialLibrary3D.ts`) | ✅ Completado | `GothicModelLoader3D.ts`, `GothicMaterialLibrary3D.ts`, `public/assets/models/manifest.json` |
+| **Camino C (Fase Final post-juego Web)**: Port a **Roblox Studio (Luau / `roblox-ts`)** reutilizando toda la capa `src/domain/` y la arquitectura de 20 capítulos una vez finalizados todos los sistemas y diseños del juego Web | ⏳ Planificado al finalizar el juego Web | `src/domain/*` → `roblox-ts` / Luau |
+

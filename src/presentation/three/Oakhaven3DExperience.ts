@@ -24,6 +24,12 @@ import { ArsenalManager, ArrowType } from '../../domain/combat/ArsenalManager';
 import { ThreeVisualDesignSystem } from './ThreeVisualDesignSystem';
 import { VISUAL_PACK_3D_CONCEPTS } from '../assets/VisualPackCatalog';
 import { GothicArticulatedRig3D } from './GothicArticulatedRig3D';
+import { GothicMaterialLibrary3D } from './GothicMaterialLibrary3D';
+import {
+  GothicModelLoader3D,
+  CANONICAL_GLB_SLOTS,
+  CanonicalGlbSlotId
+} from './GothicModelLoader3D';
 
 export interface CombatStats3D {
   health: number;
@@ -520,8 +526,9 @@ export class Oakhaven3DExperience {
   private uiOverlay!: HTMLDivElement;
   private onExitCallback?: () => void;
 
-  // Official Visual Pack & 3D Illumination System
+  // Official Visual Pack, GLB 3D Model Pipeline (Camino B) & 3D Illumination System
   private visualDesigns: ThreeVisualDesignSystem = new ThreeVisualDesignSystem();
+  private modelLoader3D: GothicModelLoader3D = new GothicModelLoader3D();
   private playerAmbientFollowLight?: THREE.PointLight;
   private isDesignsModalOpen: boolean = false;
   private designsModalEl?: HTMLDivElement;
@@ -2906,9 +2913,26 @@ export class Oakhaven3DExperience {
     this.belltowerGroup = new THREE.Group();
     this.belltowerGroup.position.set(0, 0, -202);
 
-    const stoneFloorMat = new THREE.MeshStandardMaterial({ color: 0x221e28, roughness: 0.9 });
-    const woodBeamMat = new THREE.MeshStandardMaterial({ color: 0x3d2719, roughness: 0.85 });
-    const bronzeMat = new THREE.MeshStandardMaterial({ color: 0x8b6508, metalness: 0.85, roughness: 0.35 });
+    const stoneBump = GothicMaterialLibrary3D.getSurfaceTexture('gothic_stone', 4, 4);
+    const woodBump = GothicMaterialLibrary3D.getSurfaceTexture('charred_wood', 2, 4);
+    const metalBump = GothicMaterialLibrary3D.getSurfaceTexture('forged_metal', 2, 2);
+
+    const stoneFloorMat = new THREE.MeshStandardMaterial({
+      color: 0x221e28,
+      roughness: 0.88,
+      ...(stoneBump ? { bumpMap: stoneBump, bumpScale: 0.06 } : {})
+    });
+    const woodBeamMat = new THREE.MeshStandardMaterial({
+      color: 0x3d2719,
+      roughness: 0.85,
+      ...(woodBump ? { bumpMap: woodBump, bumpScale: 0.05 } : {})
+    });
+    const bronzeMat = new THREE.MeshStandardMaterial({
+      color: 0x8b6508,
+      metalness: 0.85,
+      roughness: 0.35,
+      ...(metalBump ? { bumpMap: metalBump, bumpScale: 0.04 } : {})
+    });
     const ironBarMat = new THREE.MeshStandardMaterial({ color: 0x1a1a20, metalness: 0.9, roughness: 0.3 });
     const saltMat = new THREE.MeshStandardMaterial({ color: 0xf5f5fa, roughness: 0.4, emissive: 0x222233 });
 
@@ -3146,8 +3170,18 @@ export class Oakhaven3DExperience {
     this.greatStoneBridgeGroup = new THREE.Group();
     this.greatStoneBridgeGroup.position.set(0, 0, -255);
 
-    const graniteMat = new THREE.MeshStandardMaterial({ color: 0x38353d, roughness: 0.9 });
-    const woodCrossMat = new THREE.MeshStandardMaterial({ color: 0x2b1c11, roughness: 0.95 });
+    const bridgeStoneBump = GothicMaterialLibrary3D.getSurfaceTexture('gothic_stone', 3, 12);
+    const bridgeWoodBump = GothicMaterialLibrary3D.getSurfaceTexture('charred_wood', 2, 2);
+    const graniteMat = new THREE.MeshStandardMaterial({
+      color: 0x38353d,
+      roughness: 0.88,
+      ...(bridgeStoneBump ? { bumpMap: bridgeStoneBump, bumpScale: 0.065 } : {})
+    });
+    const woodCrossMat = new THREE.MeshStandardMaterial({
+      color: 0x2b1c11,
+      roughness: 0.92,
+      ...(bridgeWoodBump ? { bumpMap: bridgeWoodBump, bumpScale: 0.05 } : {})
+    });
     const ironMat = new THREE.MeshStandardMaterial({ color: 0x1f1f24, metalness: 0.8, roughness: 0.35 });
 
     // 1. Massive Stone Bridge Roadway (48m long, 10.6m wide to match DungeonAreaManager bounds)
@@ -3385,9 +3419,27 @@ export class Oakhaven3DExperience {
     this.londiniumCitadelGroup = new THREE.Group();
     this.londiniumCitadelGroup.position.set(0, 0, -320);
 
-    const marbleMat = new THREE.MeshStandardMaterial({ color: 0xf5f5ff, roughness: 0.15, metalness: 0.1 });
-    const goldMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.95, roughness: 0.2 });
-    const velvetMat = new THREE.MeshStandardMaterial({ color: 0x6b091e, roughness: 0.7 });
+    const marbleBump = GothicMaterialLibrary3D.getSurfaceTexture('veined_marble', 4, 10);
+    const goldBump = GothicMaterialLibrary3D.getSurfaceTexture('forged_metal', 2, 2);
+    const velvetBump = GothicMaterialLibrary3D.getSurfaceTexture('woven_cloth', 3, 3);
+
+    const marbleMat = new THREE.MeshStandardMaterial({
+      color: 0xf5f5ff,
+      roughness: 0.18,
+      metalness: 0.12,
+      ...(marbleBump ? { bumpMap: marbleBump, bumpScale: 0.035 } : {})
+    });
+    const goldMat = new THREE.MeshStandardMaterial({
+      color: 0xd4af37,
+      metalness: 0.95,
+      roughness: 0.22,
+      ...(goldBump ? { bumpMap: goldBump, bumpScale: 0.04 } : {})
+    });
+    const velvetMat = new THREE.MeshStandardMaterial({
+      color: 0x6b091e,
+      roughness: 0.7,
+      ...(velvetBump ? { bumpMap: velvetBump, bumpScale: 0.035 } : {})
+    });
     const mirrorMat = new THREE.MeshStandardMaterial({ color: 0xd8e8f8, metalness: 0.95, roughness: 0.05 });
 
     // 1. Polished White Marble Floor
@@ -5760,6 +5812,61 @@ export class Oakhaven3DExperience {
     this.showCinematicChapterBanner(this.currentCanonChapterId);
   }
 
+  public resetAndStartNew3DCampaign(): void {
+    GameSaveManager.clearSave();
+    if (this.isCompendiumOpen) {
+      this.toggleCompendiumModal();
+    }
+    this.canonChapterManager = new CanonChapterManager(1);
+    this.currentCanonChapterId = 1;
+    this.announcedChapterIds.clear();
+    this.hasHealedGedeon = false;
+    this.hasHealedMarta = false;
+    this.hasTalkedToCedric3D = false;
+    this.hasTalkedToElowen3D = false;
+    this.hasTalkedToKhaterine3D = false;
+    this.hasTalkedToThomas3D = false;
+    this.hasDeliveredBirdOnOakHill = false;
+    this.hasVisitedApothecary3D = false;
+    this.hasInspectedBurnedBarn = false;
+    this.hasCollectedWillowBird = false;
+    this.hasTriggeredCrucibleGearJam = false;
+    this.hasFreedRefugees = false;
+    this.destroyedNarcoticBraziersCount = 0;
+    this.shatteredGuiltMirrors = 0;
+    this.hasClearedMirrorGallery = false;
+    this.hasTriggeredTriHeroSynergy = false;
+    this.hasForgedAlbaGris = false;
+    this.isShalemLionActive = false;
+    if (this.shalemLionGroup) this.shalemLionGroup.visible = false;
+    if (this.epilogueFlowersGroup) this.epilogueFlowersGroup.visible = false;
+
+    this.oakhavenNarrativePhase = 'DAWN_CALM';
+    this.scene.background = new THREE.Color(0x222c46);
+    this.scene.fog = new THREE.FogExp2(0x242e48, 0.011);
+    if (this.ambientLightRef) {
+      this.ambientLightRef.color.setHex(0x64588c);
+      this.ambientLightRef.intensity = 2.6;
+    }
+    if (this.hemiLightRef) {
+      this.hemiLightRef.color.setHex(0xb8d0f8);
+      this.hemiLightRef.groundColor.setHex(0x4c3c68);
+    }
+    if (this.moonLightRef) {
+      this.moonLightRef.color.setHex(0xddeaff);
+      this.moonLightRef.intensity = 2.6;
+    }
+
+    this.dungeonAreaManager.exitToSurface();
+    this.setPlayerPosition(0, 0, 4.0);
+    this.playerGroup.rotation.y = 0;
+    this.cameraYaw = 0;
+    this.targetCameraYaw = 0;
+    this.syncCampaignSequence(0.016);
+    this.updateHUD();
+    this.openPrologueModal(0);
+  }
+
   private syncCampaignSequence(delta: number): void {
     // 1. Fade out Cinematic Chapter Banner timer
     if (this.chapterBannerTimer > 0 && this.chapterBannerEl) {
@@ -6199,6 +6306,7 @@ export class Oakhaven3DExperience {
             </div>
           </div>
           <div style="display: flex; gap: 6px; align-items: center;">
+            <button id="btn-reset-campaign" style="background: #14331e; color: #a3ffc7; border: 1px solid #2ecc71; border-radius: 3px; padding: 2px 8px; font-size: 7.5px; cursor: pointer; font-weight: bold;">🔄 NUEVA CAMPAÑA</button>
             <button id="btn-replay-prologue" style="background: #33162b; color: #ffaa88; border: 1px solid #d46a47; border-radius: 3px; padding: 2px 8px; font-size: 7.5px; cursor: pointer; font-weight: bold;">🌒 VER PRÓLOGO</button>
             <button id="p3d-compendium-close" style="background: #2a1440; color: #ffaaaa; border: 1px solid #7a2222; border-radius: 3px; padding: 2px 8px; font-size: 8px; cursor: pointer; font-weight: bold;">[X] CERRAR</button>
           </div>
@@ -6252,7 +6360,19 @@ export class Oakhaven3DExperience {
             <button id="p3d-designs-close" style="background: #2a1440; color: #ffaaaa; border: 1px solid #7a2222; border-radius: 3px; padding: 2px 8px; font-size: 8px; cursor: pointer; font-weight: bold;">[X] CERRAR</button>
           </div>
         </div>
-        <div id="p3d-designs-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-height: 290px; overflow-y: auto; padding-right: 4px;">
+        <!-- Camino B: Live GLB / GLTF 3D Model Loader & Hot-Swap Bar -->
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; background: rgba(24, 15, 38, 0.92); border: 1px solid #d4af37; border-radius: 4px; padding: 5px 9px; margin-bottom: 8px;">
+          <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+            <span style="font-family: monospace; font-size: 7.5px; color: #ffd700; font-weight: bold;">📦 MODELO 3D (.GLB):</span>
+            <select id="p3d-glb-slot-select" style="background: #12091c; color: #f3c6ff; border: 1px solid #8e44ad; border-radius: 3px; padding: 2px 6px; font-family: monospace; font-size: 7.5px;"></select>
+            <button id="btn-upload-glb" style="background: #2b1d3d; color: #ffd700; border: 1px solid #d4af37; border-radius: 3px; padding: 2.5px 8px; font-family: monospace; font-size: 7.5px; font-weight: bold; cursor: pointer;">📂 CARGAR ARCHIVO .GLB</button>
+            <input type="file" id="p3d-glb-file-input" accept=".glb,.gltf" style="display: none;" />
+          </div>
+          <div id="p3d-glb-status" style="font-family: monospace; font-size: 7px; color: #a3ffc7;">
+            Auto-detecta public/assets/models/*.glb
+          </div>
+        </div>
+        <div id="p3d-designs-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-height: 250px; overflow-y: auto; padding-right: 4px;">
           <!-- Dynamically filled by renderDesignsModal() -->
         </div>
       </div>
@@ -6447,6 +6567,47 @@ export class Oakhaven3DExperience {
       btnReplayPrologue.addEventListener('click', () => {
         if (this.isCompendiumOpen) this.toggleCompendiumModal();
         this.openPrologueModal(0);
+      });
+    }
+    const btnResetCampaign = this.uiOverlay.querySelector('#btn-reset-campaign') as HTMLButtonElement | null;
+    if (btnResetCampaign) {
+      btnResetCampaign.addEventListener('click', () => {
+        this.resetAndStartNew3DCampaign();
+      });
+    }
+
+    // Camino B: Populate GLB Slot Select & Bind File Uploader
+    const glbSelect = this.uiOverlay.querySelector('#p3d-glb-slot-select') as HTMLSelectElement | null;
+    const btnUploadGlb = this.uiOverlay.querySelector('#btn-upload-glb') as HTMLButtonElement | null;
+    const glbInput = this.uiOverlay.querySelector('#p3d-glb-file-input') as HTMLInputElement | null;
+    const glbStatus = this.uiOverlay.querySelector('#p3d-glb-status') as HTMLDivElement | null;
+    if (glbSelect) {
+      Object.values(CANONICAL_GLB_SLOTS).forEach(slot => {
+        const opt = document.createElement('option');
+        opt.value = slot.id;
+        opt.innerText = `${slot.label} (${slot.id}.glb)`;
+        glbSelect.appendChild(opt);
+      });
+    }
+    if (btnUploadGlb && glbInput) {
+      btnUploadGlb.addEventListener('click', () => glbInput.click());
+      glbInput.addEventListener('change', async () => {
+        const file = glbInput.files?.[0];
+        const slotId = (glbSelect?.value || 'thomas') as CanonicalGlbSlotId;
+        if (!file) return;
+        if (glbStatus) glbStatus.innerText = `Cargando ${file.name}...`;
+        const ok = await this.modelLoader3D.loadSlotFromFile(slotId, file);
+        if (glbStatus) {
+          glbStatus.innerText = ok
+            ? `✓ ${CANONICAL_GLB_SLOTS[slotId].label} actualizado con ${file.name}`
+            : `✗ Error al leer ${file.name}`;
+          glbStatus.style.color = ok ? '#88ffaa' : '#ff7777';
+        }
+        if (ok) {
+          this.audio.playHolyFlash?.();
+          this.spawnFloatingText(this.playerGroup.position, `📦 ¡MODELO 3D .GLB APLICADO A ${slotId.toUpperCase()}!`, '#ffd700');
+        }
+        glbInput.value = '';
       });
     }
 
@@ -11003,6 +11164,7 @@ export class Oakhaven3DExperience {
     this.updateScreenPostFx(delta);
     this.updateOfficial3DVisualStates();
     this.visualDesigns.update(delta, this.camera);
+    this.modelLoader3D.update(delta);
 
     // Keep player ambient illumination light following the active hero across all 7 3D zones
     if (this.playerAmbientFollowLight) {
@@ -13725,6 +13887,28 @@ export class Oakhaven3DExperience {
         false
       );
     });
+
+    // 8. Camino B: Register all 3D character, companion, ally, enemy & boss groups with GothicModelLoader3D
+    if (this.thomasModelGroup) this.modelLoader3D.registerSlotTarget('thomas', this.thomasModelGroup);
+    if (this.khaterineModelGroup) this.modelLoader3D.registerSlotTarget('khaterine', this.khaterineModelGroup);
+    if (this.shalemGroup) this.modelLoader3D.registerSlotTarget('shalem', this.shalemGroup);
+    if (this.elowenGroup) this.modelLoader3D.registerSlotTarget('elowen', this.elowenGroup);
+    if (this.cedricGroup) this.modelLoader3D.registerSlotTarget('cedric', this.cedricGroup);
+    if (this.martinAllyGroup) this.modelLoader3D.registerSlotTarget('martin_ally', this.martinAllyGroup);
+    if (this.tobiasAllyGroup) this.modelLoader3D.registerSlotTarget('tobias_ally', this.tobiasAllyGroup);
+    if (this.enemyGroup) this.modelLoader3D.registerSlotTarget('hound', this.enemyGroup);
+    if (this.cultistGroup) this.modelLoader3D.registerSlotTarget('cultist', this.cultistGroup);
+    if (this.zealotGroup) this.modelLoader3D.registerSlotTarget('zealot', this.zealotGroup);
+    if (this.skeletonGroup) this.modelLoader3D.registerSlotTarget('skeleton', this.skeletonGroup);
+    if (this.morwennaGroup) this.modelLoader3D.registerSlotTarget('morwenna', this.morwennaGroup);
+    if (this.inquisitorGroup) this.modelLoader3D.registerSlotTarget('inquisitor', this.inquisitorGroup);
+    if (this.rootProwlerGroup) this.modelLoader3D.registerSlotTarget('root_prowler', this.rootProwlerGroup);
+    if (this.crucibleGuardianGroup) this.modelLoader3D.registerSlotTarget('crucible_guardian', this.crucibleGuardianGroup);
+    if (this.captainVaneGroup) this.modelLoader3D.registerSlotTarget('captain_vane', this.captainVaneGroup);
+    if (this.rexMalphasGroup) this.modelLoader3D.registerSlotTarget('rex_malphas', this.rexMalphasGroup);
+    if (this.astarothGroup) this.modelLoader3D.registerSlotTarget('astaroth', this.astarothGroup);
+
+    void this.modelLoader3D.autoLoadFromManifest();
   }
 
   private updateOfficial3DVisualStates(): void {
@@ -13850,6 +14034,19 @@ export class Oakhaven3DExperience {
       this.astarothEncounter.state === 'STUNNED' ? 'stun' :
       this.astarothEncounter.state === 'METEOR_STORM' || this.astarothEncounter.state === 'BLACK_SUN_BURST' ? 'attack' : 'idle';
     this.visualDesigns.setClip('boss_astaroth', astarothClip);
+
+    // 5. Camino B: Sync any loaded .GLB / .GLTF 3D model animation clips
+    const heroGlbState: 'idle' | 'walk' | 'run' | 'attack' | 'dodge' | 'guard' | 'death' =
+      this.isPlayerDefeated ? 'death' :
+      this.playerStats.isDodging ? 'dodge' :
+      this.isPlayerAttacking ? 'attack' :
+      this.playerStats.isGuarding ? 'guard' :
+      isMoving ? 'run' : 'idle';
+    this.modelLoader3D.setClipState(this.activeHero === 'khaterine' ? 'khaterine' : 'thomas', heroGlbState);
+    this.modelLoader3D.setClipState('crucible_guardian', this.crucibleGuardianEncounter.isDefeated ? 'death' : crucibleClip === 'attack' ? 'attack' : 'idle');
+    this.modelLoader3D.setClipState('captain_vane', this.captainVaneEncounter.isDefeated ? 'death' : vaneClip === 'attack' ? 'attack' : 'idle');
+    this.modelLoader3D.setClipState('rex_malphas', this.rexMalphasEncounter.isDefeated ? 'death' : malphasClip === 'attack' ? 'attack' : 'idle');
+    this.modelLoader3D.setClipState('astaroth', this.astarothEncounter.isDefeated ? 'death' : astarothClip === 'attack' ? 'attack' : 'idle');
   }
 
   public toggleDesignsModal(): void {

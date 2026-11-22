@@ -2,6 +2,10 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { GothicArticulatedRig3D, ClipEventType3D, ArticulatedRigArchetype3D } from '../../src/presentation/three/GothicArticulatedRig3D';
 import {
+  normalizeAndGroundGlbModel,
+  CANONICAL_GLB_SLOTS
+} from '../../src/presentation/three/GothicModelLoader3D';
+import {
   computeWorldTerrainHeight,
   isBridgeAbyssDropZone,
   computeMalphasBrazierMultiplier
@@ -314,6 +318,29 @@ describe('Camera & Input Architecture (Vice City & OpenLara Solution)', () => {
 
       expect(vaneWind.nodes.capeGroup.rotation.x).toBeGreaterThan(vaneCalm.nodes.capeGroup.rotation.x);
       expect(Math.abs(vaneWind.nodes.capeGroup.rotation.z)).toBeGreaterThan(0);
+    });
+
+    it('normalizes and grounds imported .GLB / .GLTF 3D models to exact canonical height (Camino B)', () => {
+      expect(CANONICAL_GLB_SLOTS.thomas.targetHeight).toBeCloseTo(1.82, 2);
+      expect(CANONICAL_GLB_SLOTS.khaterine.targetHeight).toBeCloseTo(1.78, 2);
+      expect(CANONICAL_GLB_SLOTS.astaroth.targetHeight).toBeCloseTo(4.2, 2);
+
+      // Simulate an unscaled 10-meter tall mesh offset floating at y = +5..+15
+      const rawMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(4, 10, 4),
+        new THREE.MeshStandardMaterial({ color: 0xffffff })
+      );
+      rawMesh.position.set(3, 10, -2);
+      const rawGroup = new THREE.Group();
+      rawGroup.add(rawMesh);
+
+      const normalized = normalizeAndGroundGlbModel(rawGroup, CANONICAL_GLB_SLOTS.thomas.targetHeight);
+      const finalBox = new THREE.Box3().setFromObject(normalized);
+      const finalSize = new THREE.Vector3();
+      finalBox.getSize(finalSize);
+
+      expect(finalSize.y).toBeCloseTo(1.82, 2);
+      expect(finalBox.min.y).toBeCloseTo(0, 2);
     });
   });
 });

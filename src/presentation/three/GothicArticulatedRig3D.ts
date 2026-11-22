@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GothicMaterialLibrary3D } from './GothicMaterialLibrary3D';
 
 export type ArticulatedRigArchetype3D =
   | 'thomas'
@@ -292,26 +293,34 @@ export class GothicArticulatedRig3D {
 
     const isSlender = this.heroId === 'khaterine' || this.heroId === 'morwenna';
 
-    // Shared Gothic PBR Materials derived from archetype config
+    const clothBump = GothicMaterialLibrary3D.getSurfaceTexture('woven_cloth');
+    const metalBump = GothicMaterialLibrary3D.getSurfaceTexture('forged_metal');
+
+    // Shared Gothic PBR Materials with procedural weave & hammered-metal bump relief
     const primaryClothMat = new THREE.MeshStandardMaterial({
       color: this.style.primaryColor,
       roughness: 0.72,
-      metalness: 0.18
+      metalness: 0.18,
+      ...(clothBump ? { bumpMap: clothBump, bumpScale: 0.035 } : {})
     });
     const trimMat = new THREE.MeshStandardMaterial({
       color: this.style.trimColor,
       roughness: 0.58,
-      metalness: 0.28
+      metalness: 0.28,
+      side: THREE.DoubleSide,
+      ...(clothBump ? { bumpMap: clothBump, bumpScale: 0.03 } : {})
     });
     const leatherMat = new THREE.MeshStandardMaterial({
       color: 0x3b2618,
       roughness: 0.72,
-      metalness: 0.15
+      metalness: 0.15,
+      ...(clothBump ? { bumpMap: clothBump, bumpScale: 0.025 } : {})
     });
     const metalArmorMat = new THREE.MeshStandardMaterial({
       color: this.style.armorColor,
       roughness: 0.32,
-      metalness: 0.85
+      metalness: 0.85,
+      ...(metalBump ? { bumpMap: metalBump, bumpScale: 0.045 } : {})
     });
     const skinMat = new THREE.MeshStandardMaterial({
       color: this.style.skinColor,
@@ -327,7 +336,8 @@ export class GothicArticulatedRig3D {
     const goldAccentMat = new THREE.MeshStandardMaterial({
       color: 0xd4af37,
       roughness: 0.3,
-      metalness: 0.85
+      metalness: 0.85,
+      ...(metalBump ? { bumpMap: metalBump, bumpScale: 0.04 } : {})
     });
 
     // 1. PELVIS ROOT (y = 0.88m)
@@ -347,12 +357,13 @@ export class GothicArticulatedRig3D {
     buckle.position.set(0, 0, 0.25);
     pelvis.add(buckle);
 
-    // Tunic / Robe lower skirt flaps around pelvis
-    const skirtGeo = new THREE.CylinderGeometry(0.26, isSlender ? 0.44 : 0.38, isSlender ? 0.54 : 0.42, 10, 1, true);
+    // Tunic / Robe lower skirt flaps around pelvis (16-segment pleated gothic silhouette)
+    const skirtGeo = new THREE.CylinderGeometry(0.25, isSlender ? 0.45 : 0.39, isSlender ? 0.54 : 0.42, 16, 1, true);
     const skirtMat = new THREE.MeshStandardMaterial({
       color: this.style.primaryColor,
-      roughness: 0.8,
-      side: THREE.DoubleSide
+      roughness: 0.78,
+      side: THREE.DoubleSide,
+      ...(clothBump ? { bumpMap: clothBump, bumpScale: 0.04 } : {})
     });
     const skirt = new THREE.Mesh(skirtGeo, skirtMat);
     skirt.position.y = isSlender ? -0.24 : -0.18;
@@ -365,7 +376,7 @@ export class GothicArticulatedRig3D {
     pelvis.add(torso);
 
     const chestMesh = new THREE.Mesh(
-      new THREE.CylinderGeometry(isSlender ? 0.24 : 0.28, 0.23, 0.56, 10),
+      new THREE.CylinderGeometry(isSlender ? 0.23 : 0.27, 0.22, 0.56, 16),
       primaryClothMat
     );
     chestMesh.position.y = 0.28;
@@ -375,7 +386,7 @@ export class GothicArticulatedRig3D {
     // Pauldrons / Shoulder Guards
     [-0.31, 0.31].forEach(sideX => {
       const pauldron = new THREE.Mesh(
-        new THREE.SphereGeometry(0.14, 8, 8, 0, Math.PI * 2, 0, Math.PI * 0.6),
+        new THREE.SphereGeometry(0.145, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.6),
         isSlender ? trimMat : metalArmorMat
       );
       pauldron.position.set(sideX, 0.52, 0);
@@ -385,18 +396,27 @@ export class GothicArticulatedRig3D {
     });
 
     // Glowing Sigil on Chest
-    const sigilRing = new THREE.Mesh(new THREE.RingGeometry(0.06, 0.11, 12), runeGlowMat);
-    sigilRing.position.set(0, 0.34, isSlender ? 0.24 : 0.27);
+    const sigilRing = new THREE.Mesh(new THREE.RingGeometry(0.06, 0.11, 16), runeGlowMat);
+    sigilRing.position.set(0, 0.34, isSlender ? 0.235 : 0.265);
     torso.add(sigilRing);
 
-    // 3. FLOWING CAPE / VEIL (attached at upper torso back)
+    // 3. FLOWING DRAPED GOTHIC CAPE / VEIL (curved cylindrical mantle instead of flat box)
     const capeGroup = new THREE.Group();
-    capeGroup.position.set(0, 0.52, -0.18);
+    capeGroup.position.set(0, 0.52, -0.15);
     torso.add(capeGroup);
 
-    const capeGeo = new THREE.BoxGeometry(isSlender ? 0.52 : 0.56, isSlender ? 1.02 : 0.88, 0.04);
+    const capeGeo = new THREE.CylinderGeometry(
+      isSlender ? 0.24 : 0.27,
+      isSlender ? 0.44 : 0.48,
+      isSlender ? 1.02 : 0.88,
+      14,
+      1,
+      true,
+      Math.PI * 0.65,
+      Math.PI * 0.7
+    );
     const capeMesh = new THREE.Mesh(capeGeo, trimMat);
-    capeMesh.position.set(0, isSlender ? -0.48 : -0.42, -0.04);
+    capeMesh.position.set(0, isSlender ? -0.48 : -0.42, 0.12);
     capeMesh.rotation.x = 0.14;
     capeMesh.castShadow = true;
     capeGroup.add(capeMesh);
