@@ -10,6 +10,7 @@ import {
   isBridgeAbyssDropZone,
   computeMalphasBrazierMultiplier
 } from '../../src/presentation/three/Oakhaven3DExperience';
+import { HudCompactController3D } from '../../src/presentation/three/HudCompactController3D';
 
 describe('Camera & Input Architecture (Vice City & OpenLara Solution)', () => {
   describe('Shortest Angular Arc & Turning Math', () => {
@@ -341,6 +342,79 @@ describe('Camera & Input Architecture (Vice City & OpenLara Solution)', () => {
 
       expect(finalSize.y).toBeCloseTo(1.82, 2);
       expect(finalBox.min.y).toBeCloseTo(0, 2);
+    });
+  });
+
+  describe('Compact 3D HUD & Collapsible Drawer Controller (HudCompactController3D)', () => {
+    it('starts with both drawers collapsed and enforces mutual exclusivity between Menu and Dev drawers', () => {
+      const hud = new HudCompactController3D(7.5);
+      expect(hud.state.activeDrawer).toBe('none');
+      expect(hud.state.minimalHud).toBe(false);
+      expect(hud.state.toastVisible).toBe(true);
+
+      expect(hud.toggleDrawer('menu')).toBe('menu');
+      expect(hud.state.activeDrawer).toBe('menu');
+
+      // Opening Dev drawer automatically closes Menu drawer
+      expect(hud.toggleDrawer('dev')).toBe('dev');
+      expect(hud.state.activeDrawer).toBe('dev');
+
+      // Toggling same drawer closes it
+      expect(hud.toggleDrawer('dev')).toBe('none');
+      expect(hud.state.activeDrawer).toBe('none');
+    });
+
+    it('hides peripheral HUD chrome during cinematic beats and restores cleanly after', () => {
+      const hud = new HudCompactController3D(7.5);
+      hud.toggleDrawer('menu');
+      expect(hud.state.activeDrawer).toBe('menu');
+
+      hud.setCinematicActive(true);
+      expect(hud.shouldHidePeripheralChrome()).toBe(true);
+      expect(hud.state.activeDrawer).toBe('none');
+
+      hud.setCinematicActive(false);
+      expect(hud.shouldHidePeripheralChrome()).toBe(false);
+    });
+
+    it('auto-fades dialogue toast after countdown and glides bottom stack anchors cleanly without overlap', () => {
+      const hud = new HudCompactController3D(2.0);
+      expect(hud.state.toastVisible).toBe(true);
+      const anchorsWithToast = hud.computeBottomAnchors();
+      expect(anchorsWithToast.proximityBadgeBottomPx).toBeGreaterThan(anchorsWithToast.compassBottomPx + 25);
+
+      // Tick 10 x 0.25s = 2.5s -> should fade out
+      let changed = false;
+      for (let i = 0; i < 10; i++) {
+        if (hud.tick(0.25)) changed = true;
+      }
+      expect(changed).toBe(true);
+      expect(hud.state.toastVisible).toBe(false);
+
+      // Compass & proximity badge glide downward cleanly when toast disappears
+      const anchorsNoToast = hud.computeBottomAnchors();
+      expect(anchorsNoToast.compassBottomPx).toBeLessThan(anchorsWithToast.compassBottomPx);
+      expect(anchorsNoToast.proximityBadgeBottomPx).toBeGreaterThan(anchorsNoToast.compassBottomPx + 25);
+
+      // New toast restores visibility & timer
+      hud.notifyDialogueToast(6.0);
+      expect(hud.state.toastVisible).toBe(true);
+      hud.dismissDialogueToast();
+      expect(hud.state.toastVisible).toBe(false);
+    });
+
+    it('exits minimal HUD when opening a drawer and closes drawers when entering minimal HUD', () => {
+      const hud = new HudCompactController3D(5.0);
+      hud.toggleDrawer('dev');
+      expect(hud.toggleMinimalHud()).toBe(true);
+      expect(hud.state.activeDrawer).toBe('none');
+
+      hud.toggleDrawer('menu');
+      expect(hud.state.minimalHud).toBe(false);
+      expect(hud.state.activeDrawer).toBe('menu');
+
+      expect(hud.toggleQuestTrackerCollapsed()).toBe(true);
+      expect(hud.toggleQuestTrackerCollapsed()).toBe(false);
     });
   });
 });

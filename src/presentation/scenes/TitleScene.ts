@@ -256,12 +256,12 @@ export class TitleScene extends Phaser.Scene {
       5: 'V · Catedral Invertida'
     };
     const continueLabel = hasSave
-      ? `Continuar partida · Elegir Acto (${actNames[checkpoint!.scenarioIndex] || 'Acto ' + checkpoint!.scenarioIndex})`
+      ? `Continuar · ${actNames[checkpoint!.scenarioIndex] || 'Acto ' + checkpoint!.scenarioIndex}`
       : 'Continuar partida · Elegir Acto';
 
     const btnContinueText = this.add.text(0, -70, continueLabel, {
       fontFamily: 'Cinzel, sans-serif',
-      fontSize: '8px',
+      fontSize: '7.5px',
       color: '#ffd700',
       fontStyle: 'bold'
     }).setOrigin(0.5);

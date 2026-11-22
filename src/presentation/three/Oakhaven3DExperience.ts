@@ -39,6 +39,7 @@ import {
   CANONICAL_GLB_SLOTS,
   CanonicalGlbSlotId
 } from './GothicModelLoader3D';
+import { HudCompactController3D } from './HudCompactController3D';
 
 export interface CombatStats3D {
   health: number;
@@ -541,6 +542,16 @@ export class Oakhaven3DExperience {
   private cinematicTopBarEl?: HTMLDivElement;
   private cinematicBottomBarEl?: HTMLDivElement;
   private cinematicCaptionEl?: HTMLDivElement;
+
+  // Compact 3D HUD & Collapsible Menu / Dev Drawers
+  private hudCompactController: HudCompactController3D = new HudCompactController3D(7.5);
+  private hudTopLeftEl?: HTMLDivElement;
+  private hudTopRightEl?: HTMLDivElement;
+  private compactMenuDrawerEl?: HTMLDivElement;
+  private devDrawerEl?: HTMLDivElement;
+  private controlsBarEl?: HTMLDivElement;
+  private sectorCompassEl?: HTMLDivElement;
+  private dialogueToastContainerEl?: HTMLDivElement;
 
   // Arsenal & Munitions Manager
   private arsenalManager: ArsenalManager = new ArsenalManager();
@@ -3936,8 +3947,10 @@ export class Oakhaven3DExperience {
     }
 
     setTimeout(() => {
-      // Hide all enemy & boss HUDs upon area transition
+      // Hide all enemy & boss HUDs upon area transition and collapse open menus
       this.endCinematicCameraBeat();
+      this.hudCompactController.closeDrawers();
+      this.syncCompactHudUI();
       [
         this.enemyHpBarContainer,
         this.cultistHpBarContainer,
@@ -5936,6 +5949,8 @@ export class Oakhaven3DExperience {
       this.cinematicCaptionEl.innerText = spec.caption;
       this.cinematicCaptionEl.style.opacity = '1';
     }
+    this.hudCompactController.setCinematicActive(true);
+    this.syncCompactHudUI();
   }
 
   private endCinematicCameraBeat(): void {
@@ -5943,6 +5958,91 @@ export class Oakhaven3DExperience {
     if (this.cinematicTopBarEl) this.cinematicTopBarEl.style.height = '0px';
     if (this.cinematicBottomBarEl) this.cinematicBottomBarEl.style.height = '0px';
     if (this.cinematicCaptionEl) this.cinematicCaptionEl.style.opacity = '0';
+    this.hudCompactController.setCinematicActive(false);
+    this.syncCompactHudUI();
+  }
+
+  private syncCompactHudUI(): void {
+    if (!this.uiOverlay) return;
+    const st = this.hudCompactController.state;
+    const hideChrome = this.hudCompactController.shouldHidePeripheralChrome();
+    const anchors = this.hudCompactController.computeBottomAnchors();
+
+    if (this.compactMenuDrawerEl) {
+      this.compactMenuDrawerEl.style.display = st.activeDrawer === 'menu' && !hideChrome ? 'flex' : 'none';
+    }
+    if (this.devDrawerEl) {
+      this.devDrawerEl.style.display = st.activeDrawer === 'dev' && !hideChrome ? 'flex' : 'none';
+    }
+
+    const btnMenu = this.uiOverlay.querySelector('#btn-toggle-compact-menu') as HTMLButtonElement | null;
+    if (btnMenu) {
+      const open = st.activeDrawer === 'menu';
+      btnMenu.style.background = open ? '#422061' : '#26143a';
+      btnMenu.style.borderColor = open ? '#ffe680' : '#d4af37';
+      btnMenu.innerText = open ? '✕ [X] MENÚ' : '☰ [X] MENÚ';
+    }
+
+    const btnDev = this.uiOverlay.querySelector('#btn-toggle-dev-drawer') as HTMLButtonElement | null;
+    if (btnDev) {
+      const open = st.activeDrawer === 'dev';
+      btnDev.style.background = open ? '#1e3d2a' : '#161b26';
+      btnDev.style.borderColor = open ? '#2ecc71' : '#4a5a75';
+      btnDev.style.color = open ? '#a3ffc7' : '#a9bdd9';
+    }
+
+    const btnMin = this.uiOverlay.querySelector('#btn-toggle-minimal-hud') as HTMLButtonElement | null;
+    if (btnMin) {
+      btnMin.style.background = st.minimalHud ? '#36234d' : '#181124';
+      btnMin.style.borderColor = st.minimalHud ? '#ffd700' : '#5a4375';
+      btnMin.style.color = st.minimalHud ? '#ffd700' : '#c9b8df';
+    }
+
+    if (this.hudTopLeftEl) {
+      this.hudTopLeftEl.style.opacity = hideChrome ? '0' : '1';
+      this.hudTopLeftEl.style.pointerEvents = hideChrome ? 'none' : 'auto';
+    }
+    if (this.hudTopRightEl) {
+      this.hudTopRightEl.style.opacity = hideChrome ? '0' : '1';
+      this.hudTopRightEl.style.pointerEvents = hideChrome ? 'none' : 'auto';
+    }
+
+    const questTracker = this.uiOverlay.querySelector('#p3d-quest-tracker') as HTMLDivElement | null;
+    const questObj = this.uiOverlay.querySelector('#p3d-quest-objective') as HTMLDivElement | null;
+    const btnQuestCollapse = this.uiOverlay.querySelector('#btn-toggle-quest-collapse') as HTMLButtonElement | null;
+    if (questTracker) {
+      questTracker.style.display = st.minimalHud ? 'none' : 'block';
+    }
+    if (questObj) {
+      questObj.style.display = st.questTrackerCollapsed ? 'none' : 'block';
+    }
+    if (btnQuestCollapse) {
+      btnQuestCollapse.innerText = st.questTrackerCollapsed ? '▸' : '▾';
+    }
+
+    if (this.dialogueToastContainerEl) {
+      const showToast = st.toastVisible && !hideChrome;
+      this.dialogueToastContainerEl.style.opacity = showToast ? '1' : '0';
+      this.dialogueToastContainerEl.style.pointerEvents = showToast ? 'auto' : 'none';
+      this.dialogueToastContainerEl.style.transform = showToast
+        ? 'translateX(-50%) translateY(0px)'
+        : 'translateX(-50%) translateY(8px)';
+    }
+
+    if (this.sectorCompassEl) {
+      const showCompass = !hideChrome && !st.minimalHud;
+      this.sectorCompassEl.style.opacity = showCompass ? '1' : '0';
+      this.sectorCompassEl.style.bottom = `${anchors.compassBottomPx}px`;
+    }
+
+    if (this.proximityBadgeEl) {
+      this.proximityBadgeEl.style.bottom = `${anchors.proximityBadgeBottomPx}px`;
+    }
+
+    if (this.controlsBarEl) {
+      const showControls = !hideChrome && !st.minimalHud;
+      this.controlsBarEl.style.opacity = showControls ? '1' : '0';
+    }
   }
 
   private updateActSecondaryEnemies(delta: number): void {
@@ -6348,130 +6448,164 @@ export class Oakhaven3DExperience {
 
     this.uiOverlay.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-        <!-- Left Column: Active Hero 3D Combat HUD + Live Campaign Quest Tracker -->
-        <div style="display: flex; flex-direction: column; gap: 5px; max-width: 255px;">
-          <div style="display: flex; gap: 8px; background: rgba(14, 9, 23, 0.94); border: 1.2px solid #d4af37; border-radius: 4px; padding: 5px 8px; min-width: 215px; box-shadow: 0 4px 15px rgba(0,0,0,0.85); align-items: center;">
-            <img id="p3d-hero-portrait" src="/assets/characters/portrait_thomas.png" alt="Retrato Héroe" style="width: 36px; height: 36px; border: 1.2px solid #d4af37; border-radius: 4px; object-fit: cover; object-position: center; background: #000; flex-shrink: 0; image-rendering: pixelated;" />
-            <div style="flex: 1;">
-              <div id="p3d-hero-title" style="font-size: 8px; font-weight: bold; letter-spacing: 0.6px; margin-bottom: 3px; color: #ffd700;">
+        <!-- Left Column: Compact Hero Vitals + Collapsible Live Quest Tracker -->
+        <div id="p3d-hud-top-left" style="display: flex; flex-direction: column; gap: 4px; max-width: 215px; transition: opacity 0.35s ease; pointer-events: auto;">
+          <div style="display: flex; gap: 6px; background: rgba(12, 8, 22, 0.88); backdrop-filter: blur(4px); border: 1.2px solid rgba(212, 175, 55, 0.88); border-radius: 5px; padding: 4px 6px; min-width: 196px; box-shadow: 0 4px 16px rgba(0,0,0,0.82); align-items: center;">
+            <img id="p3d-hero-portrait" src="/assets/characters/portrait_thomas.png" alt="Retrato Héroe" style="width: 34px; height: 34px; border: 1.2px solid #d4af37; border-radius: 4px; object-fit: cover; object-position: center; background: #000; flex-shrink: 0; image-rendering: pixelated;" />
+            <div style="flex: 1; min-width: 0;">
+              <div id="p3d-hero-title" style="font-size: 7.5px; font-weight: bold; letter-spacing: 0.5px; margin-bottom: 2px; color: #ffd700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                 ✦ THOMAS — OAKHAVEN 3D ✦
               </div>
               <!-- Health Bar -->
-              <div style="display: flex; align-items: center; gap: 5px; font-size: 7.5px; font-family: monospace; color: #ffaaaa; margin-bottom: 3px;">
-                <span>SALUD</span>
-                <div style="flex: 1; height: 6px; background: #2b0c0c; border: 1px solid #7a2222; border-radius: 2px; overflow: hidden;">
+              <div style="display: flex; align-items: center; gap: 4px; font-size: 6.8px; font-family: monospace; color: #ffaaaa; margin-bottom: 2px;">
+                <span>HP</span>
+                <div style="flex: 1; height: 5px; background: #2b0c0c; border: 1px solid #7a2222; border-radius: 2px; overflow: hidden;">
                   <div id="p3d-hp" style="width: 100%; height: 100%; background: #22cc44; transition: width 0.15s ease;"></div>
                 </div>
-                <span id="p3d-hp-text">100/100</span>
+                <span id="p3d-hp-text" style="flex-shrink: 0;">100/100</span>
               </div>
               <!-- Posture / Guard Bar -->
-              <div style="display: flex; align-items: center; gap: 5px; font-size: 7.5px; font-family: monospace; color: #aaaaff; margin-bottom: 3px;">
-                <span>POSTURA</span>
-                <div style="flex: 1; height: 4px; background: #0c142b; border: 1px solid #22447a; border-radius: 2px; overflow: hidden;">
+              <div style="display: flex; align-items: center; gap: 4px; font-size: 6.8px; font-family: monospace; color: #aaaaff; margin-bottom: 2px;">
+                <span>POS</span>
+                <div style="flex: 1; height: 3.5px; background: #0c142b; border: 1px solid #22447a; border-radius: 2px; overflow: hidden;">
                   <div id="p3d-posture" style="width: 100%; height: 100%; background: #4488ff; transition: width 0.15s ease;"></div>
                 </div>
               </div>
               <!-- Weapon Status Badge -->
-              <div id="p3d-weapon-badge" style="font-size: 7px; font-family: monospace; color: #e2d4f0; background: rgba(35, 20, 50, 0.7); padding: 1px 4px; border-radius: 3px; border: 1px solid #5a3d78; pointer-events: auto; cursor: pointer;">
+              <div id="p3d-weapon-badge" style="font-size: 6.6px; font-family: monospace; color: #e2d4f0; background: rgba(35, 20, 50, 0.72); padding: 1px 4px; border-radius: 3px; border: 1px solid #5a3d78; pointer-events: auto; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                 ⚔ ARMA: Espada Corta del Monaguillo
               </div>
             </div>
           </div>
 
           <!-- Live 20-Chapter 3D Campaign Quest Tracker (Click opens Compendium [N]) -->
-          <div id="p3d-quest-tracker" title="Haz clic para abrir el Compendio Canónico [N]" style="background: rgba(14, 9, 24, 0.9); border: 1px solid rgba(212, 175, 55, 0.78); border-radius: 4px; padding: 5px 8px; box-shadow: 0 4px 14px rgba(0,0,0,0.8); pointer-events: auto; cursor: pointer;">
-            <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-bottom: 3px;">
-              <div id="p3d-quest-chapter" style="font-size: 7px; font-weight: bold; color: #ffd700; letter-spacing: 0.4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+          <div id="p3d-quest-tracker" title="Haz clic para abrir el Compendio Canónico [N]" style="background: rgba(12, 8, 22, 0.84); backdrop-filter: blur(4px); border: 1px solid rgba(212, 175, 55, 0.65); border-left: 2.5px solid #d4af37; border-radius: 4px; padding: 4px 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.75); pointer-events: auto; cursor: pointer;">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 4px; margin-bottom: 2px;">
+              <div id="p3d-quest-chapter" style="font-size: 6.8px; font-weight: bold; color: #ffd700; letter-spacing: 0.3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                 📜 CAPÍTULO I · EL MONAGUILLO DE LAS SOMBRAS
               </div>
-              <span id="p3d-quest-distance" style="font-family: monospace; font-size: 7px; color: #a3ffc7; font-weight: bold; flex-shrink: 0;">🧭 --</span>
+              <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
+                <span id="p3d-quest-distance" style="font-family: monospace; font-size: 6.8px; color: #a3ffc7; font-weight: bold;">🧭 --</span>
+                <button id="btn-toggle-quest-collapse" title="Plegar/desplegar objetivo" style="background: transparent; color: #d4af37; border: none; padding: 0 2px; font-size: 8px; cursor: pointer; line-height: 1;">▾</button>
+              </div>
             </div>
-            <div style="width: 100%; height: 3px; background: #241736; border-radius: 2px; overflow: hidden; margin-bottom: 4px;">
+            <div style="width: 100%; height: 2.5px; background: #241736; border-radius: 2px; overflow: hidden; margin-bottom: 3px;">
               <div id="p3d-quest-progress-fill" style="width: 5%; height: 100%; background: linear-gradient(90deg, #b8860b, #ffd700); transition: width 0.3s ease;"></div>
             </div>
-            <div id="p3d-quest-objective" style="font-family: monospace; font-size: 6.8px; color: #e6dcf5; line-height: 1.3;">
+            <div id="p3d-quest-objective" style="font-family: monospace; font-size: 6.5px; color: #e6dcf5; line-height: 1.28;">
               🎯 Auxilia a Gedeón o Marta [E] en el Atrio de San Jude o conversa con Padre Cedric [E]
             </div>
           </div>
         </div>
 
-        <!-- Right: Actions & Return Button -->
-        <div style="pointer-events: auto; display: flex; flex-direction: column; gap: 4px; align-items: flex-end;">
-          <div style="display: flex; gap: 4px;">
-            <button id="btn-play-2d-direct" style="background: #143822; color: #a3ffc7; border: 1.2px solid #2ecc71; padding: 4px 9px; border-radius: 4px; font-family: 'Cinzel', serif; font-size: 8px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.6); transition: all 0.2s;">
+        <!-- Right: Ultra-Compact 1-Row Action Bar + Collapsible Menu & Dev Drawers -->
+        <div id="p3d-hud-top-right" style="pointer-events: auto; display: flex; flex-direction: column; gap: 4px; align-items: flex-end; transition: opacity 0.35s ease; z-index: 75;">
+          <!-- Compact Top-Right Pill Row (Always Clean & Unobtrusive) -->
+          <div style="display: flex; gap: 3px; align-items: center; background: rgba(12, 8, 22, 0.88); backdrop-filter: blur(5px); border: 1px solid rgba(212, 175, 55, 0.55); border-radius: 5px; padding: 3px 4px; box-shadow: 0 4px 16px rgba(0,0,0,0.8);">
+            <button id="btn-quick-balm" title="Usar Bálsamo Rápido [Q]" style="background: #14331e; color: #a3ffc7; border: 1px solid #2ecc71; padding: 3px 6px; border-radius: 3px; font-family: monospace; font-size: 7px; font-weight: bold; cursor: pointer;">
+              🌿 [Q] (0)
+            </button>
+            <button id="btn-toggle-compact-menu" title="Abrir/Cerrar Menú Compacto [X]" style="background: #26143a; color: #ffd700; border: 1px solid #d4af37; padding: 3px 7px; border-radius: 3px; font-family: 'Cinzel', serif; font-size: 7.2px; font-weight: bold; cursor: pointer;">
+              ☰ [X] MENÚ
+            </button>
+            <button id="btn-toggle-dev-drawer" title="Viaje Rápido de Actos y Atajos de Depuración" style="background: #161b26; color: #a9bdd9; border: 1px solid #4a5a75; padding: 3px 5px; border-radius: 3px; font-family: monospace; font-size: 7px; font-weight: bold; cursor: pointer;">
+              🛠 DEV
+            </button>
+            <button id="btn-toggle-minimal-hud" title="Modo HUD Mínimo / Inmersivo [Z]" style="background: #181124; color: #c9b8df; border: 1px solid #5a4375; padding: 3px 5px; border-radius: 3px; font-family: monospace; font-size: 7.2px; cursor: pointer;">
+              👁️
+            </button>
+            <button id="btn-return-2d" title="Volver al Menú Principal 2D" style="background: #2a1440; color: #ffd700; border: 1px solid #b8860b; padding: 3px 6px; border-radius: 3px; font-family: 'Cinzel', serif; font-size: 7px; font-weight: bold; cursor: pointer;">
+              ⮌ 2D
+            </button>
+          </div>
+
+          <!-- Collapsible Compact Game Menu Drawer ([X]) -->
+          <div id="p3d-compact-menu-drawer" style="display: none; flex-direction: column; gap: 5px; width: 214px; background: rgba(12, 7, 22, 0.96); backdrop-filter: blur(8px); border: 1.3px solid #d4af37; border-radius: 5px; padding: 7px 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.92);">
+            <div style="font-size: 6.8px; font-weight: bold; color: #d4af37; letter-spacing: 0.9px; border-bottom: 1px solid rgba(212,175,55,0.28); padding-bottom: 2px;">
+              ✦ AVENTURA & CÓDICE
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+              <button id="btn-toggle-inventory" style="background: #332210; color: #ffd7aa; border: 1px solid #d49a37; padding: 3.5px 5px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer; text-align: left;">
+                🎒 [I] Bolsa
+              </button>
+              <button id="btn-toggle-alchemy" style="background: #0f2c1f; color: #7dffb3; border: 1px solid #2ecc71; padding: 3.5px 5px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer; font-weight: bold; text-align: left;">
+                ⚗️ [B] Botica
+              </button>
+              <button id="btn-toggle-skills" style="background: #28183c; color: #ffd700; border: 1px solid #b8860b; padding: 3.5px 5px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer; font-weight: bold; text-align: left;">
+                🌟 [H] Hab. (0)
+              </button>
+              <button id="btn-toggle-compendium" style="background: #2b1d3d; color: #ffd700; border: 1px solid #d4af37; padding: 3.5px 5px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer; font-weight: bold; text-align: left;">
+                📜 [N] Compendio
+              </button>
+            </div>
+            <button id="btn-toggle-designs" style="background: #38184c; color: #f3c6ff; border: 1px solid #cc66ff; padding: 4px 6px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer; font-weight: bold; text-align: center;">
+              🎨 [V] DISEÑOS 3D & MODELOS .GLB
+            </button>
+
+            <div style="font-size: 6.8px; font-weight: bold; color: #c7a8e8; letter-spacing: 0.9px; border-bottom: 1px solid rgba(155,89,182,0.3); padding-bottom: 2px; margin-top: 1px;">
+              ✦ COMBATE & CÁMARA
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+              <button id="btn-toggle-hero" style="background: #2b143d; color: #e6b8ff; border: 1px solid #8e44ad; padding: 3px 5px; border-radius: 3px; font-family: monospace; font-size: 6.8px; cursor: pointer; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                🔄 [TAB] HÉROE: THOMAS
+              </button>
+              <button id="btn-toggle-audio" style="background: #142a1f; color: #a3ffc7; border: 1px solid #27ae60; padding: 3px 5px; border-radius: 3px; font-family: monospace; font-size: 6.8px; cursor: pointer; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                🎵 [M] AUDIO: ACTIVO
+              </button>
+              <button id="btn-toggle-cam" style="background: #141f2a; color: #99ddff; border: 1px solid #336699; padding: 3px 5px; border-radius: 3px; font-family: monospace; font-size: 6.8px; cursor: pointer; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                🎥 [C] CÁMARA: 3ª PERS.
+              </button>
+              <button id="btn-toggle-lockon" style="background: #2b1a14; color: #ffd700; border: 1px solid #d4af37; padding: 3px 5px; border-radius: 3px; font-family: monospace; font-size: 6.8px; cursor: pointer; font-weight: bold; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                🎯 [R] LOCK-ON: LIBRE
+              </button>
+            </div>
+
+            <div style="font-size: 6.8px; font-weight: bold; color: #88ccff; letter-spacing: 0.9px; border-bottom: 1px solid rgba(59,107,153,0.35); padding-bottom: 2px; margin-top: 1px;">
+              ✦ SANTUARIO & MODOS
+            </div>
+            <button id="btn-save-sanctuary" style="background: #1c2538; color: #99ddff; border: 1px solid #3b6b99; padding: 3.5px 6px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer; font-weight: bold; text-align: center;">
+              💾 [G] GUARDAR EN SANTUARIO
+            </button>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+              <button id="btn-export-save" style="background: #152238; color: #88ccff; border: 1px solid #2f5485; padding: 3px 5px; border-radius: 3px; font-family: monospace; font-size: 6.8px; cursor: pointer; font-weight: bold;">
+                📤 EXPORTAR
+              </button>
+              <button id="btn-import-save" style="background: #231633; color: #d4b8ff; border: 1px solid #6b4394; padding: 3px 5px; border-radius: 3px; font-family: monospace; font-size: 6.8px; cursor: pointer; font-weight: bold;">
+                📂 IMPORTAR
+              </button>
+              <input type="file" id="p3d-save-file-input" accept=".json" style="display: none;" />
+            </div>
+            <button id="btn-play-2d-direct" style="background: #143822; color: #a3ffc7; border: 1px solid #2ecc71; padding: 3.5px 6px; border-radius: 3px; font-family: 'Cinzel', serif; font-size: 7.2px; font-weight: bold; cursor: pointer; text-align: center;">
               🎮 JUGAR MODO 2D
             </button>
-            <button id="btn-return-2d" style="background: #2a1440; color: #ffd700; border: 1.2px solid #d4af37; padding: 4px 9px; border-radius: 4px; font-family: 'Cinzel', serif; font-size: 8px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.6); transition: all 0.2s;">
-              ⮌ MENÚ 2D
-            </button>
           </div>
-          <div style="display: flex; gap: 4px;">
-            <button id="btn-toggle-designs" style="background: #38184c; color: #f3c6ff; border: 1.2px solid #cc66ff; padding: 3px 8px; border-radius: 4px; font-family: monospace; font-size: 7.5px; cursor: pointer; font-weight: bold;">
-              🎨 [V] DISEÑOS 3D (22 LÁMINAS)
-            </button>
-            <button id="btn-toggle-inventory" style="background: #3b2812; color: #ffd7aa; border: 1px solid #d49a37; padding: 3px 7px; border-radius: 4px; font-family: monospace; font-size: 7.5px; cursor: pointer;">
-              🎒 [I] INVENTARIO
-            </button>
-            <button id="btn-quick-balm" style="background: #14331e; color: #a3ffc7; border: 1px solid #2ecc71; padding: 3px 7px; border-radius: 4px; font-family: monospace; font-size: 7.5px; cursor: pointer;">
-              🌿 [Q] BÁLSAMO
-            </button>
-          </div>
-          <div style="display: flex; gap: 4px;">
-            <button id="btn-toggle-alchemy" style="background: #0f2c1f; color: #7dffb3; border: 1px solid #2ecc71; padding: 3px 7px; border-radius: 4px; font-family: monospace; font-size: 7.5px; cursor: pointer; font-weight: bold;">
-              ⚗️ [B] BOTICA
-            </button>
-            <button id="btn-toggle-skills" style="background: #28183c; color: #ffd700; border: 1px solid #b8860b; padding: 3px 7px; border-radius: 4px; font-family: monospace; font-size: 7.5px; cursor: pointer; font-weight: bold;">
-              🌟 [H] HABILIDADES
-            </button>
-            <button id="btn-toggle-compendium" style="background: #2b1d3d; color: #ffd700; border: 1px solid #d4af37; padding: 3px 7px; border-radius: 4px; font-family: monospace; font-size: 7.5px; cursor: pointer; font-weight: bold;">
-              📜 [N] COMPENDIO
-            </button>
-            <button id="btn-save-sanctuary" style="background: #1c2538; color: #99ddff; border: 1px solid #3b6b99; padding: 3px 7px; border-radius: 4px; font-family: monospace; font-size: 7.5px; cursor: pointer; font-weight: bold;">
-              💾 [G] SANTUARIO
-            </button>
-          </div>
-          <div style="display: flex; gap: 4px;">
-            <button id="btn-export-save" style="background: #152238; color: #88ccff; border: 1px solid #2f5485; padding: 2.5px 6px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer; font-weight: bold;">
-              💾 EXPORTAR JSON
-            </button>
-            <button id="btn-import-save" style="background: #231633; color: #d4b8ff; border: 1px solid #6b4394; padding: 2.5px 6px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer; font-weight: bold;">
-              📂 IMPORTAR JSON
-            </button>
-            <input type="file" id="p3d-save-file-input" accept=".json" style="display: none;" />
-          </div>
-          <div style="display: flex; gap: 4px;">
-            <button id="btn-toggle-hero" style="background: #2b143d; color: #e6b8ff; border: 1px solid #8e44ad; padding: 3px 7px; border-radius: 4px; font-family: monospace; font-size: 7.5px; cursor: pointer;">
-              🔄 [TAB] HÉROE: THOMAS
-            </button>
-            <button id="btn-toggle-audio" style="background: #142a1f; color: #a3ffc7; border: 1px solid #27ae60; padding: 3px 7px; border-radius: 4px; font-family: monospace; font-size: 7.5px; cursor: pointer;">
-              🎵 [M] AUDIO: ACTIVO
-            </button>
-          </div>
-          <div style="display: flex; gap: 4px;">
-            <button id="btn-toggle-cam" style="background: #141f2a; color: #99ddff; border: 1px solid #336699; padding: 3px 7px; border-radius: 4px; font-family: monospace; font-size: 7.5px; cursor: pointer;">
-              🎥 [C] CÁMARA: TERCERA PERSONA
-            </button>
-            <button id="btn-toggle-lockon" style="background: #2b1a14; color: #ffd700; border: 1px solid #d4af37; padding: 3px 7px; border-radius: 4px; font-family: monospace; font-size: 7.5px; cursor: pointer; font-weight: bold;">
-              🎯 [R] LOCK-ON: LIBRE
-            </button>
-          </div>
-          <div style="display: flex; gap: 3px; margin-top: 2px;">
-            <button id="btn-dbg-colina" style="background: #1d331a; color: #b8ff99; border: 1px solid #44cc55; padding: 2px 5px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer; font-weight: bold;">🌳 [Y] COLINA ROBLE</button>
-            <button id="btn-trigger-siege" style="background: #3b1218; color: #ffaa88; border: 1px solid #ff4422; padding: 2px 5px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer; font-weight: bold;">⚔️ [F] INICIAR ASEDIO</button>
-          </div>
-          <!-- Fast Travel Act Inspection Shortcuts -->
-          <div style="display: flex; gap: 3px; margin-top: 2px;">
-            <button id="btn-dbg-portal" style="background: #1a162b; color: #a3ffc7; border: 1px solid #2ecc71; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer;">[1] PORTAL</button>
-            <button id="btn-dbg-criptas" style="background: #1a162b; color: #a3ffc7; border: 1px solid #2ecc71; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer;">[2] CRIPTAS</button>
-            <button id="btn-dbg-sarcofago" style="background: #1a162b; color: #a3ffc7; border: 1px solid #2ecc71; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer;">[3] BOTÍN</button>
-            <button id="btn-dbg-inquisidor" style="background: #1a162b; color: #a3ffc7; border: 1px solid #2ecc71; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer;">[4] JEFE</button>
-            <button id="btn-dbg-derrota" style="background: #1a162b; color: #a3ffc7; border: 1px solid #2ecc71; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer;">[5] VICTORIA</button>
-          </div>
-          <div style="display: flex; gap: 3px; margin-top: 2px;">
-            <button id="btn-dbg-campanario" style="background: #2b1d0c; color: #ffaa55; border: 1px solid #e67e22; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer;">[9] ACT II</button>
-            <button id="btn-dbg-puente" style="background: #2b260c; color: #ffd755; border: 1px solid #d4af37; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer;">[0] ACT III</button>
-            <button id="btn-dbg-londinium" style="background: #1d0c2b; color: #d488ff; border: 1px solid #9b59b6; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer;">[P] ACT IV</button>
-            <button id="btn-dbg-catedral" style="background: #2b0c1d; color: #ff88b8; border: 1px solid #e84393; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer;">[O] ACT V</button>
+
+          <!-- Collapsible Dev / Fast-Travel Act Shortcuts Drawer (Collapsed by Default!) -->
+          <div id="p3d-dev-drawer" style="display: none; flex-direction: column; gap: 5px; width: 214px; background: rgba(10, 13, 20, 0.96); backdrop-filter: blur(8px); border: 1.2px solid #2ecc71; border-radius: 5px; padding: 7px 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.92);">
+            <div style="font-size: 6.8px; font-weight: bold; color: #ffd755; letter-spacing: 0.9px; border-bottom: 1px solid rgba(255,215,85,0.28); padding-bottom: 2px;">
+              ✦ VIAJE RÁPIDO DE ACTOS (3D)
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+              <button id="btn-dbg-campanario" style="background: #2b1d0c; color: #ffaa55; border: 1px solid #e67e22; padding: 3.5px 5px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer; font-weight: bold;">[9] ACT II</button>
+              <button id="btn-dbg-puente" style="background: #2b260c; color: #ffd755; border: 1px solid #d4af37; padding: 3.5px 5px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer; font-weight: bold;">[0] ACT III</button>
+              <button id="btn-dbg-londinium" style="background: #1d0c2b; color: #d488ff; border: 1px solid #9b59b6; padding: 3.5px 5px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer; font-weight: bold;">[P] ACT IV</button>
+              <button id="btn-dbg-catedral" style="background: #2b0c1d; color: #ff88b8; border: 1px solid #e84393; padding: 3.5px 5px; border-radius: 3px; font-family: monospace; font-size: 7px; cursor: pointer; font-weight: bold;">[O] ACT V</button>
+            </div>
+
+            <div style="font-size: 6.8px; font-weight: bold; color: #a3ffc7; letter-spacing: 0.9px; border-bottom: 1px solid rgba(46,204,113,0.28); padding-bottom: 2px; margin-top: 1px;">
+              ✦ EVENTOS & CRIPTAS (ACTO I)
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+              <button id="btn-dbg-colina" style="background: #1d331a; color: #b8ff99; border: 1px solid #44cc55; padding: 3px 4px; border-radius: 3px; font-family: monospace; font-size: 6.8px; cursor: pointer; font-weight: bold;">🌳 [Y] COLINA</button>
+              <button id="btn-trigger-siege" style="background: #3b1218; color: #ffaa88; border: 1px solid #ff4422; padding: 3px 4px; border-radius: 3px; font-family: monospace; font-size: 6.8px; cursor: pointer; font-weight: bold;">⚔️ [F] ASEDIO</button>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px;">
+              <button id="btn-dbg-portal" title="[1] Abrir Verja del Cementerio" style="background: #1a162b; color: #a3ffc7; border: 1px solid #2ecc71; padding: 3px 2px; border-radius: 3px; font-family: monospace; font-size: 6.6px; cursor: pointer;">[1]</button>
+              <button id="btn-dbg-criptas" title="[2] Entrar a Criptas" style="background: #1a162b; color: #a3ffc7; border: 1px solid #2ecc71; padding: 3px 2px; border-radius: 3px; font-family: monospace; font-size: 6.6px; cursor: pointer;">[2]</button>
+              <button id="btn-dbg-sarcofago" title="[3] Sarcófago Botín" style="background: #1a162b; color: #a3ffc7; border: 1px solid #2ecc71; padding: 3px 2px; border-radius: 3px; font-family: monospace; font-size: 6.6px; cursor: pointer;">[3]</button>
+              <button id="btn-dbg-inquisidor" title="[4] Jefe Inquisidor" style="background: #1a162b; color: #a3ffc7; border: 1px solid #2ecc71; padding: 3px 2px; border-radius: 3px; font-family: monospace; font-size: 6.6px; cursor: pointer;">[4]</button>
+              <button id="btn-dbg-derrota" title="[5] Victoria Criptas" style="background: #1a162b; color: #a3ffc7; border: 1px solid #2ecc71; padding: 3px 2px; border-radius: 3px; font-family: monospace; font-size: 6.6px; cursor: pointer;">[5]</button>
+            </div>
           </div>
         </div>
       </div>
@@ -6517,81 +6651,81 @@ export class Oakhaven3DExperience {
       </div>
 
       <!-- Boss Morwenna 3D Target HUD (Top Center) -->
-      <div id="p3d-boss-hud" style="position: absolute; top: 98px; left: 50%; transform: translateX(-50%); background: rgba(30, 8, 12, 0.95); border: 1.2px solid #ff3344; border-radius: 4px; padding: 4px 12px; width: 220px; text-align: center; box-shadow: 0 4px 20px rgba(255, 0, 0, 0.45); display: none;">
-        <div style="font-size: 7.5px; font-weight: bold; color: #ffbbbb; margin-bottom: 2px; letter-spacing: 0.5px;">
+      <div id="p3d-boss-hud" style="position: absolute; top: 8px; left: 50%; transform: translateX(-50%); background: rgba(30, 8, 12, 0.94); border: 1.2px solid #ff3344; border-radius: 4px; padding: 4px 12px; width: 224px; text-align: center; box-shadow: 0 4px 20px rgba(255, 0, 0, 0.45); display: none;">
+        <div style="font-size: 7.2px; font-weight: bold; color: #ffbbbb; margin-bottom: 2px; letter-spacing: 0.4px;">
           👑 MADRE MORWENNA — VIGÍA DE LA PIRA 👑
         </div>
-        <div style="width: 100%; height: 6px; background: #3b0d14; border: 1px solid #8b1824; border-radius: 2px; overflow: hidden;">
+        <div style="width: 100%; height: 5px; background: #3b0d14; border: 1px solid #8b1824; border-radius: 2px; overflow: hidden;">
           <div id="p3d-boss-hp-fill" style="width: 100%; height: 100%; background: #ff2233; transition: width 0.15s ease;"></div>
         </div>
       </div>
 
       <!-- Sub-boss: Inquisidor de las Catacumbas 3D Target HUD -->
-      <div id="p3d-inquisitor-hud" style="position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(22, 8, 22, 0.95); border: 1.2px solid #9b59b6; border-radius: 4px; padding: 4px 12px; width: 225px; text-align: center; box-shadow: 0 4px 20px rgba(155, 89, 182, 0.45); display: none;">
-        <div style="font-size: 7.5px; font-weight: bold; color: #eeddff; margin-bottom: 2px; letter-spacing: 0.5px;">
+      <div id="p3d-inquisitor-hud" style="position: absolute; top: 8px; left: 50%; transform: translateX(-50%); background: rgba(22, 8, 22, 0.94); border: 1.2px solid #9b59b6; border-radius: 4px; padding: 4px 12px; width: 225px; text-align: center; box-shadow: 0 4px 20px rgba(155, 89, 182, 0.45); display: none;">
+        <div style="font-size: 7.2px; font-weight: bold; color: #eeddff; margin-bottom: 2px; letter-spacing: 0.4px;">
           ⚔ EL INQUISIDOR CAÍDO DE SAN JUDE ⚔
         </div>
-        <div style="width: 100%; height: 6px; background: #260c2b; border: 1px solid #6c2d7a; border-radius: 2px; overflow: hidden;">
+        <div style="width: 100%; height: 5px; background: #260c2b; border: 1px solid #6c2d7a; border-radius: 2px; overflow: hidden;">
           <div id="p3d-inquisitor-hp-fill" style="width: 100%; height: 100%; background: #9b59b6; transition: width 0.15s ease;"></div>
         </div>
       </div>
 
       <!-- Beast: Acechador de Raíces 3D Target HUD -->
-      <div id="p3d-root-prowler-hud" style="position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(18, 12, 28, 0.95); border: 1.2px solid #bb44ff; border-radius: 4px; padding: 4px 12px; width: 235px; text-align: center; box-shadow: 0 4px 20px rgba(187, 68, 255, 0.45); display: none;">
-        <div style="font-size: 7.5px; font-weight: bold; color: #eeddff; margin-bottom: 2px; letter-spacing: 0.5px;">
+      <div id="p3d-root-prowler-hud" style="position: absolute; top: 8px; left: 50%; transform: translateX(-50%); background: rgba(18, 12, 28, 0.94); border: 1.2px solid #bb44ff; border-radius: 4px; padding: 4px 12px; width: 230px; text-align: center; box-shadow: 0 4px 20px rgba(187, 68, 255, 0.45); display: none;">
+        <div style="font-size: 7.2px; font-weight: bold; color: #eeddff; margin-bottom: 2px; letter-spacing: 0.4px;">
           🌿 ACECHADOR DE RAÍCES DEL SAUCE NEGRO 🌿
         </div>
-        <div style="width: 100%; height: 6px; background: #231233; border: 1px solid #7722aa; border-radius: 2px; overflow: hidden;">
+        <div style="width: 100%; height: 5px; background: #231233; border: 1px solid #7722aa; border-radius: 2px; overflow: hidden;">
           <div id="p3d-root-prowler-hp-fill" style="width: 100%; height: 100%; background: #bb44ff; transition: width 0.15s ease;"></div>
         </div>
       </div>
 
       <!-- Boss Act II: Guardián del Crisol 3D Target HUD -->
-      <div id="p3d-crucible-guardian-hud" style="position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(28, 14, 8, 0.95); border: 1.2px solid #ff7722; border-radius: 4px; padding: 4px 12px; width: 235px; text-align: center; box-shadow: 0 4px 20px rgba(255, 119, 34, 0.45); display: none;">
-        <div style="font-size: 7.5px; font-weight: bold; color: #ffd2aa; margin-bottom: 2px; letter-spacing: 0.5px;">
+      <div id="p3d-crucible-guardian-hud" style="position: absolute; top: 8px; left: 50%; transform: translateX(-50%); background: rgba(28, 14, 8, 0.94); border: 1.2px solid #ff7722; border-radius: 4px; padding: 4px 12px; width: 230px; text-align: center; box-shadow: 0 4px 20px rgba(255, 119, 34, 0.45); display: none;">
+        <div style="font-size: 7.2px; font-weight: bold; color: #ffd2aa; margin-bottom: 2px; letter-spacing: 0.4px;">
           🔨 EL GUARDIÁN DEL CRISOL DE BRONCE 🔨
         </div>
-        <div style="width: 100%; height: 6px; background: #331508; border: 1px solid #a04000; border-radius: 2px; overflow: hidden;">
+        <div style="width: 100%; height: 5px; background: #331508; border: 1px solid #a04000; border-radius: 2px; overflow: hidden;">
           <div id="p3d-crucible-guardian-hp-fill" style="width: 100%; height: 100%; background: #ff7722; transition: width 0.15s ease;"></div>
         </div>
       </div>
 
       <!-- Boss Act III: Capitán Áureo Vane 3D Target HUD -->
-      <div id="p3d-captain-vane-hud" style="position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(30, 24, 8, 0.95); border: 1.2px solid #ffd700; border-radius: 4px; padding: 4px 12px; width: 235px; text-align: center; box-shadow: 0 4px 20px rgba(255, 215, 0, 0.45); display: none;">
-        <div style="font-size: 7.5px; font-weight: bold; color: #fff3aa; margin-bottom: 2px; letter-spacing: 0.5px;">
+      <div id="p3d-captain-vane-hud" style="position: absolute; top: 8px; left: 50%; transform: translateX(-50%); background: rgba(30, 24, 8, 0.94); border: 1.2px solid #ffd700; border-radius: 4px; padding: 4px 12px; width: 230px; text-align: center; box-shadow: 0 4px 20px rgba(255, 215, 0, 0.45); display: none;">
+        <div style="font-size: 7.2px; font-weight: bold; color: #fff3aa; margin-bottom: 2px; letter-spacing: 0.4px;">
           🛡️ CAPITÁN ÁUREO VANE — ESCUDO DE TORRE 🛡️
         </div>
-        <div style="width: 100%; height: 6px; background: #382c0a; border: 1px solid #b8860b; border-radius: 2px; overflow: hidden;">
+        <div style="width: 100%; height: 5px; background: #382c0a; border: 1px solid #b8860b; border-radius: 2px; overflow: hidden;">
           <div id="p3d-captain-vane-hp-fill" style="width: 100%; height: 100%; background: #ffd700; transition: width 0.15s ease;"></div>
         </div>
       </div>
 
       <!-- Boss Act IV: Rex Malphas 3D Target HUD -->
-      <div id="p3d-rex-malphas-hud" style="position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(28, 8, 28, 0.95); border: 1.2px solid #cc44ff; border-radius: 4px; padding: 4px 12px; width: 235px; text-align: center; box-shadow: 0 4px 20px rgba(204, 68, 255, 0.45); display: none;">
-        <div style="font-size: 7.5px; font-weight: bold; color: #eeddff; margin-bottom: 2px; letter-spacing: 0.5px;">
+      <div id="p3d-rex-malphas-hud" style="position: absolute; top: 8px; left: 50%; transform: translateX(-50%); background: rgba(28, 8, 28, 0.94); border: 1.2px solid #cc44ff; border-radius: 4px; padding: 4px 12px; width: 230px; text-align: center; box-shadow: 0 4px 20px rgba(204, 68, 255, 0.45); display: none;">
+        <div style="font-size: 7.2px; font-weight: bold; color: #eeddff; margin-bottom: 2px; letter-spacing: 0.4px;">
           👑 REX MALPHAS — EL DÉSPOTA ASTRAL (ALARIC) 👑
         </div>
-        <div style="width: 100%; height: 6px; background: #260a2b; border: 1px solid #7c1d8c; border-radius: 2px; overflow: hidden;">
+        <div style="width: 100%; height: 5px; background: #260a2b; border: 1px solid #7c1d8c; border-radius: 2px; overflow: hidden;">
           <div id="p3d-rex-malphas-hp-fill" style="width: 100%; height: 100%; background: #cc44ff; transition: width 0.15s ease;"></div>
         </div>
       </div>
 
       <!-- Boss Act V: Astaroth Titan 3D Target HUD -->
-      <div id="p3d-astaroth-hud" style="position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(16, 5, 26, 0.98); border: 1.5px solid #ff2288; border-radius: 4px; padding: 4px 14px; width: 250px; text-align: center; box-shadow: 0 4px 25px rgba(255, 34, 136, 0.55); display: none;">
-        <div style="font-size: 7.5px; font-weight: bold; color: #ffaacc; margin-bottom: 2px; letter-spacing: 0.8px;">
-          🌌 ASTAROTH: EL PADRE DE LAS CENIZAS — SOL DEL ABISMO 🌌
+      <div id="p3d-astaroth-hud" style="position: absolute; top: 8px; left: 50%; transform: translateX(-50%); background: rgba(16, 5, 26, 0.96); border: 1.4px solid #ff2288; border-radius: 4px; padding: 4px 12px; width: 242px; text-align: center; box-shadow: 0 4px 24px rgba(255, 34, 136, 0.55); display: none;">
+        <div style="font-size: 7px; font-weight: bold; color: #ffaacc; margin-bottom: 2px; letter-spacing: 0.5px;">
+          🌌 ASTAROTH — PADRE DE LAS CENIZAS 🌌
         </div>
-        <div style="width: 100%; height: 7px; background: #2b0c1e; border: 1px solid #8c1d55; border-radius: 2px; overflow: hidden;">
+        <div style="width: 100%; height: 6px; background: #2b0c1e; border: 1px solid #8c1d55; border-radius: 2px; overflow: hidden;">
           <div id="p3d-astaroth-hp-fill" style="width: 100%; height: 100%; background: #ff2288; transition: width 0.15s ease;"></div>
         </div>
       </div>
 
       <!-- Unified Act II, IV & V Secondary Enemy 3D Target HUD -->
-      <div id="p3d-act-enemy-hud" style="position: absolute; top: 52px; left: 50%; transform: translateX(-50%); background: rgba(20, 10, 26, 0.94); border: 1.2px solid #cc66ff; border-radius: 4px; padding: 3px 10px; width: 205px; text-align: center; box-shadow: 0 4px 14px rgba(0,0,0,0.85); display: none;">
-        <div id="p3d-act-enemy-title" style="font-size: 7px; font-weight: bold; color: #f0ccff; margin-bottom: 2px;">
+      <div id="p3d-act-enemy-hud" style="position: absolute; top: 44px; left: 50%; transform: translateX(-50%); background: rgba(20, 10, 26, 0.92); border: 1.1px solid #cc66ff; border-radius: 4px; padding: 3px 10px; width: 200px; text-align: center; box-shadow: 0 4px 14px rgba(0,0,0,0.85); display: none;">
+        <div id="p3d-act-enemy-title" style="font-size: 6.8px; font-weight: bold; color: #f0ccff; margin-bottom: 2px;">
           ⚔ CENTINELA ⚔
         </div>
-        <div style="width: 100%; height: 5px; background: #26102e; border: 1px solid #7d2e99; border-radius: 2px; overflow: hidden;">
+        <div style="width: 100%; height: 4.5px; background: #26102e; border: 1px solid #7d2e99; border-radius: 2px; overflow: hidden;">
           <div id="p3d-act-enemy-hp-fill" style="width: 100%; height: 100%; background: #cc55ff; transition: width 0.12s ease;"></div>
         </div>
       </div>
@@ -6603,7 +6737,7 @@ export class Oakhaven3DExperience {
       </div>
 
       <!-- Floating Proximity Action Pill (Interactive [E]) -->
-      <div id="p3d-proximity-badge" style="position: absolute; bottom: 106px; left: 50%; transform: translateX(-50%); background: rgba(18, 9, 32, 0.96); border: 1.5px solid #ffd700; border-radius: 4px; padding: 4px 14px; font-family: monospace; font-size: 8.5px; font-weight: bold; color: #ffd700; display: none; box-shadow: 0 4px 20px rgba(0,0,0,0.85); z-index: 50; cursor: pointer; pointer-events: auto; text-align: center; letter-spacing: 0.5px;">
+      <div id="p3d-proximity-badge" style="position: absolute; bottom: 100px; left: 50%; transform: translateX(-50%); background: rgba(18, 9, 32, 0.95); backdrop-filter: blur(4px); border: 1.4px solid #ffd700; border-radius: 4px; padding: 4px 12px; font-family: monospace; font-size: 8px; font-weight: bold; color: #ffd700; display: none; box-shadow: 0 4px 18px rgba(0,0,0,0.85); z-index: 50; cursor: pointer; pointer-events: auto; text-align: center; letter-spacing: 0.4px; transition: bottom 0.3s ease;">
         [E] INTERACTUAR
       </div>
 
@@ -6715,7 +6849,7 @@ export class Oakhaven3DExperience {
       </div>
 
       <!-- Non-Blocking Cinematic Chapter Title Card -->
-      <div id="p3d-chapter-banner" style="position: absolute; top: 56px; left: 50%; transform: translateX(-50%); background: linear-gradient(90deg, rgba(14,8,24,0) 0%, rgba(16,9,28,0.92) 18%, rgba(16,9,28,0.92) 82%, rgba(14,8,24,0) 100%); border-top: 1px solid rgba(212,175,55,0.65); border-bottom: 1px solid rgba(212,175,55,0.65); padding: 6px 34px; text-align: center; pointer-events: none; opacity: 0; transition: opacity 0.65s ease; z-index: 60; min-width: 280px;">
+      <div id="p3d-chapter-banner" style="position: absolute; top: 78px; left: 50%; transform: translateX(-50%); background: linear-gradient(90deg, rgba(14,8,24,0) 0%, rgba(16,9,28,0.88) 18%, rgba(16,9,28,0.88) 82%, rgba(14,8,24,0) 100%); border-top: 1px solid rgba(212,175,55,0.6); border-bottom: 1px solid rgba(212,175,55,0.6); padding: 5px 28px; text-align: center; pointer-events: none; opacity: 0; transition: opacity 0.65s ease; z-index: 45; min-width: 240px;">
         <div id="p3d-chapter-banner-act" style="font-family: monospace; font-size: 7px; color: #d999ff; letter-spacing: 1.4px; margin-bottom: 2px;">✦ ACTO I · CAPÍTULO I ✦</div>
         <div id="p3d-chapter-banner-title" style="font-size: 11px; font-weight: bold; color: #ffd700; letter-spacing: 1.2px; text-shadow: 0 2px 8px #000;">EL MONAGUILLO DE LAS SOMBRAS</div>
         <div id="p3d-chapter-banner-sub" style="font-family: serif; font-size: 7.5px; color: #d8cee8; font-style: italic; margin-top: 1px;">📍 Parroquia de San Jude, Oakhaven</div>
@@ -6766,13 +6900,13 @@ export class Oakhaven3DExperience {
         </div>
       </div>
 
-      <!-- Compact Tactical Parchment Compass & Sub-Sector Banner (Top Center below enemy bars) -->
-      <div id="p3d-sector-compass" style="position: absolute; bottom: 64px; left: 50%; transform: translateX(-50%); background: rgba(18, 12, 28, 0.92); border: 1.2px solid #d4af37; border-radius: 4px; padding: 3px 12px; display: flex; align-items: center; gap: 10px; box-shadow: 0 4px 14px rgba(0,0,0,0.85); pointer-events: none; z-index: 40;">
-        <div id="p3d-sector-name" style="font-size: 7.5px; font-weight: bold; color: #ffd700; letter-spacing: 0.5px;">
+      <!-- Compact Tactical Parchment Compass & Sub-Sector Banner -->
+      <div id="p3d-sector-compass" style="position: absolute; bottom: 64px; left: 50%; transform: translateX(-50%); max-width: 560px; background: rgba(14, 9, 24, 0.86); backdrop-filter: blur(4px); border: 1px solid rgba(212, 175, 55, 0.72); border-radius: 4px; padding: 3px 10px; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 14px rgba(0,0,0,0.8); pointer-events: none; z-index: 40; transition: bottom 0.3s ease, opacity 0.35s ease;">
+        <div id="p3d-sector-name" style="font-size: 7px; font-weight: bold; color: #ffd700; letter-spacing: 0.4px; white-space: nowrap;">
           📍 ATRIO DE SAN JUDE (CAP. I — ALBA DE NIEBLA)
         </div>
-        <div style="width: 1px; height: 11px; background: #5a3d78;"></div>
-        <div id="p3d-shalem-guide" style="font-family: monospace; font-size: 7.2px; color: #a3ffc7;">
+        <div style="width: 1px; height: 10px; background: #5a3d78; flex-shrink: 0;"></div>
+        <div id="p3d-shalem-guide" style="font-family: monospace; font-size: 6.8px; color: #a3ffc7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
           🐈‍⬛ Shalem guía → Sube a la Colina del Viejo Roble [Este +2.2m] o pulsa [Y]
         </div>
       </div>
@@ -6800,12 +6934,13 @@ export class Oakhaven3DExperience {
         </div>
       </div>
 
-      <!-- Dialogue Toast (Bottom Center) -->
-      <div id="p3d-dialogue-toast-container" style="position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 9px; background: rgba(14, 9, 23, 0.96); border: 1.2px solid #d4af37; border-radius: 4px; padding: 4px 12px; max-width: 560px; width: 85%; box-shadow: 0 6px 25px rgba(0,0,0,0.9);">
-        <img id="p3d-dialogue-portrait" src="/assets/characters/portrait_shalem.png" alt="Retrato Hablante" style="width: 32px; height: 32px; border: 1.2px solid #d4af37; border-radius: 4px; object-fit: cover; object-position: center; flex-shrink: 0; image-rendering: pixelated;" />
-        <div id="p3d-dialogue-toast" style="font-size: 8px; color: #e6dcfa; line-height: 1.35; flex: 1;">
+      <!-- Dialogue Toast (Bottom Center, Auto-Fading + Dismissible) -->
+      <div id="p3d-dialogue-toast-container" style="position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; background: rgba(12, 8, 22, 0.93); backdrop-filter: blur(5px); border: 1.1px solid #d4af37; border-radius: 4px; padding: 4px 10px; max-width: 530px; width: 82%; box-shadow: 0 6px 22px rgba(0,0,0,0.88); transition: opacity 0.35s ease, transform 0.35s ease; pointer-events: auto;">
+        <img id="p3d-dialogue-portrait" src="/assets/characters/portrait_shalem.png" alt="Retrato Hablante" style="width: 30px; height: 30px; border: 1.1px solid #d4af37; border-radius: 4px; object-fit: cover; object-position: center; flex-shrink: 0; image-rendering: pixelated;" />
+        <div id="p3d-dialogue-toast" style="font-size: 7.6px; color: #e6dcfa; line-height: 1.32; flex: 1;">
           <span style="color: #ffd700; font-weight: bold;">Shalem:</span> «¡Alba en Oakhaven! Sube al este hacia la <span style="color:#b8ff99;">Colina del Viejo Roble [Y]</span> para entregarle el pájaro de sauce a Elowen, o pulsa <span style="color:#ffaa88;">[F]</span> para iniciar el asedio nocturno.»
         </div>
+        <button id="p3d-toast-close" title="Ocultar aviso" style="background: transparent; color: #a896bf; border: none; padding: 0 3px; font-size: 10px; cursor: pointer; flex-shrink: 0; line-height: 1;">×</button>
       </div>
 
       <!-- Dynamic Screen Post-FX Overlays -->
@@ -6819,8 +6954,8 @@ export class Oakhaven3DExperience {
       </div>
 
       <!-- Bottom Controls Bar -->
-      <div style="position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); max-width: 96%; background: rgba(8, 4, 14, 0.95); border: 1px solid #3d2852; border-radius: 3px; padding: 2px 8px; font-family: monospace; font-size: 6.8px; color: #c5b4db; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-        WASD: Mover | J/K: Ataque | L: Guardia | Espacio: Esquivar | E: Interactuar | T: Lanzar | R: Fijar | TAB: Héroe | C: Cámara | I/B/N/V: Menús
+      <div id="p3d-controls-bar" style="position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%); max-width: 96%; background: rgba(8, 4, 14, 0.86); border: 1px solid rgba(90, 61, 120, 0.55); border-radius: 3px; padding: 2px 8px; font-family: monospace; font-size: 6.6px; color: #c5b4db; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: opacity 0.35s ease;">
+        WASD: Mover | J/K: Ataque | L: Guardia | Espacio: Esquivar | E: Interactuar | T: Lanzar | R: Fijar | TAB: Héroe | X: Menú | Z: HUD
       </div>
     `;
 
@@ -6912,7 +7047,7 @@ export class Oakhaven3DExperience {
     const btnCam = this.uiOverlay.querySelector('#btn-toggle-cam') as HTMLButtonElement;
     btnCam.addEventListener('click', () => {
       this.toggleCameraMode();
-      btnCam.innerText = `🎥 [C] CÁMARA: ${this.cameraMode === 'isometric' ? 'OBLICUA 3/4' : 'TERCERA PERSONA'}`;
+      btnCam.innerText = `🎥 [C] ${this.cameraMode === 'isometric' ? 'OBLICUA' : '3ª PERS.'}`;
     });
 
     const btnLockOn = this.uiOverlay.querySelector('#btn-toggle-lockon') as HTMLButtonElement | null;
@@ -6923,6 +7058,8 @@ export class Oakhaven3DExperience {
     const btnDbgColina = this.uiOverlay.querySelector('#btn-dbg-colina') as HTMLButtonElement | null;
     if (btnDbgColina) {
       btnDbgColina.addEventListener('click', () => {
+        this.hudCompactController.closeDrawers();
+        this.syncCompactHudUI();
         if (this.astarothEncounter.isDefeated) {
           this.triggerFirstDawnPlayableEpilogue();
           return;
@@ -6933,6 +7070,60 @@ export class Oakhaven3DExperience {
         this.cameraYaw = -Math.PI / 2;
         this.targetCameraYaw = -Math.PI / 2;
         this.updateProximityInteractions();
+      });
+    }
+
+    // Compact HUD & Collapsible Drawer Bindings
+    this.hudTopLeftEl = this.uiOverlay.querySelector('#p3d-hud-top-left') as HTMLDivElement;
+    this.hudTopRightEl = this.uiOverlay.querySelector('#p3d-hud-top-right') as HTMLDivElement;
+    this.compactMenuDrawerEl = this.uiOverlay.querySelector('#p3d-compact-menu-drawer') as HTMLDivElement;
+    this.devDrawerEl = this.uiOverlay.querySelector('#p3d-dev-drawer') as HTMLDivElement;
+    this.controlsBarEl = this.uiOverlay.querySelector('#p3d-controls-bar') as HTMLDivElement;
+    this.sectorCompassEl = this.uiOverlay.querySelector('#p3d-sector-compass') as HTMLDivElement;
+    this.dialogueToastContainerEl = this.uiOverlay.querySelector('#p3d-dialogue-toast-container') as HTMLDivElement;
+
+    const btnCompactMenu = this.uiOverlay.querySelector('#btn-toggle-compact-menu') as HTMLButtonElement | null;
+    if (btnCompactMenu) {
+      btnCompactMenu.addEventListener('click', () => {
+        this.hudCompactController.toggleDrawer('menu');
+        this.syncCompactHudUI();
+        this.audio.playSfx('menu_select');
+      });
+    }
+    const btnDevDrawer = this.uiOverlay.querySelector('#btn-toggle-dev-drawer') as HTMLButtonElement | null;
+    if (btnDevDrawer) {
+      btnDevDrawer.addEventListener('click', () => {
+        this.hudCompactController.toggleDrawer('dev');
+        this.syncCompactHudUI();
+        this.audio.playSfx('menu_select');
+      });
+    }
+    const btnMinimalHud = this.uiOverlay.querySelector('#btn-toggle-minimal-hud') as HTMLButtonElement | null;
+    if (btnMinimalHud) {
+      btnMinimalHud.addEventListener('click', () => {
+        const isMinimal = this.hudCompactController.toggleMinimalHud();
+        this.syncCompactHudUI();
+        this.audio.playSfx('menu_select');
+        this.spawnFloatingText(
+          this.playerGroup.position,
+          isMinimal ? '👁️ HUD MÍNIMO ACTIVO ([Z] PARA RESTAURAR)' : '👁️ HUD COMPLETO RESTAURADO',
+          '#ffd700'
+        );
+      });
+    }
+    const btnQuestCollapse = this.uiOverlay.querySelector('#btn-toggle-quest-collapse') as HTMLButtonElement | null;
+    if (btnQuestCollapse) {
+      btnQuestCollapse.addEventListener('click', (ev: MouseEvent) => {
+        ev.stopPropagation();
+        this.hudCompactController.toggleQuestTrackerCollapsed();
+        this.syncCompactHudUI();
+      });
+    }
+    const btnToastClose = this.uiOverlay.querySelector('#p3d-toast-close') as HTMLButtonElement | null;
+    if (btnToastClose) {
+      btnToastClose.addEventListener('click', () => {
+        this.hudCompactController.dismissDialogueToast();
+        this.syncCompactHudUI();
       });
     }
 
@@ -7209,6 +7400,17 @@ export class Oakhaven3DExperience {
         }
       });
     }
+
+    if (this.devDrawerEl) {
+      this.devDrawerEl.addEventListener('click', (ev: MouseEvent) => {
+        if ((ev.target as HTMLElement | null)?.closest('button')) {
+          this.hudCompactController.closeDrawers();
+          this.syncCompactHudUI();
+        }
+      });
+    }
+
+    this.syncCompactHudUI();
   }
 
   // =========================================================================
@@ -7242,6 +7444,8 @@ export class Oakhaven3DExperience {
     if (this.proximityBadgeEl) {
       this.proximityBadgeEl.style.display = 'none';
     }
+    this.hudCompactController.closeDrawers();
+    this.syncCompactHudUI();
     this.isPointerDragging = false;
   }
 
@@ -7386,6 +7590,31 @@ export class Oakhaven3DExperience {
       this.endCinematicCameraBeat();
       return;
     }
+    // Close open compact menu / dev drawer with [Escape]
+    if (!e.repeat && e.key === 'Escape' && this.hudCompactController.state.activeDrawer !== 'none') {
+      this.hudCompactController.closeDrawers();
+      this.syncCompactHudUI();
+      return;
+    }
+    // Toggle Compact Menu Drawer with [X]
+    if (!e.repeat && key === 'x') {
+      this.hudCompactController.toggleDrawer('menu');
+      this.syncCompactHudUI();
+      this.audio.playSfx('menu_select');
+      return;
+    }
+    // Toggle Minimal / Immersive HUD with [Z]
+    if (!e.repeat && key === 'z') {
+      const isMinimal = this.hudCompactController.toggleMinimalHud();
+      this.syncCompactHudUI();
+      this.audio.playSfx('menu_select');
+      this.spawnFloatingText(
+        this.playerGroup.position,
+        isMinimal ? '👁️ HUD MÍNIMO ACTIVO ([Z] PARA RESTAURAR)' : '👁️ HUD COMPLETO RESTAURADO',
+        '#ffd700'
+      );
+      return;
+    }
 
     // Toggle Hero with [TAB] (single-pulse only, ignores e.repeat)
     if (e.key === 'Tab') {
@@ -7508,7 +7737,7 @@ export class Oakhaven3DExperience {
         this.toggleCameraMode();
         const btnCam = this.uiOverlay?.querySelector('#btn-toggle-cam') as HTMLButtonElement | null;
         if (btnCam) {
-          btnCam.innerText = `🎥 [C] CÁMARA: ${this.cameraMode === 'isometric' ? 'OBLICUA 3/4' : 'TERCERA PERSONA'}`;
+          btnCam.innerText = `🎥 [C] ${this.cameraMode === 'isometric' ? 'OBLICUA' : '3ª PERS.'}`;
         }
       }
       return;
@@ -7688,6 +7917,8 @@ export class Oakhaven3DExperience {
       img.src = this.normalizePortraitUrl(portrait);
       img.style.borderColor = borderColor;
     }
+    this.hudCompactController.notifyDialogueToast(7.5);
+    this.syncCompactHudUI();
   }
 
   public toggleHero(): void {
@@ -11715,6 +11946,9 @@ export class Oakhaven3DExperience {
     this.updateLockOn(delta);
     this.updateSectorCompassAndShalemGuide(delta);
     this.syncCampaignSequence(delta);
+    if (this.hudCompactController.tick(delta)) {
+      this.syncCompactHudUI();
+    }
     this.updateEnemy(delta);
     this.updateCultist(delta);
     this.updateZealot(delta);
@@ -13978,12 +14212,12 @@ export class Oakhaven3DExperience {
     if (btnQuickBalm) {
       const balm = this.inventory.getItem('maiden_balm') || this.inventory.getItem('balm_health');
       const count = balm ? balm.quantity : 0;
-      btnQuickBalm.innerText = `🌿 [Q] BÁLSAMO (${count})`;
+      btnQuickBalm.innerText = `🌿 [Q] (${count})`;
     }
 
     const btnSkills = this.uiOverlay.querySelector('#btn-toggle-skills') as HTMLButtonElement;
     if (btnSkills) {
-      btnSkills.innerText = `🌟 [H] HABILIDADES (${this.progression.getExp()} EXP)`;
+      btnSkills.innerText = `🌟 [H] Hab. (${this.progression.getExp()})`;
     }
 
     if (this.attackBuffTimer > 0 && weaponBadge) {
