@@ -35,6 +35,7 @@ import {
   LoreChoiceBranch3D
 } from '../../domain/story/ActEncountersAndLore3D';
 import { ArsenalManager, ArrowType } from '../../domain/combat/ArsenalManager';
+import { CombatFlowController3D, THOMAS_COMBO_SPECS_3D, ThomasComboStep3D } from '../../domain/combat/CombatFlowController3D';
 import { ThreeVisualDesignSystem } from './ThreeVisualDesignSystem';
 import { VISUAL_PACK_3D_CONCEPTS } from '../assets/VisualPackCatalog';
 import { GothicArticulatedRig3D } from './GothicArticulatedRig3D';
@@ -68,6 +69,8 @@ export interface Projectile3D {
   isHeavy: boolean;
   arrowType?: ArrowType;
   isThrownFlask?: boolean;
+  trailTimer?: number;
+  isCounterShot?: boolean;
 }
 
 export interface DestructibleProp3D {
@@ -568,6 +571,10 @@ export class Oakhaven3DExperience {
   // 3D Combat Spectacle, Boss Telegraphs, Meteors & Hitstop Engine
   private combatVfx!: CombatSpectacleVfx3D;
   private gothicArch: GothicArchitectureBuilder3D = new GothicArchitectureBuilder3D();
+  private combatFlow: CombatFlowController3D = new CombatFlowController3D();
+  private currentComboStep3D: number = 0;
+  private slowMoVignetteEl?: HTMLDivElement;
+  private combatFlowBadgeEl?: HTMLDivElement;
 
   // Arsenal & Munitions Manager
   private arsenalManager: ArsenalManager = new ArsenalManager();
@@ -4479,8 +4486,7 @@ export class Oakhaven3DExperience {
             }
           }
         } else if (this.playerStats.isDodging) {
-          this.audio.playSfx('dodge');
-          this.spawnFloatingText(pPos, '⚡ ¡ESQUIVADO PERFECTO!', '#00e5ff');
+          this.triggerPerfectDodge();
         }
 
         this.rootProwlerEncounter.setState('RECOVERY');
@@ -4634,8 +4640,7 @@ export class Oakhaven3DExperience {
             }
           }
         } else if (this.playerStats.isDodging) {
-          this.audio.playSfx('dodge');
-          this.spawnFloatingText(pPos, '⚡ ¡ESQUIVADO PERFECTO!', '#00e5ff');
+          this.triggerPerfectDodge();
         }
 
         this.crucibleGuardianEncounter.setState('CHASE');
@@ -4824,8 +4829,7 @@ export class Oakhaven3DExperience {
             }
           }
         } else if (this.playerStats.isDodging) {
-          this.audio.playSfx('dodge');
-          this.spawnFloatingText(pPos, '⚡ ¡ESQUIVADO PERFECTO!', '#00e5ff');
+          this.triggerPerfectDodge();
         }
 
         this.captainVaneEncounter.setState('CHASE');
@@ -5264,8 +5268,7 @@ export class Oakhaven3DExperience {
             }
           }
         } else if (this.playerStats.isDodging) {
-          this.audio.playSfx('dodge');
-          this.spawnFloatingText(pPos, '⚡ ¡ESQUIVADO PERFECTO!', '#00e5ff');
+          this.triggerPerfectDodge();
         }
 
         this.rexMalphasEncounter.setState('CHASE');
@@ -5465,8 +5468,7 @@ export class Oakhaven3DExperience {
             }
           }
         } else if (this.playerStats.isDodging) {
-          this.audio.playSfx('dodge');
-          this.spawnFloatingText(pPos, '⚡ ¡ESQUIVADO PERFECTO!', '#00e5ff');
+          this.triggerPerfectDodge();
         }
 
         this.astarothEncounter.setState('CHASE');
@@ -6136,6 +6138,50 @@ export class Oakhaven3DExperience {
     }
   }
 
+  private triggerPerfectDodge(): void {
+    const activated = this.combatFlow.triggerPerfectDodge();
+    this.audio.playSfx('dodge');
+    if (!activated) {
+      this.spawnFloatingText(this.playerGroup.position, '⚡ ¡ESQUIVADO!', '#00e5ff');
+      return;
+    }
+
+    // Reward posture recovery + shadow-time VFX pulse + slow-mo counter window
+    this.playerStats.posture = Math.min(this.playerStats.maxPosture, this.playerStats.posture + 15);
+    this.audio.playHolyFlash?.();
+    this.combatVfx?.spawnPerfectDodgePulse(this.playerGroup.position);
+    this.spawnFloatingText(
+      this.playerGroup.position,
+      '⚡ ¡ESQUIVA PERFECTA! CÁMARA LENTA · CONTRAATAQUE +50%',
+      '#00eeff'
+    );
+    this.syncCombatFlowUI();
+    this.updateHUD();
+  }
+
+  private syncCombatFlowUI(): void {
+    const isSlowMo = this.combatFlow.isSlowMoActive;
+    if (this.slowMoVignetteEl) {
+      this.slowMoVignetteEl.style.opacity = isSlowMo ? '1' : '0';
+    }
+    if (this.combatFlowBadgeEl) {
+      if (this.combatFlow.isCounterReady) {
+        this.combatFlowBadgeEl.style.display = 'block';
+        this.combatFlowBadgeEl.style.borderColor = '#00eeff';
+        this.combatFlowBadgeEl.style.color = '#88ffff';
+        this.combatFlowBadgeEl.innerText = `⚡ CONTRAATAQUE PERFECTO (+50% DAÑO) · ${this.combatFlow.counterRemainingSec.toFixed(1)}s`;
+      } else if (this.combatFlow.activeComboStep > 0 && this.activeHero === 'thomas') {
+        const spec = THOMAS_COMBO_SPECS_3D[this.combatFlow.activeComboStep as ThomasComboStep3D];
+        this.combatFlowBadgeEl.style.display = 'block';
+        this.combatFlowBadgeEl.style.borderColor = spec.step === 3 ? '#ff5522' : '#d4af37';
+        this.combatFlowBadgeEl.style.color = spec.step === 3 ? '#ffaa66' : '#ffd700';
+        this.combatFlowBadgeEl.innerText = `⚔ COMBO ${spec.step}/3 · ${spec.label} (x${spec.damageMultiplier.toFixed(2)})`;
+      } else {
+        this.combatFlowBadgeEl.style.display = 'none';
+      }
+    }
+  }
+
   private updateActSecondaryEnemies(delta: number): void {
     const area = this.dungeonAreaManager.currentArea;
     const pPos = this.playerGroup.position;
@@ -6212,6 +6258,11 @@ export class Oakhaven3DExperience {
 
         if (enemy.timer <= 0) {
           enemy.warningMesh.visible = false;
+          if (dist <= 2.75 && this.playerStats.isDodging) {
+            this.triggerPerfectDodge();
+            enemy.state = 'CHASE';
+            continue;
+          }
           if (dist <= 2.75 && !this.playerStats.isDodging) {
             const parryWindow = 280 + this.inventory.getParryBonusMs();
             const isParry = this.playerStats.isGuarding && (performance.now() - this.lastGuardTime) <= parryWindow;
@@ -6586,6 +6637,11 @@ export class Oakhaven3DExperience {
             <div id="p3d-quest-objective" style="font-family: monospace; font-size: 6.5px; color: #e6dcf5; line-height: 1.28;">
               🎯 Auxilia a Gedeón o Marta [E] en el Atrio de San Jude o conversa con Padre Cedric [E]
             </div>
+          </div>
+
+          <!-- Dynamic Combo Chain & Perfect Dodge Counter Badge (Hidden when idle) -->
+          <div id="p3d-combat-flow-badge" style="display: none; background: rgba(14, 10, 28, 0.92); backdrop-filter: blur(4px); border: 1.2px solid #ffd700; border-radius: 4px; padding: 3px 7px; font-family: monospace; font-size: 6.8px; font-weight: bold; color: #ffd700; letter-spacing: 0.4px; box-shadow: 0 4px 14px rgba(0,0,0,0.85);">
+            ⚔ COMBO 1/3 · TAJO DIAGONAL I
           </div>
         </div>
 
@@ -7044,6 +7100,7 @@ export class Oakhaven3DExperience {
 
       <!-- Dynamic Screen Post-FX Overlays -->
       <div id="p3d-damage-vignette" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; box-shadow: inset 0 0 85px 35px rgba(220, 20, 20, 0.85); opacity: 0; transition: opacity 0.08s ease; z-index: 210;"></div>
+      <div id="p3d-slowmo-vignette" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; box-shadow: inset 0 0 95px 30px rgba(0, 220, 255, 0.52); background: radial-gradient(circle, transparent 52%, rgba(45, 18, 95, 0.34) 100%); opacity: 0; transition: opacity 0.14s ease; z-index: 215;"></div>
       <div id="p3d-holy-flash" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; background: radial-gradient(circle, rgba(255, 235, 130, 0.75) 0%, rgba(200, 240, 255, 0.4) 60%, transparent 100%); opacity: 0; transition: opacity 0.1s ease; z-index: 220;"></div>
 
       <!-- Subterranean Zone Transition Overlay -->
@@ -7478,7 +7535,9 @@ export class Oakhaven3DExperience {
     this.morwennaHpBarFill = this.uiOverlay.querySelector('#p3d-boss-hp-fill') as HTMLDivElement;
 
     this.damageVignetteEl = this.uiOverlay.querySelector('#p3d-damage-vignette') as HTMLDivElement;
+    this.slowMoVignetteEl = this.uiOverlay.querySelector('#p3d-slowmo-vignette') as HTMLDivElement;
     this.holyFlashEl = this.uiOverlay.querySelector('#p3d-holy-flash') as HTMLDivElement;
+    this.combatFlowBadgeEl = this.uiOverlay.querySelector('#p3d-combat-flow-badge') as HTMLDivElement;
 
     const weaponBadge = this.uiOverlay.querySelector('#p3d-weapon-badge') as HTMLDivElement;
     if (weaponBadge) {
@@ -8091,46 +8150,111 @@ export class Oakhaven3DExperience {
   // COMBAT ACTIONS (ATTACK, DODGE, THROW, PARRY)
   // =========================================================================
   private executeAttack(isHeavy: boolean): void {
-    if (this.isPlayerAttacking || this.playerStats.isDodging) return;
+    if (this.playerStats.isDodging) return;
+    if (this.isPlayerAttacking || this.attackCooldown > 0) {
+      // Generous input buffering: any tap mid-swing smoothly chains into the next combo hit
+      this.combatFlow.bufferAttack(isHeavy ? 'heavy' : 'light');
+      return;
+    }
 
-    // If Khaterine is active, fire Abyssal Arrow projectiles!
+    // If Khaterine is active, fire upgraded Elemental Abyssal Arrow projectiles!
     if (this.activeHero === 'khaterine') {
       this.shootAbyssalArrow(isHeavy);
       return;
     }
 
-    // Thomas Melee Attack
-    this.isPlayerAttacking = true;
-    this.attackCooldown = isHeavy ? 0.45 : 0.28;
-    this.audio.playCombatHit(isHeavy);
+    // Thomas 3-Hit Escalating Melee Combo + Heavy Combo Synergy + Perfect Dodge Counter (+50%)
+    const counterRes = this.combatFlow.consumeCounterAttack();
+    let strikeDamageMult = counterRes.multiplier;
+    let comboStep = 1;
+    let lungeSpeed = isHeavy ? 3.2 : 2.3;
+    let animMs = isHeavy ? 280 : 175;
+    let arcColorHex = this.hasForgedAlbaGris ? 0x88eeff : 0xffd700;
 
-    // Spawn official animated slash VFX billboard in front of Thomas
+    if (!isHeavy) {
+      const stepSpec = this.combatFlow.advanceLightCombo();
+      comboStep = stepSpec.step;
+      this.currentComboStep3D = comboStep;
+      strikeDamageMult *= stepSpec.damageMultiplier;
+      lungeSpeed = stepSpec.forwardLungeSpeed;
+      animMs = stepSpec.animDurationMs;
+      this.attackCooldown = stepSpec.cooldownSec;
+      arcColorHex = this.hasForgedAlbaGris ? 0x88eeff : stepSpec.arcColorHex;
+      if (stepSpec.step === 3) {
+        this.spawnFloatingText(this.playerGroup.position, '🔥 ¡COMBO III: REMATE DE FUEGO NEGRO!', '#ff7733');
+      }
+    } else {
+      const heavyBonus = this.combatFlow.consumeHeavyFinisherBonus();
+      this.currentComboStep3D = 0;
+      strikeDamageMult *= heavyBonus.bonusMultiplier;
+      this.attackCooldown = 0.42;
+      if (heavyBonus.chainedFromCombo) {
+        this.spawnFloatingText(this.playerGroup.position, '⚔ ¡REMATE ENCADENADO (+15%)!', '#ffd700');
+      }
+    }
+
+    if (counterRes.triggered) {
+      this.combatVfx?.spawnParryOrCritFlash(this.playerGroup.position, 'crit');
+      this.spawnFloatingText(this.playerGroup.position, '⚡ ¡CONTRAATAQUE PERFECTO (+50%)!', '#00eeff');
+    }
+
+    this.isPlayerAttacking = true;
+    this.audio.playCombatHit(isHeavy || comboStep === 3 || counterRes.triggered);
+    this.syncCombatFlowUI();
+
+    // Forward combat lunge + Luminous 3D Crescent Slash Arc + Official Billboard VFX
     const slashForward = new THREE.Vector3(0, 0, -1).applyEuler(this.playerGroup.rotation).normalize();
-    const slashPos = this.playerGroup.position.clone().add(new THREE.Vector3(0, 1.15, 0)).add(slashForward.multiplyScalar(1.1));
+    this.playerVelocity.x += slashForward.x * lungeSpeed;
+    this.playerVelocity.z += slashForward.z * lungeSpeed;
+
+    this.combatVfx?.spawnSwordSlashArc3D(
+      this.playerGroup.position,
+      this.playerGroup.rotation.y,
+      comboStep,
+      isHeavy,
+      counterRes.triggered ? 0x00eeff : arcColorHex
+    );
+
+    const slashPos = this.playerGroup.position.clone().add(new THREE.Vector3(0, 1.15, 0)).add(slashForward.clone().multiplyScalar(1.1));
     this.visualDesigns.spawnVfxBillboard(
       this.scene,
       slashPos,
-      isHeavy ? 2.2 : 1.7,
-      isHeavy ? 2.2 : 1.7,
-      isHeavy || this.hasForgedAlbaGris ? '/assets/vfx/fx_slash_gold.png' : '/assets/vfx/fx_slash_abyss.png',
+      isHeavy || comboStep === 3 ? 2.3 : 1.75,
+      isHeavy || comboStep === 3 ? 2.3 : 1.75,
+      isHeavy || comboStep >= 2 || this.hasForgedAlbaGris ? '/assets/vfx/fx_slash_gold.png' : '/assets/vfx/fx_slash_abyss.png',
       5,
       20
     );
 
-    // Visual Slash Animation on weapon
+    // Visual Slash Animation on weapon tailored per 3-hit combo step
     if (this.playerStats.isArmed) {
-      this.playerSwordMesh.rotation.set(isHeavy ? -1.2 : -0.8, isHeavy ? 0.8 : -0.6, 0);
+      if (isHeavy) {
+        this.playerSwordMesh.rotation.set(-1.25, 0.85, 0);
+      } else if (comboStep === 2) {
+        this.playerSwordMesh.rotation.set(-0.55, 1.1, 0.5);
+      } else if (comboStep === 3) {
+        this.playerSwordMesh.rotation.set(-1.5, -0.35, -0.4);
+      } else {
+        this.playerSwordMesh.rotation.set(-0.85, -0.65, 0);
+      }
       setTimeout(() => {
         if (this.playerSwordMesh) this.playerSwordMesh.rotation.set(0.3, 0, -0.2);
         this.isPlayerAttacking = false;
-      }, isHeavy ? 280 : 180);
+      }, animMs);
     } else {
-      // Unarmed punch animation
+      // Unarmed rapid punch animation
       this.playerFistsGroup.position.z += 0.35;
       setTimeout(() => {
         if (this.playerFistsGroup) this.playerFistsGroup.position.z -= 0.35;
         this.isPlayerAttacking = false;
-      }, 160);
+      }, 150);
+    }
+
+    const savedAttackBuffMult = this.attackBuffMultiplier;
+    this.attackBuffMultiplier = savedAttackBuffMult * strikeDamageMult;
+    const effectiveHeavy = isHeavy || comboStep === 3 || counterRes.triggered;
+    if (effectiveHeavy && !isHeavy) {
+      isHeavy = true;
     }
 
     const reach = this.playerStats.isArmed ? 2.4 : 1.6;
@@ -8557,6 +8681,9 @@ export class Oakhaven3DExperience {
         }
       }
     }
+
+    // Restore base buff multiplier after single-strike combo/counter scaling
+    this.attackBuffMultiplier = savedAttackBuffMult;
   }
 
   // =========================================================================
@@ -8564,9 +8691,16 @@ export class Oakhaven3DExperience {
   // =========================================================================
   private shootAbyssalArrow(isHeavy: boolean): void {
     const shot = this.arsenalManager.prepareArrowShot(this.inventory, isHeavy);
+    const counterRes = this.combatFlow.consumeCounterAttack();
     this.isPlayerAttacking = true;
-    this.attackCooldown = isHeavy ? 0.48 : 0.26;
+    this.attackCooldown = isHeavy ? 0.44 : 0.24;
     this.audio.playBowShot();
+
+    if (counterRes.triggered) {
+      this.combatVfx?.spawnParryOrCritFlash(this.playerGroup.position, 'crit');
+      this.spawnFloatingText(this.playerGroup.position, '⚡ ¡FLECHA DE CONTRAATAQUE (+50%)!', '#00eeff');
+    }
+    this.syncCombatFlowUI();
 
     // Bow recoil animation
     if (this.khaterineBowMesh) {
@@ -8574,46 +8708,69 @@ export class Oakhaven3DExperience {
       setTimeout(() => {
         if (this.khaterineBowMesh) this.khaterineBowMesh.position.z += 0.15;
         this.isPlayerAttacking = false;
-      }, isHeavy ? 260 : 160);
+      }, isHeavy ? 240 : 155);
     }
 
     const forward = new THREE.Vector3(0, 0, -1).applyEuler(this.playerGroup.rotation).normalize();
     const spawnPos = this.playerGroup.position.clone().add(new THREE.Vector3(0, 1.25, 0)).add(forward.clone().multiplyScalar(0.7));
 
-    // Arrow Group Mesh
+    // Enhanced 3-Arrow Elemental Mesh (Abyssal Violet Torus / Fire Ember Tip / Silver Astral Halo + Fletching)
     const arrowGroup = new THREE.Group();
     arrowGroup.position.copy(spawnPos);
 
-    const arrowShaftMat = new THREE.MeshBasicMaterial({ color: shot.colorHex });
+    const arrowShaftMat = new THREE.MeshBasicMaterial({ color: counterRes.triggered ? 0x00eeff : shot.colorHex });
     const arrowHeadMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
 
-    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, isHeavy ? 0.95 : 0.7, 6), arrowShaftMat);
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, isHeavy ? 1.05 : 0.78, 6), arrowShaftMat);
     shaft.rotation.x = Math.PI / 2;
     arrowGroup.add(shaft);
 
-    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.22, 6), arrowHeadMat);
-    tip.position.z = -0.4;
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.26, 6), arrowHeadMat);
+    tip.position.z = -0.44;
     tip.rotation.x = -Math.PI / 2;
     arrowGroup.add(tip);
 
-    const light = new THREE.PointLight(shot.colorHex, isHeavy ? 3.8 : 2.2, 5);
+    // Glowing Elemental Fletching Fins & Energy Ring
+    const finMat = new THREE.MeshBasicMaterial({
+      color: shot.arrowType === 'fire' ? 0xffaa22 : shot.arrowType === 'silver' ? 0x88ffff : 0xe056fd,
+      transparent: true,
+      opacity: 0.9,
+      side: THREE.DoubleSide
+    });
+    const finH = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.16), finMat);
+    finH.position.z = 0.34;
+    finH.rotation.x = Math.PI / 2;
+    const finV = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.16), finMat);
+    finV.position.z = 0.34;
+    finV.rotation.y = Math.PI / 2;
+    const energyRing = new THREE.Mesh(new THREE.TorusGeometry(isHeavy ? 0.15 : 0.1, 0.022, 6, 14), finMat);
+    energyRing.position.z = -0.18;
+    arrowGroup.add(finH, finV, energyRing);
+
+    const light = new THREE.PointLight(shot.colorHex, isHeavy || counterRes.triggered ? 4.4 : 2.6, 6.5);
     arrowGroup.add(light);
 
     // Look in flying direction
     arrowGroup.lookAt(spawnPos.clone().add(forward));
     this.scene.add(arrowGroup);
 
-    const speed = isHeavy ? 22 : 18;
+    const speed = isHeavy ? 24 : 20;
     const arrowBonus = 1.0 + (this.progression.getArrowDamageBonusPct() / 100);
+    const vel = forward.multiplyScalar(speed);
+    // Subtle heroic bow trajectory lift
+    vel.y = isHeavy ? 0.55 : 0.85;
+
     this.projectiles.push({
       mesh: arrowGroup,
       light,
-      velocity: forward.multiplyScalar(speed),
+      velocity: vel,
       life: 1.8,
       maxLife: 1.8,
-      damage: Math.round(shot.baseDamage * this.attackBuffMultiplier * arrowBonus),
-      isHeavy,
-      arrowType: shot.arrowType
+      damage: Math.round(shot.baseDamage * this.attackBuffMultiplier * arrowBonus * counterRes.multiplier),
+      isHeavy: isHeavy || counterRes.triggered,
+      arrowType: shot.arrowType,
+      trailTimer: 0,
+      isCounterShot: counterRes.triggered
     });
     this.updateHUD();
   }
@@ -8627,9 +8784,20 @@ export class Oakhaven3DExperience {
         p.velocity.y -= 14.0 * delta;
         p.mesh.rotation.x += 8.0 * delta;
         p.mesh.rotation.z += 6.0 * delta;
+      } else {
+        // Gentle ballistic bow arc + luminous elemental flight trail for Khaterine's 3 arrow types
+        p.velocity.y -= 1.65 * delta;
+        p.trailTimer = (p.trailTimer ?? 0) - delta;
+        if (p.trailTimer <= 0) {
+          p.trailTimer = 0.026;
+          this.combatVfx?.spawnArrowTrailNode(p.mesh.position, p.arrowType || 'abyssal', p.isHeavy);
+        }
       }
 
       p.mesh.position.addScaledVector(p.velocity, delta);
+      if (!p.isThrownFlask) {
+        p.mesh.lookAt(p.mesh.position.clone().add(p.velocity));
+      }
 
       // Thrown flask floor impact
       if (p.isThrownFlask && p.mesh.position.y <= 0.2) {
@@ -9118,8 +9286,14 @@ export class Oakhaven3DExperience {
         }
       }
 
-      // Cleanup
+      // Cleanup + Elemental Arrow Impact VFX Burst
       if (collided || p.life <= 0) {
+        if (collided && !p.isThrownFlask) {
+          this.combatVfx?.spawnArrowImpactBurst(p.mesh.position, p.arrowType || 'abyssal', p.isHeavy);
+          if (p.isCounterShot) {
+            this.combatVfx?.spawnParryOrCritFlash(p.mesh.position, 'crit');
+          }
+        }
         this.scene.remove(p.mesh);
         this.projectiles.splice(i, 1);
       }
@@ -11309,7 +11483,7 @@ export class Oakhaven3DExperience {
 
       if (dist <= 4.4) {
         if (this.playerStats.isDodging) {
-          this.spawnFloatingText(this.playerGroup.position, '¡ESQUIVA DE TORBELLINO!', '#88ffaa');
+          this.triggerPerfectDodge();
         } else {
           const dmg = this.calculateIncomingDamage(34, 14);
           this.playerStats.health = Math.max(0, this.playerStats.health - dmg);
@@ -11363,7 +11537,7 @@ export class Oakhaven3DExperience {
         }
 
         if (this.playerStats.isDodging) {
-          this.spawnFloatingText(this.playerGroup.position, '¡ESQUIVA PERFECTA!', '#88ffaa');
+          this.triggerPerfectDodge();
         } else {
           const dmg = this.calculateIncomingDamage(32, 10);
           this.playerStats.health = Math.max(0, this.playerStats.health - dmg);
@@ -11396,7 +11570,7 @@ export class Oakhaven3DExperience {
 
       // Check for Dodge
       if (this.playerStats.isDodging) {
-        this.spawnFloatingText(this.playerGroup.position, '¡ESQUIVA PERFECTA!', '#88ffaa');
+        this.triggerPerfectDodge();
         this.morwennaState = 'RECOVERY';
         this.morwennaTimer = 0.8;
         return;
@@ -11770,7 +11944,7 @@ export class Oakhaven3DExperience {
             return;
           }
         } else if (this.playerStats.isDodging && distToPlayer <= CatacombInquisitor.SLAM_RADIUS) {
-          this.spawnFloatingText(this.playerGroup.position, '¡ESQUIVA PERFECTA!', '#88ffaa');
+          this.triggerPerfectDodge();
         }
 
         this.inquisitorEncounter.setState('RECOVERY');
@@ -11784,7 +11958,7 @@ export class Oakhaven3DExperience {
         this.inquisitorWarningMesh.visible = false;
         if (distToPlayer <= 2.8) {
           if (this.playerStats.isDodging) {
-            this.spawnFloatingText(this.playerGroup.position, '¡ESQUIVA PERFECTA!', '#88ffaa');
+            this.triggerPerfectDodge();
           } else {
             const parryWindow = 280 + this.inventory.getParryBonusMs();
             const isParry = this.playerStats.isGuarding && (performance.now() - this.lastGuardTime) <= parryWindow;
@@ -11846,7 +12020,7 @@ export class Oakhaven3DExperience {
       } else {
         this.cryptAmbushTimer = 1.2;
         if (this.playerStats.isDodging) {
-          this.spawnFloatingText(this.playerGroup.position, '¡ESQUIVA PERFECTA!', '#88ffaa');
+          this.triggerPerfectDodge();
         } else {
           const dmg = this.calculateIncomingDamage(18, 5);
           this.playerStats.health = Math.max(0, this.playerStats.health - dmg);
@@ -12085,9 +12259,19 @@ export class Oakhaven3DExperience {
     if (!this.isRunning) return;
 
     const rawDelta = Math.min(this.clock.getDelta(), 0.1);
-    const delta = this.combatVfx ? this.combatVfx.consumeSimulationDelta(rawDelta) : rawDelta;
+    const baseDelta = this.combatVfx ? this.combatVfx.consumeSimulationDelta(rawDelta) : rawDelta;
+    const flowTick = this.combatFlow.tick(rawDelta);
+    const playerDelta = baseDelta * flowTick.playerTimeScale;
+    const delta = baseDelta * flowTick.worldTimeScale;
 
-    this.updatePlayer(delta);
+    this.updatePlayer(playerDelta);
+    this.syncCombatFlowUI();
+    if (!this.isPlayerAttacking && this.attackCooldown <= 0 && !this.playerStats.isDodging && this.combatFlow.hasBufferedAttack) {
+      const queued = this.combatFlow.popBufferedAttack();
+      if (queued !== 'none') {
+        this.executeAttack(queued === 'heavy');
+      }
+    }
     this.updateLockOn(delta);
     this.updateSectorCompassAndShalemGuide(delta);
     this.syncCampaignSequence(delta);
@@ -12502,7 +12686,8 @@ export class Oakhaven3DExperience {
       isHeavyAttack: this.attackCooldown > 0.3,
       isArmed: this.playerStats.isArmed,
       isDefeated: this.isPlayerDefeated,
-      windSway: this.dungeonAreaManager.currentArea === 'great_stone_bridge' ? 1.0 : 0
+      windSway: this.dungeonAreaManager.currentArea === 'great_stone_bridge' ? 1.0 : 0,
+      comboStep: this.currentComboStep3D || 1
     };
     if (this.thomasRig) this.thomasRig.update(rigInput);
     if (this.khaterineRig) this.khaterineRig.update(rigInput);

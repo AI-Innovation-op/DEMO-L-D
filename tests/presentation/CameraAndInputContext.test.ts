@@ -13,6 +13,7 @@ import {
 import { HudCompactController3D } from '../../src/presentation/three/HudCompactController3D';
 import { CombatSpectacleVfx3D } from '../../src/presentation/three/CombatSpectacleVfx3D';
 import { GothicArchitectureBuilder3D } from '../../src/presentation/three/GothicArchitectureBuilder3D';
+import { CombatFlowController3D } from '../../src/domain/combat/CombatFlowController3D';
 
 describe('Camera & Input Architecture (Vice City & OpenLara Solution)', () => {
   describe('Shortest Angular Arc & Turning Math', () => {
@@ -512,6 +513,107 @@ describe('Camera & Input Architecture (Vice City & OpenLara Solution)', () => {
           builder.update(i * 0.1, 0.05);
         }
       }).not.toThrow();
+    });
+  });
+
+  describe('3D Combat Fluidity: Thomas 3-Hit Combo, Khaterine Arrow Trails & Perfect Dodge Slow-Mo', () => {
+    it('escalates Thomas 3-hit melee combo (1.0x -> 1.18x -> 1.48x), supports input buffering, and grants heavy chain synergy', () => {
+      const flow = new CombatFlowController3D();
+
+      const hit1 = flow.advanceLightCombo();
+      expect(hit1.step).toBe(1);
+      expect(hit1.damageMultiplier).toBeCloseTo(1.0, 2);
+
+      flow.tick(0.25);
+      const hit2 = flow.advanceLightCombo();
+      expect(hit2.step).toBe(2);
+      expect(hit2.damageMultiplier).toBeCloseTo(1.18, 2);
+
+      flow.tick(0.25);
+      const hit3 = flow.advanceLightCombo();
+      expect(hit3.step).toBe(3);
+      expect(hit3.damageMultiplier).toBeCloseTo(1.48, 2);
+      expect(hit3.grantsStagger).toBe(true);
+
+      // Chaining Heavy right after Combo 3 grants +15% finisher bonus
+      const heavyBonus = flow.consumeHeavyFinisherBonus();
+      expect(heavyBonus.chainedFromCombo).toBe(true);
+      expect(heavyBonus.bonusMultiplier).toBeCloseTo(1.15, 2);
+
+      // Input buffering queues and pops cleanly
+      flow.bufferAttack('light');
+      expect(flow.hasBufferedAttack).toBe(true);
+      expect(flow.popBufferedAttack()).toBe('light');
+      expect(flow.hasBufferedAttack).toBe(false);
+    });
+
+    it('activates Perfect Dodge slow-motion (0.32x world / 0.85x player) and +50% rewarded Counter-Attack window', () => {
+      const flow = new CombatFlowController3D();
+      expect(flow.triggerPerfectDodge()).toBe(true);
+      // Duplicate call inside cooldown is suppressed
+      expect(flow.triggerPerfectDodge()).toBe(false);
+
+      const slowTick = flow.tick(0.1);
+      expect(slowTick.isSlowMo).toBe(true);
+      expect(slowTick.worldTimeScale).toBeCloseTo(0.32, 2);
+      expect(slowTick.playerTimeScale).toBeCloseTo(0.85, 2);
+      expect(slowTick.isCounterWindowActive).toBe(true);
+
+      const counter = flow.consumeCounterAttack();
+      expect(counter.triggered).toBe(true);
+      expect(counter.multiplier).toBeCloseTo(1.5, 2);
+      // Counter consumed -> second call returns normal 1.0x
+      expect(flow.consumeCounterAttack().triggered).toBe(false);
+
+      // After slow-mo expires (~0.6s), world returns to 1.0x normal speed
+      for (let i = 0; i < 8; i++) flow.tick(0.1);
+      expect(flow.isSlowMoActive).toBe(false);
+    });
+
+    it('animates distinct articulated rig poses for Combo Steps 1, 2, 3 and spawns sword arcs, arrow trails, and dodge pulses', () => {
+      const rig1 = new GothicArticulatedRig3D('thomas');
+      const rig2 = new GothicArticulatedRig3D('thomas');
+      const rig3 = new GothicArticulatedRig3D('thomas');
+
+      const baseInput = {
+        delta: 0.08,
+        elapsedTime: 0.5,
+        planarSpeed: 0,
+        isMoving: false,
+        isDodging: false,
+        isGuarding: false,
+        isAttacking: true,
+        isHeavyAttack: false,
+        isArmed: true,
+        isDefeated: false
+      };
+
+      rig1.update({ ...baseInput, comboStep: 1 });
+      rig2.update({ ...baseInput, comboStep: 2 });
+      rig3.update({ ...baseInput, comboStep: 3 });
+
+      // Reverse Cross-Slash (Step 2) swings torso opposite to Step 1
+      expect(Math.sign(rig2.nodes.torso.rotation.y)).not.toBe(Math.sign(rig1.nodes.torso.rotation.y));
+      // Rising Finisher (Step 3) elevates pelvis and sweeps deeper than Step 1
+      expect(rig3.nodes.pelvis.position.y).toBeGreaterThan(rig1.nodes.pelvis.position.y);
+
+      const scene = new THREE.Scene();
+      const vfx = new CombatSpectacleVfx3D(scene);
+      const pos = new THREE.Vector3(0, 0, 0);
+
+      vfx.spawnSwordSlashArc3D(pos, 0, 1, false, 0xbb66ff);
+      vfx.spawnSwordSlashArc3D(pos, 0, 2, false, 0xffcc44);
+      vfx.spawnSwordSlashArc3D(pos, 0, 3, false, 0xff4422);
+      vfx.spawnArrowTrailNode(pos, 'abyssal', false);
+      vfx.spawnArrowTrailNode(pos, 'fire', true);
+      vfx.spawnArrowTrailNode(pos, 'silver', true);
+      vfx.spawnArrowImpactBurst(pos, 'silver', true);
+      vfx.spawnPerfectDodgePulse(pos);
+      expect(vfx.activeEffectCount).toBeGreaterThan(25);
+
+      for (let i = 0; i < 30; i++) vfx.update(0.05);
+      expect(vfx.activeEffectCount).toBe(0);
+      vfx.dispose();
     });
   });
 });

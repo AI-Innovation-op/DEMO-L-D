@@ -44,6 +44,7 @@ export interface RigUpdateInput3D {
   isDefeated: boolean;
   aimYawOffset?: number;
   windSway?: number;
+  comboStep?: number;
 }
 
 interface ArchetypeStyleConfig {
@@ -256,6 +257,7 @@ export class GothicArticulatedRig3D {
   private upperDuration: number = 0.3;
   private currentLowerState: LowerBodyState3D = 'idle';
   private currentUpperState: UpperBodyState3D = 'none';
+  private lastComboStep: number = 0;
   private emittedWeaponContact: boolean = false;
   private eventListeners: Array<(event: ClipEventType3D) => void> = [];
 
@@ -614,7 +616,8 @@ export class GothicArticulatedRig3D {
       isArmed,
       isDefeated,
       aimYawOffset = 0,
-      windSway = 0
+      windSway = 0,
+      comboStep = 1
     } = input;
 
     const n = this.nodes;
@@ -707,10 +710,11 @@ export class GothicArticulatedRig3D {
           ? 'shoot_heavy'
           : 'shoot_light';
 
-      if (this.currentUpperState !== targetUpper) {
+      if (this.currentUpperState !== targetUpper || (!isHeavyAttack && this.lastComboStep !== comboStep)) {
         this.currentUpperState = targetUpper;
+        this.lastComboStep = comboStep;
         this.upperTimer = 0;
-        this.upperDuration = isHeavyAttack ? 0.38 : 0.24;
+        this.upperDuration = isHeavyAttack ? 0.38 : comboStep === 3 ? 0.30 : 0.22;
         this.emittedWeaponContact = false;
       }
 
@@ -724,21 +728,46 @@ export class GothicArticulatedRig3D {
 
       if (!this.style.usesBow) {
         if (isArmed) {
-          // Dynamic sword cleave arc: windup -> cleave across torso -> follow-through
           const swingArc = Math.sin(t * Math.PI);
-          const cleaveProgress = t < 0.35 ? THREE.MathUtils.lerp(-0.7, -1.35, t / 0.35) : THREE.MathUtils.lerp(-1.35, 1.15, (t - 0.35) / 0.65);
+          if (!isHeavyAttack && comboStep === 2) {
+            // Combo Step 2: Reverse Cross-Slash (left-to-right horizontal backhand sweep)
+            const reverseSweep = t < 0.3 ? THREE.MathUtils.lerp(0.6, 1.1, t / 0.3) : THREE.MathUtils.lerp(1.1, -1.25, (t - 0.3) / 0.7);
+            n.torso.rotation.y = aimYawOffset + (t < 0.3 ? 0.52 : -0.62);
+            n.torso.rotation.x = 0.14 * swingArc;
+            n.shoulderR.rotation.x = 0.75 * swingArc;
+            n.shoulderR.rotation.z = reverseSweep * 0.68;
+            n.forearmR.rotation.x = 0.35 + 0.4 * swingArc;
+            n.shoulderL.rotation.x = -0.45 * swingArc;
+            n.shoulderL.rotation.z = 0.42;
+            n.forearmL.rotation.x = 0.45;
+          } else if (!isHeavyAttack && comboStep === 3) {
+            // Combo Step 3: Rising Black-Fire Finisher (deep windup -> explosive ascending cleave)
+            const risingArc = t < 0.32 ? THREE.MathUtils.lerp(0.95, 1.45, t / 0.32) : THREE.MathUtils.lerp(1.45, -1.55, (t - 0.32) / 0.68);
+            n.pelvis.position.y += 0.08 * swingArc;
+            n.torso.rotation.y = aimYawOffset + (t < 0.32 ? -0.72 : 0.85);
+            n.torso.rotation.x = -0.22 * swingArc;
+            n.shoulderR.rotation.x = risingArc;
+            n.shoulderR.rotation.z = -0.52 * swingArc;
+            n.forearmR.rotation.x = 0.25 + 0.55 * swingArc;
+            n.shoulderL.rotation.x = 0.55 * swingArc;
+            n.shoulderL.rotation.z = 0.35;
+            n.forearmL.rotation.x = 0.65;
+          } else {
+            // Combo Step 1 & Heavy Cleave: Dynamic diagonal overhead slash
+            const cleaveProgress = t < 0.35 ? THREE.MathUtils.lerp(-0.7, -1.35, t / 0.35) : THREE.MathUtils.lerp(-1.35, 1.15, (t - 0.35) / 0.65);
 
-          n.torso.rotation.y = aimYawOffset + (t < 0.35 ? -0.45 : 0.55) * (isHeavyAttack ? 1.25 : 1.0);
-          n.torso.rotation.x = 0.18 * swingArc;
+            n.torso.rotation.y = aimYawOffset + (t < 0.35 ? -0.45 : 0.55) * (isHeavyAttack ? 1.25 : 1.0);
+            n.torso.rotation.x = 0.18 * swingArc;
 
-          n.shoulderR.rotation.x = cleaveProgress;
-          n.shoulderR.rotation.z = -0.35 * swingArc;
-          n.forearmR.rotation.x = 0.45 + 0.35 * swingArc;
+            n.shoulderR.rotation.x = cleaveProgress;
+            n.shoulderR.rotation.z = -0.35 * swingArc;
+            n.forearmR.rotation.x = 0.45 + 0.35 * swingArc;
 
-          // Counter-balance left arm
-          n.shoulderL.rotation.x = -0.35 * swingArc;
-          n.shoulderL.rotation.z = 0.28;
-          n.forearmL.rotation.x = 0.5;
+            // Counter-balance left arm
+            n.shoulderL.rotation.x = -0.35 * swingArc;
+            n.shoulderL.rotation.z = 0.28;
+            n.forearmL.rotation.x = 0.5;
+          }
         } else {
           // Unarmed rapid punch combo
           const punchExtend = Math.sin(t * Math.PI);

@@ -57,6 +57,15 @@ interface ActiveDefeatPillar3D {
   duration: number;
 }
 
+interface ActiveSlashArc3D {
+  mesh: THREE.Mesh;
+  mat: THREE.MeshBasicMaterial;
+  spinSpeed: number;
+  elapsed: number;
+  duration: number;
+  baseScale: number;
+}
+
 const THEME_COLORS: Record<BossSpectacleTheme, { primary: number; secondary: number }> = {
   fire_crimson: { primary: 0xff3300, secondary: 0xffaa22 },
   molten_bronze: { primary: 0xff7722, secondary: 0xffdd55 },
@@ -83,12 +92,14 @@ export class CombatSpectacleVfx3D {
   private readonly sparkGeo: THREE.BoxGeometry;
   private readonly meteorGeo: THREE.DodecahedronGeometry;
   private readonly pillarGeo: THREE.CylinderGeometry;
+  private readonly crescentArcGeo: THREE.RingGeometry;
 
   private telegraphs: ActiveTelegraph3D[] = [];
   private shockwaves: ActiveShockwave3D[] = [];
   private particles: ActiveParticle3D[] = [];
   private meteors: ActiveMeteor3D[] = [];
   private pillars: ActiveDefeatPillar3D[] = [];
+  private slashArcs: ActiveSlashArc3D[] = [];
 
   private hitstopRemainingSec: number = 0;
 
@@ -104,6 +115,7 @@ export class CombatSpectacleVfx3D {
     this.sparkGeo = new THREE.BoxGeometry(0.09, 0.09, 0.24);
     this.meteorGeo = new THREE.DodecahedronGeometry(0.42, 0);
     this.pillarGeo = new THREE.CylinderGeometry(0.55, 1.35, 14.0, 16, 1, true);
+    this.crescentArcGeo = new THREE.RingGeometry(0.75, 1.48, 20, 1, -Math.PI * 0.45, Math.PI * 0.9);
   }
 
   public get activeEffectCount(): number {
@@ -112,7 +124,8 @@ export class CombatSpectacleVfx3D {
       this.shockwaves.length +
       this.particles.length +
       this.meteors.length +
-      this.pillars.length
+      this.pillars.length +
+      this.slashArcs.length
     );
   }
 
@@ -425,6 +438,148 @@ export class CombatSpectacleVfx3D {
     });
   }
 
+  /**
+   * Spawns a luminous 3D crescent slash arc tilted distinctly per Thomas's 3-hit combo step or Heavy Cleave.
+   */
+  public spawnSwordSlashArc3D(
+    position: THREE.Vector3,
+    yaw: number,
+    comboStep: number,
+    isHeavy: boolean,
+    colorHex: number
+  ): void {
+    const mat = new THREE.MeshBasicMaterial({
+      color: colorHex,
+      transparent: true,
+      opacity: 0.92,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    const mesh = new THREE.Mesh(this.crescentArcGeo, mat);
+    mesh.position.set(position.x, position.y + 1.05, position.z);
+    mesh.rotation.order = 'YXZ';
+    mesh.rotation.y = yaw + Math.PI / 2;
+
+    if (isHeavy) {
+      mesh.rotation.x = Math.PI * 0.42;
+      mesh.rotation.z = 0.25;
+    } else if (comboStep === 2) {
+      // Reverse cross-slash tilt
+      mesh.rotation.x = Math.PI * 0.56;
+      mesh.rotation.z = -0.38;
+    } else if (comboStep === 3) {
+      // Rising Black-Fire finisher vertical-diagonal cleave
+      mesh.rotation.x = Math.PI * 0.16;
+      mesh.rotation.z = 0.2;
+    } else {
+      // Step 1 diagonal cleave
+      mesh.rotation.x = Math.PI * 0.46;
+      mesh.rotation.z = 0.34;
+    }
+
+    const baseScale = isHeavy ? 1.45 : comboStep === 3 ? 1.55 : comboStep === 2 ? 1.18 : 1.0;
+    mesh.scale.setScalar(baseScale);
+    this.rootGroup.add(mesh);
+
+    this.slashArcs.push({
+      mesh,
+      mat,
+      spinSpeed: comboStep === 2 ? -9.5 : 9.5,
+      elapsed: 0,
+      duration: isHeavy || comboStep === 3 ? 0.26 : 0.19,
+      baseScale
+    });
+
+    if (comboStep === 3 || isHeavy) {
+      this.spawnParticleBurst(position, comboStep === 3 ? 12 : 8, comboStep === 3 ? 'fire_crimson' : 'solar_gold', {
+        speed: 4.8,
+        upwardBoost: 2.6,
+        life: 0.36
+      });
+    }
+  }
+
+  /**
+   * Emits a lightweight elemental trail node behind Khaterine's Abyssal, Fire, or Silver arrows in flight.
+   */
+  public spawnArrowTrailNode(
+    position: THREE.Vector3,
+    arrowType: 'abyssal' | 'fire' | 'silver' = 'abyssal',
+    isHeavy: boolean = false
+  ): void {
+    const color =
+      arrowType === 'fire'
+        ? 0xff7722
+        : arrowType === 'silver'
+          ? 0x88ffff
+          : 0xbb55ff;
+
+    const mat = new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: isHeavy ? 0.9 : 0.72
+    });
+    const geo = arrowType === 'silver' ? this.shardGeo : this.sparkGeo;
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.copy(position);
+    const scale = isHeavy ? 0.95 : 0.65;
+    mesh.scale.setScalar(scale);
+    this.rootGroup.add(mesh);
+
+    this.particles.push({
+      mesh,
+      mat,
+      velocity: new THREE.Vector3(
+        (Math.random() - 0.5) * 0.8,
+        arrowType === 'fire' ? 1.5 + Math.random() * 1.0 : (Math.random() - 0.5) * 0.6,
+        (Math.random() - 0.5) * 0.8
+      ),
+      spin: new THREE.Vector3(6, 8, 5),
+      gravity: arrowType === 'fire' ? 1.2 : -0.6,
+      elapsed: 0,
+      life: isHeavy ? 0.28 : 0.2,
+      initialScale: scale
+    });
+  }
+
+  /**
+   * Elemental 3D impact burst when one of Khaterine's 3 arrow types strikes a target.
+   */
+  public spawnArrowImpactBurst(
+    position: THREE.Vector3,
+    arrowType: 'abyssal' | 'fire' | 'silver' = 'abyssal',
+    isHeavy: boolean = false
+  ): void {
+    if (arrowType === 'fire') {
+      this.spawnShockwaveRing(position, 0.2, isHeavy ? 2.8 : 1.9, 0.32, 0xff6611, true);
+      this.spawnParticleBurst(position, isHeavy ? 16 : 10, 'fire_crimson', { speed: 5.5, upwardBoost: 3.8, life: 0.45 });
+      return;
+    }
+    if (arrowType === 'silver') {
+      this.spawnShockwaveRing(position, 0.2, isHeavy ? 3.0 : 2.1, 0.32, 0x88ffff, true);
+      this.spawnParticleBurst(position, isHeavy ? 16 : 10, 'parry_holy', { speed: 6.2, upwardBoost: 3.2, life: 0.42, useShards: true });
+      return;
+    }
+    // Abyssal
+    this.spawnShockwaveRing(position, 0.2, isHeavy ? 2.6 : 1.7, 0.28, 0xbb44ff, false);
+    this.spawnParticleBurst(position, isHeavy ? 14 : 8, 'mirror_astral', { speed: 5.0, upwardBoost: 2.8, life: 0.38, useShards: true });
+  }
+
+  /**
+   * Dramatic shadow-time visual pulse when the player nails a Perfect Dodge.
+   */
+  public spawnPerfectDodgePulse(position: THREE.Vector3): void {
+    this.spawnShockwaveRing(position, 0.3, 4.2, 0.46, 0x00eeff, true);
+    this.spawnShockwaveRing(position, 0.2, 3.0, 0.36, 0xaa44ff, false);
+    this.spawnParticleBurst(position, 16, 'mirror_astral', {
+      speed: 5.8,
+      upwardBoost: 3.2,
+      gravity: -2.5,
+      life: 0.55,
+      useShards: true
+    });
+  }
+
   public update(delta: number): void {
     const safeDelta = Math.max(0, Math.min(delta, 0.1));
 
@@ -527,6 +682,22 @@ export class CombatSpectacleVfx3D {
         this.pillars.splice(i, 1);
       }
     }
+
+    // 6. Update 3D sword crescent slash arcs
+    for (let i = this.slashArcs.length - 1; i >= 0; i--) {
+      const arc = this.slashArcs[i];
+      arc.elapsed += safeDelta;
+      const pct = THREE.MathUtils.clamp(arc.elapsed / arc.duration, 0, 1);
+      arc.mesh.rotation.z += arc.spinSpeed * safeDelta;
+      arc.mesh.scale.setScalar(arc.baseScale * (1 + pct * 0.32));
+      arc.mat.opacity = (1 - pct) * 0.92;
+
+      if (arc.elapsed >= arc.duration) {
+        this.rootGroup.remove(arc.mesh);
+        arc.mat.dispose();
+        this.slashArcs.splice(i, 1);
+      }
+    }
   }
 
   public dispose(): void {
@@ -553,12 +724,17 @@ export class CombatSpectacleVfx3D {
       this.rootGroup.remove(pl.light);
       pl.mat.dispose();
     });
+    this.slashArcs.forEach(arc => {
+      this.rootGroup.remove(arc.mesh);
+      arc.mat.dispose();
+    });
 
     this.telegraphs = [];
     this.shockwaves = [];
     this.particles = [];
     this.meteors = [];
     this.pillars = [];
+    this.slashArcs = [];
 
     this.ringGeo.dispose();
     this.discGeo.dispose();
@@ -566,6 +742,7 @@ export class CombatSpectacleVfx3D {
     this.sparkGeo.dispose();
     this.meteorGeo.dispose();
     this.pillarGeo.dispose();
+    this.crescentArcGeo.dispose();
 
     this.scene.remove(this.rootGroup);
   }
