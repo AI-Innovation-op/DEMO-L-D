@@ -45,6 +45,7 @@ import {
   CanonicalGlbSlotId
 } from './GothicModelLoader3D';
 import { HudCompactController3D } from './HudCompactController3D';
+import { CombatSpectacleVfx3D } from './CombatSpectacleVfx3D';
 
 export interface CombatStats3D {
   health: number;
@@ -563,6 +564,9 @@ export class Oakhaven3DExperience {
   private soundscapeTitleEl?: HTMLDivElement;
   private soundscapeAtmosEl?: HTMLDivElement;
 
+  // 3D Combat Spectacle, Boss Telegraphs, Meteors & Hitstop Engine
+  private combatVfx!: CombatSpectacleVfx3D;
+
   // Arsenal & Munitions Manager
   private arsenalManager: ArsenalManager = new ArsenalManager();
   private activeBurnEffects: Array<{ targetId: string; ticksLeft: number; dmgPerTick: number; timer: number }> = [];
@@ -611,6 +615,7 @@ export class Oakhaven3DExperience {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x222c46);
     this.scene.fog = new THREE.FogExp2(0x242e48, 0.011);
+    this.combatVfx = new CombatSpectacleVfx3D(this.scene);
 
     // 2. Camera (3rd-Person Close Follow Camera by default — OpenLara & Vice City Architecture)
     const aspect = this.container.clientWidth / this.container.clientHeight || 16 / 9;
@@ -4147,6 +4152,8 @@ export class Oakhaven3DExperience {
   public handleInquisitorDefeat(): void {
     this.audio.playFinisherSound(true);
     this.triggerHolyFlash(1.0);
+    this.triggerScreenShake(0.75);
+    this.combatVfx?.spawnBossDefeatCataclysm(this.inquisitorGroup.position, 'abyss_willow');
     this.spawnFloatingText(this.inquisitorGroup.position, '👑 ¡INQUISIDOR PURIFICADO! (+250 EXP)', '#ffd700');
     this.inquisitorGroup.position.y = -0.4;
 
@@ -4216,6 +4223,8 @@ export class Oakhaven3DExperience {
     this.rootProwlerGroup.position.y = -0.4;
     this.rootProwlerEyesLight.intensity = 0;
     this.audio.playFinisherSound(true);
+    this.triggerScreenShake(0.75);
+    this.combatVfx?.spawnBossDefeatCataclysm(this.rootProwlerGroup.position, 'abyss_willow');
 
     const reward = this.rootProwlerEncounter.claimRewards(this.inventory, this.progression);
     if (reward.claimed) {
@@ -4569,6 +4578,7 @@ export class Oakhaven3DExperience {
         this.crucibleGuardianEncounter.setState(isBurst ? 'SLAG_BURST' : 'HAMMER_SLAM');
         this.crucibleTimer = isBurst ? 0.8 : 0.65;
         if (this.crucibleWarningMesh) this.crucibleWarningMesh.visible = true;
+        this.combatVfx?.spawnGroundTelegraph(gPos, isBurst ? 3.8 : 2.9, this.crucibleTimer, 'molten_bronze');
         this.audio.playSfx('warning');
       }
     } else if (this.crucibleGuardianEncounter.state === 'HAMMER_SLAM' || this.crucibleGuardianEncounter.state === 'SLAG_BURST') {
@@ -4581,6 +4591,9 @@ export class Oakhaven3DExperience {
       if (this.crucibleTimer <= 0) {
         if (this.crucibleWarningMesh) this.crucibleWarningMesh.visible = false;
         const isBurst = this.crucibleGuardianEncounter.state === 'SLAG_BURST';
+        this.combatVfx?.spawnShockwaveRing(gPos, 0.5, isBurst ? 4.6 : 3.2, 0.45, 0xff7722, true);
+        this.combatVfx?.spawnParticleBurst(gPos, isBurst ? 22 : 12, 'molten_bronze', { speed: 6.4, upwardBoost: 4.5 });
+        this.triggerScreenShake(isBurst ? 0.55 : 0.35);
         const attackRes = this.crucibleGuardianEncounter.evaluateAttack(distToPlayer, this.playerStats.isDodging, isBurst);
         if (attackRes.hit) {
           const parryWindow = 280 + this.inventory.getParryBonusMs();
@@ -4588,6 +4601,7 @@ export class Oakhaven3DExperience {
           if (isParry) {
             this.audio.playSfx('parry');
             this.triggerHolyFlash(0.85);
+            this.combatVfx?.spawnParryOrCritFlash(pPos, 'parry');
             this.crucibleGuardianEncounter.setState('STUNNED');
             this.crucibleTimer = 2.0 * this.getStaggerMultiplier();
             this.spawnFloatingText(pPos, '⚡ ¡PARRY DE MARTILLO!', '#66ccff');
@@ -4636,6 +4650,8 @@ export class Oakhaven3DExperience {
     if (this.crucibleWarningMesh) this.crucibleWarningMesh.visible = false;
     this.audio.playFinisherSound(true);
     this.triggerHolyFlash(1.0);
+    this.triggerScreenShake(0.85);
+    this.combatVfx?.spawnBossDefeatCataclysm(this.crucibleGuardianGroup.position, 'molten_bronze');
 
     const reward = this.crucibleGuardianEncounter.claimRewards(this.inventory, this.progression);
     if (reward.claimed) {
@@ -4749,6 +4765,7 @@ export class Oakhaven3DExperience {
         this.captainVaneEncounter.setState(isSlash ? 'GREAT_SLASH' : 'BASH');
         this.vaneTimer = isSlash ? 0.65 : 0.55;
         if (this.vaneWarningMesh) this.vaneWarningMesh.visible = true;
+        this.combatVfx?.spawnGroundTelegraph(vPos, isSlash ? 3.3 : 2.6, this.vaneTimer, 'solar_gold');
         this.audio.playSfx('warning');
       }
     } else if (this.captainVaneEncounter.state === 'BASH' || this.captainVaneEncounter.state === 'GREAT_SLASH') {
@@ -4761,6 +4778,9 @@ export class Oakhaven3DExperience {
       if (this.vaneTimer <= 0) {
         if (this.vaneWarningMesh) this.vaneWarningMesh.visible = false;
         const isSlash = this.captainVaneEncounter.state === 'GREAT_SLASH';
+        this.combatVfx?.spawnShockwaveRing(vPos, 0.4, isSlash ? 3.8 : 2.8, 0.4, 0xffd700, true);
+        this.combatVfx?.spawnParticleBurst(vPos, 14, 'solar_gold', { useShards: true });
+        this.triggerScreenShake(0.4);
         const attackRes = this.captainVaneEncounter.evaluateAttack(distToPlayer, this.playerStats.isDodging, isSlash);
         if (attackRes.hit) {
           const parryWindow = 280 + this.inventory.getParryBonusMs();
@@ -4769,6 +4789,8 @@ export class Oakhaven3DExperience {
             this.audio.playSfx('parry');
             this.audio.playSfx('shield_break');
             this.triggerHolyFlash(0.85);
+            this.combatVfx?.spawnParryOrCritFlash(pPos, 'parry');
+            this.combatVfx?.spawnParticleBurst(vPos, 18, 'solar_gold', { useShards: true, speed: 6.8 });
             this.captainVaneEncounter.breakShield();
             if (this.vaneShieldMesh) this.vaneShieldMesh.rotation.x = 1.1;
             this.vaneTimer = 2.0 * this.getStaggerMultiplier();
@@ -4818,6 +4840,8 @@ export class Oakhaven3DExperience {
     if (this.vaneWarningMesh) this.vaneWarningMesh.visible = false;
     this.audio.playFinisherSound(true);
     this.triggerHolyFlash(1.0);
+    this.triggerScreenShake(0.85);
+    this.combatVfx?.spawnBossDefeatCataclysm(this.captainVaneGroup.position, 'solar_gold');
 
     const reward = this.captainVaneEncounter.claimRewards(this.inventory, this.progression);
     if (reward.claimed) {
@@ -5183,6 +5207,7 @@ export class Oakhaven3DExperience {
         this.rexMalphasEncounter.setState(isPhase2 ? 'LEY_DEL_DESEO' : 'SOLAR_COMBO');
         this.malphasTimer = isPhase2 ? 0.55 : 0.65;
         if (this.malphasWarningMesh) this.malphasWarningMesh.visible = true;
+        this.combatVfx?.spawnGroundTelegraph(mPos, isPhase2 ? 3.8 : 2.9, this.malphasTimer, 'mirror_astral');
         this.audio.playSfx('warning');
       }
     } else if (this.rexMalphasEncounter.state === 'SOLAR_COMBO' || this.rexMalphasEncounter.state === 'LEY_DEL_DESEO') {
@@ -5195,6 +5220,9 @@ export class Oakhaven3DExperience {
       if (this.malphasTimer <= 0) {
         if (this.malphasWarningMesh) this.malphasWarningMesh.visible = false;
         const isTimeWarp = this.rexMalphasEncounter.state === 'LEY_DEL_DESEO';
+        this.combatVfx?.spawnShockwaveRing(mPos, 0.5, isTimeWarp ? 4.8 : 3.2, 0.46, 0xcc44ff, true);
+        this.combatVfx?.spawnParticleBurst(mPos, isTimeWarp ? 22 : 12, 'mirror_astral', { useShards: true, speed: 6.8 });
+        this.triggerScreenShake(isTimeWarp ? 0.55 : 0.35);
         const attackRes = this.rexMalphasEncounter.evaluateAttack(distToPlayer, this.playerStats.isDodging, isTimeWarp);
 
         if (attackRes.hit) {
@@ -5203,6 +5231,7 @@ export class Oakhaven3DExperience {
           if (isParry) {
             this.audio.playSfx('parry');
             this.triggerHolyFlash(0.85);
+            this.combatVfx?.spawnParryOrCritFlash(pPos, 'parry');
             this.rexMalphasEncounter.setState('STUNNED');
             this.malphasTimer = 2.0 * this.getStaggerMultiplier();
             this.spawnFloatingText(pPos, '⚡ ¡PARRY ASTRAL PERFECTO!', '#66ccff');
@@ -5252,6 +5281,8 @@ export class Oakhaven3DExperience {
     if (this.malphasWarpRingMesh) this.malphasWarpRingMesh.visible = false;
     this.audio.playFinisherSound(true);
     this.triggerHolyFlash(1.0);
+    this.triggerScreenShake(0.9);
+    this.combatVfx?.spawnBossDefeatCataclysm(this.rexMalphasGroup.position, 'mirror_astral');
 
     const reward = this.rexMalphasEncounter.claimRewards(this.inventory, this.progression);
     if (reward.claimed) {
@@ -5369,9 +5400,15 @@ export class Oakhaven3DExperience {
         aPos.z = THREE.MathUtils.clamp(aPos.z, -412, -372);
       } else {
         const roll = Math.random();
-        this.astarothEncounter.setState(roll < 0.5 ? 'METEOR_STORM' : 'BLACK_SUN_BURST');
+        const isMeteor = roll < 0.5;
+        this.astarothEncounter.setState(isMeteor ? 'METEOR_STORM' : 'BLACK_SUN_BURST');
         this.astarothTimer = 0.75;
         if (this.astarothWarningMesh) this.astarothWarningMesh.visible = true;
+        if (isMeteor) {
+          this.combatVfx?.spawnMeteorVolley(pPos, 3, 3.4, 'black_sun');
+        } else {
+          this.combatVfx?.spawnGroundTelegraph(aPos, 4.6, this.astarothTimer, 'black_sun');
+        }
         this.audio.playSfx('warning');
       }
     } else if (this.astarothEncounter.state === 'METEOR_STORM' || this.astarothEncounter.state === 'BLACK_SUN_BURST') {
@@ -5384,6 +5421,9 @@ export class Oakhaven3DExperience {
       if (this.astarothTimer <= 0) {
         if (this.astarothWarningMesh) this.astarothWarningMesh.visible = false;
         const isBlackSun = this.astarothEncounter.state === 'BLACK_SUN_BURST';
+        this.combatVfx?.spawnShockwaveRing(aPos, 0.6, isBlackSun ? 5.6 : 4.0, 0.55, 0xff2288, true);
+        this.combatVfx?.spawnParticleBurst(aPos, 24, 'black_sun', { useShards: true, speed: 7.2, upwardBoost: 5.0 });
+        this.triggerScreenShake(0.65);
         const attackRes = this.astarothEncounter.evaluateAttack(distToPlayer, this.playerStats.isDodging, isBlackSun);
 
         if (attackRes.hit) {
@@ -5392,6 +5432,7 @@ export class Oakhaven3DExperience {
           if (isParry) {
             this.audio.playSfx('parry');
             this.triggerHolyFlash(1.0);
+            this.combatVfx?.spawnParryOrCritFlash(pPos, 'parry');
             this.astarothEncounter.setState('STUNNED');
             this.astarothTimer = 2.0 * this.getStaggerMultiplier();
             this.spawnFloatingText(pPos, '⚡ ¡PARRY CÓSMICO PERFECTO!', '#88ffff');
@@ -5437,6 +5478,9 @@ export class Oakhaven3DExperience {
     if (this.astarothWarningMesh) this.astarothWarningMesh.visible = false;
     this.audio.playCosmicChime?.();
     this.triggerHolyFlash(1.8);
+    this.triggerScreenShake(1.0);
+    this.combatVfx?.spawnBossDefeatCataclysm(this.astarothGroup.position, 'solar_gold');
+    this.combatVfx?.spawnBossDefeatCataclysm(this.astarothGroup.position, 'black_sun');
 
     const reward = this.astarothEncounter.claimRewards(this.inventory, this.progression);
     if (reward.claimed) {
@@ -8354,6 +8398,9 @@ export class Oakhaven3DExperience {
           isVulnerable || isHeavy ? '#ffd700' : '#ff7722'
         );
         this.audio.playCombatHit(isHeavy || isVulnerable);
+        if (isHeavy || isVulnerable) {
+          this.combatVfx?.spawnParryOrCritFlash(this.crucibleGuardianGroup.position, 'crit');
+        }
 
         if (isHeavy && this.crucibleGuardianEncounter.state !== 'STUNNED') {
           this.crucibleGuardianEncounter.setState('STUNNED');
@@ -8418,6 +8465,7 @@ export class Oakhaven3DExperience {
           this.captainVaneEncounter.breakShield();
           this.vaneTimer = 1.6 * this.getStaggerMultiplier();
           this.audio.playSfx('shield_break');
+          this.combatVfx?.spawnParryOrCritFlash(this.captainVaneGroup.position, 'finisher');
           if (this.vaneShieldMesh) this.vaneShieldMesh.rotation.x = 1.1;
           this.spawnFloatingText(this.captainVaneGroup.position, '💥 ¡ESCUDO DE TORRE QUEBRADO! [E] ¡REMATAR!', '#ffd700');
         }
@@ -8486,6 +8534,9 @@ export class Oakhaven3DExperience {
           this.hasForgedAlbaGris ? '#88eeff' : '#ff2288'
         );
         this.audio.playCombatHit(isHeavy || this.hasForgedAlbaGris);
+        if (isHeavy || this.hasForgedAlbaGris) {
+          this.combatVfx?.spawnParryOrCritFlash(this.astarothGroup.position, 'crit');
+        }
 
         if (isHeavy && this.astarothEncounter.state !== 'STUNNED') {
           this.astarothEncounter.setState('STUNNED');
@@ -9289,6 +9340,12 @@ export class Oakhaven3DExperience {
       this.crucibleGuardianEncounter.setState('STUNNED');
       this.crucibleTimer = 3.0;
       this.triggerCinematicCameraBeat('crucible_jam', this.crucibleGuardianGroup.position);
+      this.combatVfx?.spawnShockwaveRing(this.crucibleGuardianGroup.position, 0.6, 5.2, 0.6, 0xff7722, true);
+      this.combatVfx?.spawnParticleBurst(this.crucibleGuardianGroup.position, 28, 'molten_bronze', {
+        speed: 7.0,
+        upwardBoost: 5.5,
+        life: 0.9
+      });
       this.audio.playFlaskExplosion?.();
       this.triggerScreenShake(0.65);
       this.visualDesigns.spawnVfxBillboard(
@@ -10095,6 +10152,15 @@ export class Oakhaven3DExperience {
     this.audio.playGlassShatter?.();
     if (!this.hasClearedMirrorGallery) {
       this.shatteredGuiltMirrors = Math.min(3, this.shatteredGuiltMirrors + 1);
+      const mirrorBurstPos = new THREE.Vector3(-7.0, 0.4, -320);
+      this.combatVfx?.spawnShockwaveRing(mirrorBurstPos, 0.4, 4.4, 0.48, 0x88eeff, true);
+      this.combatVfx?.spawnParticleBurst(mirrorBurstPos, 24, 'mirror_astral', {
+        useShards: true,
+        speed: 6.8,
+        upwardBoost: 4.6,
+        life: 0.85
+      });
+      this.triggerScreenShake(0.45);
       if (this.shatteredGuiltMirrors === 1) {
         this.progression.addExp(40);
         this.spawnFloatingText(this.playerGroup.position, '🪞 ¡ESPEJO DE CULPA 1/3 QUEBRADO! (+40 EXP)', '#d999ff');
@@ -11100,6 +11166,12 @@ export class Oakhaven3DExperience {
         this.morwennaState = 'WINDUP';
         this.morwennaTimer = this.morwennaAttackPattern === 'WHIRLWIND' ? 0.75 : 0.6;
         this.morwennaWarningMesh.visible = true;
+        this.combatVfx?.spawnGroundTelegraph(
+          this.morwennaGroup.position,
+          this.morwennaAttackPattern === 'WHIRLWIND' ? 4.4 : 3.2,
+          this.morwennaTimer,
+          'fire_crimson'
+        );
         this.audio.playSfx('warning');
       }
     } else if (this.morwennaState === 'WINDUP') {
@@ -11159,6 +11231,9 @@ export class Oakhaven3DExperience {
 
     this.audio.playFinisherSound(true);
     this.audio.playSfx('warning');
+    this.triggerScreenShake(0.75);
+    this.combatVfx?.spawnShockwaveRing(this.morwennaGroup.position, 0.6, 6.2, 0.65, 0xff3300, true);
+    this.combatVfx?.spawnParticleBurst(this.morwennaGroup.position, 26, 'fire_crimson', { speed: 7.2, upwardBoost: 5.0 });
 
     this.spawnFloatingText(this.morwennaGroup.position, '🔥 ¡FASE 2: PIRA DEL ABISMO DESATADA! 🔥', '#ff3300');
     this.spawnFloatingText(this.playerGroup.position, '⚠ ¡ONDA EXPANSIVA DE FUEGO!', '#ffaa44');
@@ -11185,6 +11260,8 @@ export class Oakhaven3DExperience {
     if (this.morwennaState === 'DEAD') return;
     this.morwennaState = 'DEAD';
     this.triggerHolyFlash(1.0);
+    this.triggerScreenShake(0.85);
+    this.combatVfx?.spawnBossDefeatCataclysm(this.morwennaGroup.position, 'fire_crimson');
     this.spawnFloatingText(this.morwennaGroup.position, '👑 ¡MADRE MORWENNA PURIFICADA! (+350 EXP) 👑', '#ffd700');
     this.spawnFloatingText(this.playerGroup.position, '🗝️ ¡LLAVE DE LAS CRIPTAS OBTENIDA!', '#00e5ff');
     this.audio.playFinisherSound(true);
@@ -11218,6 +11295,9 @@ export class Oakhaven3DExperience {
     if (this.morwennaAttackPattern === 'WHIRLWIND') {
       // 360-degree Whirlwind Attack
       this.spawnFloatingText(this.morwennaGroup.position, '🌪️ ¡TORBELLINO DE LA PIRA!', '#ff3300');
+      this.combatVfx?.spawnShockwaveRing(this.morwennaGroup.position, 0.5, 4.6, 0.45, 0xff3300, true);
+      this.combatVfx?.spawnParticleBurst(this.morwennaGroup.position, 18, 'fire_crimson', { speed: 6.4, upwardBoost: 3.8 });
+      this.triggerScreenShake(0.45);
       this.audio.playSfx('dodge');
 
       if (dist <= 4.4) {
@@ -11997,7 +12077,8 @@ export class Oakhaven3DExperience {
   private animate = (): void => {
     if (!this.isRunning) return;
 
-    const delta = Math.min(this.clock.getDelta(), 0.1);
+    const rawDelta = Math.min(this.clock.getDelta(), 0.1);
+    const delta = this.combatVfx ? this.combatVfx.consumeSimulationDelta(rawDelta) : rawDelta;
 
     this.updatePlayer(delta);
     this.updateLockOn(delta);
@@ -12033,7 +12114,8 @@ export class Oakhaven3DExperience {
     this.updateFloatingTexts(delta);
     this.checkShalemProximity();
     this.updateBurnEffects(delta);
-    this.updateScreenPostFx(delta);
+    this.combatVfx?.update(rawDelta);
+    this.updateScreenPostFx(rawDelta);
     this.updateOfficial3DVisualStates();
     this.visualDesigns.update(delta, this.camera);
     this.modelLoader3D.update(delta);
@@ -15005,6 +15087,7 @@ export class Oakhaven3DExperience {
     }
 
     this.visualDesigns.dispose();
+    this.combatVfx?.dispose();
     this.audio.stopBgm(true);
 
     this.releaseAllInputs();

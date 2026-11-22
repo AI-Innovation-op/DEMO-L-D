@@ -11,6 +11,7 @@ import {
   computeMalphasBrazierMultiplier
 } from '../../src/presentation/three/Oakhaven3DExperience';
 import { HudCompactController3D } from '../../src/presentation/three/HudCompactController3D';
+import { CombatSpectacleVfx3D } from '../../src/presentation/three/CombatSpectacleVfx3D';
 
 describe('Camera & Input Architecture (Vice City & OpenLara Solution)', () => {
   describe('Shortest Angular Arc & Turning Math', () => {
@@ -415,6 +416,69 @@ describe('Camera & Input Architecture (Vice City & OpenLara Solution)', () => {
 
       expect(hud.toggleQuestTrackerCollapsed()).toBe(true);
       expect(hud.toggleQuestTrackerCollapsed()).toBe(false);
+    });
+  });
+
+  describe('3D Combat Spectacle, Boss Telegraphs, Falling Meteors & Hitstop (CombatSpectacleVfx3D)', () => {
+    it('slows simulation delta to 8% during hitstop and restores normal speed cleanly', () => {
+      const scene = new THREE.Scene();
+      const vfx = new CombatSpectacleVfx3D(scene);
+
+      expect(vfx.isHitstopActive).toBe(false);
+      expect(vfx.consumeSimulationDelta(0.05)).toBeCloseTo(0.05, 5);
+
+      vfx.triggerHitstop(0.08);
+      expect(vfx.isHitstopActive).toBe(true);
+      const slowed = vfx.consumeSimulationDelta(0.05);
+      expect(slowed).toBeCloseTo(0.05 * 0.08, 5);
+      expect(vfx.isHitstopActive).toBe(true);
+
+      // Consume remaining 0.03s hitstop -> next step returns full speed
+      vfx.consumeSimulationDelta(0.05);
+      expect(vfx.isHitstopActive).toBe(false);
+      expect(vfx.consumeSimulationDelta(0.04)).toBeCloseTo(0.04, 5);
+
+      vfx.dispose();
+    });
+
+    it('spawns and cleans up boss ground telegraphs, shockwaves, mirror shards, and defeat cataclysms', () => {
+      const scene = new THREE.Scene();
+      const vfx = new CombatSpectacleVfx3D(scene);
+      const origin = new THREE.Vector3(0, 0, -200);
+
+      vfx.spawnGroundTelegraph(origin, 3.8, 0.5, 'molten_bronze');
+      vfx.spawnParryOrCritFlash(origin, 'parry');
+      vfx.spawnBossDefeatCataclysm(origin, 'mirror_astral');
+      expect(vfx.activeEffectCount).toBeGreaterThan(20);
+      expect(vfx.isHitstopActive).toBe(true);
+
+      // Advance 2.5 seconds in small steps so every telegraph, particle, shockwave, and pillar expires cleanly
+      for (let i = 0; i < 50; i++) {
+        vfx.update(0.05);
+      }
+      expect(vfx.activeEffectCount).toBe(0);
+
+      vfx.dispose();
+    });
+
+    it('drops Astaroth cosmic meteors from sky and detonates them on touchdown into shockwaves and shards', () => {
+      const scene = new THREE.Scene();
+      const vfx = new CombatSpectacleVfx3D(scene);
+      const target = new THREE.Vector3(0, 2.0, -390);
+
+      vfx.spawnMeteorVolley(target, 3, 3.0, 'black_sun');
+      // 3 meteors + 3 ground telegraphs = 6 active effects initially
+      expect(vfx.activeEffectCount).toBe(6);
+
+      // After 0.8s meteors impact ground and spawn shockwaves + particle bursts
+      for (let i = 0; i < 16; i++) {
+        vfx.update(0.05);
+      }
+      expect(vfx.activeEffectCount).toBeGreaterThan(10);
+
+      // Clean dispose wipes everything
+      vfx.dispose();
+      expect(vfx.activeEffectCount).toBe(0);
     });
   });
 });
