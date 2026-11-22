@@ -81,6 +81,16 @@ export class GameScene extends Phaser.Scene {
   private lastGuardPressTime: number = 0;
   private hasAlbaGrisAwakened: boolean = false;
 
+  // Phase 2 & 3 2.5D Mechanics (Acts II - V)
+  private martinSprite?: Phaser.GameObjects.Sprite;
+  private tobiasSprite?: Phaser.GameObjects.Sprite;
+  private bridgeAlliesAttackTimer2D: number = 0;
+  private narcoticBraziers2D: Array<{ sprite: Phaser.GameObjects.Sprite; x: number; y: number; destroyed: boolean }> = [];
+  private destroyedBraziers2DCount: number = 0;
+  private isShalemLion2DActive: boolean = false;
+  private shalemLion2DTimer: number = 0;
+  private firstDawnOverlay2D?: Phaser.GameObjects.Rectangle;
+
   // Game Over Modal State
   private isGameOverModalOpen: boolean = false;
   private gameOverContainer?: Phaser.GameObjects.Container;
@@ -696,8 +706,11 @@ export class GameScene extends Phaser.Scene {
       const vy = normY * baseSpeed * 0.72 * (delta / 1000);
 
       const nextX = Phaser.Math.Clamp(this.playerSprite.x + vx, 35, 1145);
-      // Allow climbing the elevated Colina del Viejo Roble terrace (y down to 178) when in x: 225..425
-      const minY = (this.currentScenario === 1 && nextX >= 225 && nextX <= 425) ? 178 : 205;
+      // Allow climbing elevated terraces: Act I Old Oak Hill (x: 225..425) & Act II Elevated Salt Cell (x: 170..290)
+      const isOnElevatedTerrace =
+        (this.currentScenario === 1 && nextX >= 225 && nextX <= 425) ||
+        (this.currentScenario === 2 && nextX >= 170 && nextX <= 290);
+      const minY = isOnElevatedTerrace ? 178 : 205;
       const nextY = Phaser.Math.Clamp(this.playerSprite.y + vy, minY, 315);
 
       this.playerSprite.setPosition(nextX, nextY);
@@ -894,6 +907,7 @@ export class GameScene extends Phaser.Scene {
         });
       } else if (this.currentScenario === 3) {
         this.storyProgress.completeMilestone('act3_refugees');
+        this.spawnBridgeAllies2D();
         this.scene.pause('GameScene');
         this.scene.launch('CharacterDialogueScene', {
           player: this.player,
@@ -1190,6 +1204,27 @@ export class GameScene extends Phaser.Scene {
     const reachX = attackRange + (isHeavy ? 65 : 45);
     const reachY = isHeavy ? 35 : 26;
 
+    // Phase 2 Act IV: Check hit against 3 Destructible Golden Narcotic Braziers
+    if (this.currentScenario === 4 && this.narcoticBraziers2D.length > 0) {
+      for (const brazier of this.narcoticBraziers2D) {
+        if (brazier.destroyed) continue;
+        const bdx = (brazier.x - playerX) * facing;
+        const bdy = Math.abs(brazier.y - playerY);
+        if (bdx > -16 && bdx <= reachX + 20 && bdy <= reachY + 20) {
+          brazier.destroyed = true;
+          this.destroyedBraziers2DCount = Math.min(3, this.destroyedBraziers2DCount + 1);
+          this.spawnAnimatedVfx(brazier.x, brazier.y - 20, 'fx_pyre_explosion', 0.9, false);
+          this.audio.playCombatHit(true);
+          brazier.sprite.destroy();
+          this.spawnDamageNumber(brazier.x, brazier.y - 40, `🌿 BRASERO ${this.destroyedBraziers2DCount}/3`, true, '#ffd700');
+          this.triggerShalemBalloon(
+            `Ciudadano Despierto: «¡El humo dorado se disipa! ¡Rex Malphas recibe +${this.destroyedBraziers2DCount * 15}% daño!»`,
+            3800
+          );
+        }
+      }
+    }
+
     // Check hit against active enemies in 2.5D
     for (const enemy of this.enemies) {
       if (!enemy.isAlive()) continue;
@@ -1217,6 +1252,35 @@ export class GameScene extends Phaser.Scene {
           }
           sprite.setTint(0xff3333);
           this.time.delayedCall(120, () => sprite.clearTint());
+
+          // Phase 2 Act III: Heavy attacks on the Great Stone Bridge push enemies toward the broken parapet -> river abyss!
+          if (!res.targetKilled && this.currentScenario === 3 && isHeavy) {
+            const pushedY = enemy.position.y - 35;
+            enemy.position = new Vector2(enemy.position.x, pushedY);
+            if (pushedY <= 208) {
+              enemy.health = 0;
+              enemy.state = 'DEAD';
+              this.audio.playFinisherSound(true);
+              this.spawnDamageNumber(enemy.position.x, enemy.position.y - 25, '🌊 ¡AL ABISMO!', true, '#66ccff');
+              this.tweens.add({
+                targets: sprite,
+                y: 165,
+                scale: 0.3,
+                alpha: 0,
+                duration: 450,
+                ease: 'Cubic.easeIn',
+                onComplete: () => {
+                  sprite.destroy();
+                  this.enemyShadows.get(enemy.id)?.destroy();
+                  this.enemyShadows.delete(enemy.id);
+                }
+              });
+              this.storyProgress.addProgress(25);
+              break;
+            } else {
+              this.tweens.add({ targets: sprite, y: pushedY, duration: 130, ease: 'Cubic.easeOut' });
+            }
+          }
 
           if (res.targetKilled) {
             const deathAnim = this.getEnemyAnimKey(enemy.id, 'death');
@@ -1313,6 +1377,14 @@ export class GameScene extends Phaser.Scene {
 
         const prevPhase = this.currentBoss.phase;
         const res = CombatUseCases.executeAttackOnBoss(this.player, this.currentBoss, isHeavy, false);
+        // Phase 2 Act IV: Extra +15% damage per destroyed narcotic brazier against Rex Malphas
+        if (this.currentScenario === 4 && this.destroyedBraziers2DCount > 0 && this.currentBoss.health > 0) {
+          const extraDmg = Math.round(res.damageDealt * (this.destroyedBraziers2DCount * 0.15));
+          if (extraDmg > 0) {
+            this.currentBoss.takeDamage(extraDmg);
+            this.spawnDamageNumber(this.currentBoss.position.x + 18, this.currentBoss.position.y - 65, `+${extraDmg} SIN INCIENSO`, true, '#ffd700');
+          }
+        }
         if (this.currentBoss.id === 'madre_morwenna' && prevPhase === BossPhaseType.PHASE_1 && this.currentBoss.phase === BossPhaseType.PHASE_2) {
           this.playAnimSafe(this.bossSprite, 'morwenna_phase2_shockwave', true);
           this.spawnAnimatedVfx(this.currentBoss.position.x, this.currentBoss.position.y - 35, 'fx_pyre_explosion', 1.1, false);
@@ -1336,7 +1408,7 @@ export class GameScene extends Phaser.Scene {
         this.bossSprite.setTint(0xff5555);
         this.time.delayedCall(120, () => this.bossSprite?.clearTint());
 
-        if (res.targetKilled) {
+        if (res.targetKilled || this.currentBoss.health <= 0) {
           this.handleBossDefeated();
         }
       } else if (bdx > effectiveReachX && this.enemies.filter(e => e.isAlive()).length === 0) {
@@ -1602,6 +1674,23 @@ export class GameScene extends Phaser.Scene {
       fontStyle: 'bold'
     }).setOrigin(0.5).setDepth(450);
 
+    // Phase 3 Act V: Transform Shalem into the Colossal Crimson Ember Lion (2.2x scale + fiery tint)
+    if (this.currentScenario === 5 && this.shalemSprite) {
+      this.isShalemLion2DActive = true;
+      this.shalemLion2DTimer = 1.5;
+      this.tweens.add({
+        targets: this.shalemSprite,
+        scaleX: Math.abs(this.shalemSprite.scaleX) * 2.2,
+        scaleY: Math.abs(this.shalemSprite.scaleY) * 2.2,
+        duration: 420,
+        ease: 'Back.easeOut'
+      });
+      this.shalemSprite.setTint(0xff7733);
+      this.spawnAnimatedVfx(this.shalemSprite.x, this.shalemSprite.y - 24, 'fx_pyre_explosion', 1.15, false);
+      this.spawnDamageNumber(this.shalemSprite.x, this.shalemSprite.y - 60, '🦁 ¡SHALEM: LEÓN DE BRASAS!', true, '#ff7733');
+      this.triggerShalemBalloon("🦁 ¡SHALEM ROMPE SU PACTO: LEÓN DE BRASAS! ¡Atacará a Astaroth cada 3s (-40 HP)!", 4800);
+    }
+
     this.tweens.add({
       targets: banner,
       y: 75,
@@ -1610,6 +1699,20 @@ export class GameScene extends Phaser.Scene {
       ease: 'Sine.easeOut',
       onComplete: () => banner.destroy()
     });
+  }
+
+  /** Phase 2 Act III: Spawns Martín el Armero & Tobías el Leñador to flank Captain Áureo Vane in 2.5D. */
+  private spawnBridgeAllies2D(): void {
+    if (this.martinSprite || this.tobiasSprite) return;
+    const baseKey = this.textures.exists('thomas_idle') ? 'thomas_idle' : this.playerSprite.texture.key;
+    this.martinSprite = this.normalizeSprite(this.add.sprite(220, 232, baseKey, 0), 46, 56, 0.5, 0.95)
+      .setTint(0xa3ffc7)
+      .setDepth(232);
+    this.tobiasSprite = this.normalizeSprite(this.add.sprite(245, 276, baseKey, 0), 46, 56, 0.5, 0.95)
+      .setTint(0x88ddff)
+      .setDepth(276);
+    this.bridgeAlliesAttackTimer2D = 1.2;
+    this.spawnDamageNumber(235, 200, '⚔ ¡MARTÍN Y TOBÍAS SE UNEN AL COMBATE!', true, '#a3ffc7');
   }
 
   /** Triggers a Perfect Parry when blocking within 280ms of an incoming attack. */
@@ -2091,6 +2194,23 @@ export class GameScene extends Phaser.Scene {
     this.enemies = [];
     this.enemySprites.clear();
     this.enemyShadows.clear();
+
+    // Phase 3 Act V: Golden-Rose First Dawn Atmosphere upon defeating Astaroth
+    if (this.currentScenario === 5) {
+      this.isShalemLion2DActive = false;
+      if (!this.firstDawnOverlay2D) {
+        this.firstDawnOverlay2D = this.add.rectangle(590, 180, 1220, 380, 0xffcc88, 0.22).setDepth(320);
+      }
+      if (this.shalemSprite) {
+        this.shalemSprite.clearTint();
+        this.normalizeSprite(this.shalemSprite, 32, 32, 0.5, 0.95);
+        this.shalemSprite.setTint(0xffe899);
+      }
+      this.triggerShalemBalloon(
+        "🌅 EPÍLOGO — EL PRIMER AMANECER: «Por fin el sol cálido baña Albion. Ya no somos hijos del temor, sino la oscuridad que eligió amar.»",
+        7000
+      );
+    }
 
     if (this.currentScenario === 1) {
 
@@ -2738,8 +2858,9 @@ export class GameScene extends Phaser.Scene {
         proj.destroy();
 
         // Stun enemies in impact area in 2.5D
+        const impactX = thrownX + dir * 190;
         for (const enemy of this.enemies) {
-          if (Math.abs(enemy.position.x - (thrownX + dir * 190)) < 55 && Math.abs(enemy.position.y - thrownY) < 30) {
+          if (Math.abs(enemy.position.x - impactX) < 55 && Math.abs(enemy.position.y - thrownY) < 30) {
             enemy.damagePosture(50);
             this.audio.playCombatHit(true);
             this.spawnDamageNumber(enemy.position.x, enemy.position.y - 35, 45, true);
@@ -2749,6 +2870,23 @@ export class GameScene extends Phaser.Scene {
               this.playAnimSafe(sprite, this.getEnemyAnimKey(enemy.id, 'stagger'), true);
               sprite.setTint(0xffff55);
               this.time.delayedCall(400, () => sprite.clearTint());
+            }
+          }
+        }
+
+        // Phase 2 Act II: Jamming the Great Bronze Crucible gears with a thrown sword!
+        if (this.currentScenario === 2 && this.currentBoss && this.currentBoss.health > 0) {
+          if (Math.abs(this.currentBoss.position.x - impactX) < 110) {
+            this.currentBoss.takeDamage(120);
+            this.currentBoss.posture = 0;
+            this.currentBoss.state = 'STUNNED';
+            this.currentBoss.interruptAttack(2200);
+            this.audio.playCombatHit(true);
+            this.cameras.main.shake(260, 0.02);
+            this.spawnAnimatedVfx(this.currentBoss.position.x, this.currentBoss.position.y - 30, 'fx_pyre_explosion', 1.25, false);
+            this.spawnDamageNumber(this.currentBoss.position.x, this.currentBoss.position.y - 58, '🔥 ¡CRISOL TRABADO! -120 HP', true, '#ff7722');
+            if (this.currentBoss.health <= 0) {
+              this.handleBossDefeated();
             }
           }
         }
@@ -3038,6 +3176,48 @@ export class GameScene extends Phaser.Scene {
 
     // Phase 2 Ground Flame Pillars (Pilar 3)
     this.updateFlamePillars(delta);
+
+    // Phase 2 Act III: Active Combat Allies Martín & Tobías flank Captain Áureo Vane (-15 HP every 2.5s)
+    if (this.currentScenario === 3 && this.martinSprite && this.tobiasSprite && this.currentBoss.health > 0) {
+      const targetMartinX = this.bossSprite.x - 44;
+      const targetMartinY = Phaser.Math.Clamp(this.bossSprite.y - 16, 208, 310);
+      const targetTobiasX = this.bossSprite.x - 54;
+      const targetTobiasY = Phaser.Math.Clamp(this.bossSprite.y + 18, 208, 310);
+      this.martinSprite.x = Phaser.Math.Linear(this.martinSprite.x, targetMartinX, 0.05);
+      this.martinSprite.y = Phaser.Math.Linear(this.martinSprite.y, targetMartinY, 0.05);
+      this.martinSprite.setDepth(this.martinSprite.y);
+      this.tobiasSprite.x = Phaser.Math.Linear(this.tobiasSprite.x, targetTobiasX, 0.05);
+      this.tobiasSprite.y = Phaser.Math.Linear(this.tobiasSprite.y, targetTobiasY, 0.05);
+      this.tobiasSprite.setDepth(this.tobiasSprite.y);
+
+      this.bridgeAlliesAttackTimer2D += delta / 1000;
+      if (this.bridgeAlliesAttackTimer2D >= 2.5) {
+        this.bridgeAlliesAttackTimer2D = 0;
+        this.currentBoss.takeDamage(15);
+        this.audio.playCombatHit(false);
+        this.spawnDamageNumber(this.bossSprite.x, this.bossSprite.y - 62, '⚔ ¡MARTÍN Y TOBÍAS! -15', true, '#a3ffc7');
+        if (this.currentBoss.health <= 0) {
+          this.handleBossDefeated();
+          return;
+        }
+      }
+    }
+
+    // Phase 3 Act V: Colossal Crimson Ember Lion Shalem strikes Astaroth every 3.0s (-40 HP)
+    if (this.currentScenario === 5 && this.isShalemLion2DActive && this.currentBoss.health > 0) {
+      this.shalemLion2DTimer += delta / 1000;
+      if (this.shalemLion2DTimer >= 3.0) {
+        this.shalemLion2DTimer = 0;
+        this.currentBoss.takeDamage(40);
+        this.audio.playCombatHit(true);
+        this.spawnAnimatedVfx(this.bossSprite.x, this.bossSprite.y - 32, 'fx_slash_gold', 1.3, false);
+        this.spawnDamageNumber(this.bossSprite.x, this.bossSprite.y - 72, '🦁 ¡LEÓN DE BRASAS! -40', true, '#ff7733');
+        if (this.currentBoss.health <= 0) {
+          this.handleBossDefeated();
+          return;
+        }
+      }
+    }
 
     // Handle Telegraphed Boss Strike completion
     if (shouldStrike) {
@@ -3515,7 +3695,28 @@ export class GameScene extends Phaser.Scene {
       addProp('prop_soul_brazier', 965, 226, 32, 48, true);
       addProp('prop_mausoleum_facade', 1075, 218, 96, 128, true);
     } else if (scenarioIndex === 2) {
-      // Act II: Belltower & Cemetery Crypt Entrance Props across 1180px
+      // Act II: Burned Barn Slab (Cap. VIII) + Elevated Salt Cell Terrace (Cap. VII) & Belltower Crucible Props
+      const barnSlab = this.add.rectangle(145, 272, 42, 22, 0x2c2238, 0.95).setStrokeStyle(2, 0xaa44ff).setDepth(270);
+      const barnLabel = this.add.text(145, 254, '🗡️ LOSA DEL GRANERO (CAP. VIII)', {
+        fontFamily: 'Cinzel, monospace',
+        fontSize: '6.5px',
+        color: '#d999ff',
+        backgroundColor: 'rgba(18, 10, 28, 0.85)',
+        padding: { x: 3, y: 1 }
+      }).setOrigin(0.5).setDepth(271);
+
+      const saltTerrace = this.add.ellipse(220, 192, 130, 34, 0x353140, 0.94).setStrokeStyle(2, 0xddddff).setDepth(174);
+      const saltStep1 = this.add.rectangle(175, 210, 22, 10, 0x4b4656, 0.95).setStrokeStyle(1, 0x8b8698).setDepth(175);
+      const saltStep2 = this.add.rectangle(195, 200, 22, 10, 0x4b4656, 0.95).setStrokeStyle(1, 0x8b8698).setDepth(175);
+      const saltLabel = this.add.text(220, 166, '🔔 CELDA DE SAL ELEVADA (+2.8m)', {
+        fontFamily: 'Cinzel, monospace',
+        fontSize: '7px',
+        color: '#ffd700',
+        backgroundColor: 'rgba(18, 12, 24, 0.85)',
+        padding: { x: 4, y: 1 }
+      }).setOrigin(0.5).setDepth(186);
+      this.scenarioProps.push(barnSlab, barnLabel, saltTerrace, saltStep1, saltStep2, saltLabel);
+
       addProp('prop_mausoleum_facade', 565, 215, 96, 128, true);
       addProp('prop_celtic_gravestone', 140, 222, 32, 48, false);
       addProp('prop_celtic_gravestone', 320, 220, 32, 48, false);
@@ -3536,10 +3737,26 @@ export class GameScene extends Phaser.Scene {
       addProp('prop_street_lamp', 760, 212, 32, 96, true);
       addProp('prop_mausoleum_facade', 1060, 218, 96, 128, true);
     } else if (scenarioIndex === 4) {
-      // Act IV: Londinium Citadel Props across 1180px
+      // Act IV: Londinium Citadel Props + 3 Destructible Golden Narcotic Braziers
+      this.narcoticBraziers2D = [];
+      this.destroyedBraziers2DCount = 0;
+      const brazierCoords = [
+        { x: 240, y: 232 },
+        { x: 360, y: 268 },
+        { x: 450, y: 235 }
+      ];
+      brazierCoords.forEach(bc => {
+        if (this.textures.exists('prop_soul_brazier')) {
+          const bSpr = this.normalizeSprite(this.add.sprite(bc.x, bc.y, 'prop_soul_brazier', 0), 34, 52, 0.5, 0.95)
+            .setTint(0xffdd55)
+            .setDepth(bc.y - 1);
+          if (this.anims.exists('prop_soul_brazier')) bSpr.play('prop_soul_brazier');
+          this.narcoticBraziers2D.push({ sprite: bSpr, x: bc.x, y: bc.y, destroyed: false });
+          this.scenarioProps.push(bSpr);
+        }
+      });
+
       addProp('prop_sanctuary_altar', 310, 222, 64, 48, true);
-      addProp('prop_soul_brazier', 240, 224, 32, 48, true);
-      addProp('prop_soul_brazier', 380, 224, 32, 48, true);
       addProp('prop_mausoleum_facade', 575, 215, 96, 128, true);
       addProp('prop_soul_brazier', 820, 224, 32, 48, true);
       addProp('prop_sanctuary_cross', 1020, 222, 48, 80, true);
@@ -3678,6 +3895,23 @@ export class GameScene extends Phaser.Scene {
     this.isGameOverModalOpen = false;
     this.gameOverContainer = undefined;
     this.lastGuardPressTime = 0;
+
+    // Clear Phase 2 & 3 dynamic 2D allies, narcotic braziers, Shalem Lion & First Dawn overlay
+    this.martinSprite?.destroy();
+    this.martinSprite = undefined;
+    this.tobiasSprite?.destroy();
+    this.tobiasSprite = undefined;
+    this.bridgeAlliesAttackTimer2D = 0;
+    this.narcoticBraziers2D = [];
+    this.destroyedBraziers2DCount = 0;
+    this.isShalemLion2DActive = false;
+    this.shalemLion2DTimer = 0;
+    this.firstDawnOverlay2D?.destroy();
+    this.firstDawnOverlay2D = undefined;
+    if (this.shalemSprite) {
+      this.shalemSprite.clearTint();
+      this.normalizeSprite(this.shalemSprite, 32, 32, 0.5, 0.95);
+    }
     this.hasAlbaGrisAwakened = false;
 
     // Populate official visual pack props for this scenario

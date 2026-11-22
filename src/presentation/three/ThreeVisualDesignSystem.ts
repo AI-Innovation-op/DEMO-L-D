@@ -130,8 +130,13 @@ export class ThreeVisualDesignSystem {
     mesh.name = `visual_billboard_${id}`;
     mesh.renderOrder = 2;
 
-    const isPlayableHero = id === 'hero_thomas' || id === 'hero_khaterine';
-    const showBillboardNow = this.isEnabled && !(isPlayableHero && this.heroRigMode === 'articulated_3d');
+    const isArticulatedEntity =
+      id === 'hero_thomas' ||
+      id === 'hero_khaterine' ||
+      id === 'boss_crucible' ||
+      id === 'boss_vane' ||
+      id === 'boss_malphas';
+    const showBillboardNow = this.isEnabled && !(isArticulatedEntity && this.heroRigMode === 'articulated_3d');
     mesh.visible = showBillboardNow;
 
     if (hideProceduralChildren) {
@@ -257,8 +262,13 @@ export class ThreeVisualDesignSystem {
   public toggleVisualStyle(): boolean {
     this.heroRigMode = this.heroRigMode === 'articulated_3d' ? 'billboard_hd2d' : 'articulated_3d';
     for (const b of this.billboards.values()) {
-      const isPlayableHero = b.id === 'hero_thomas' || b.id === 'hero_khaterine';
-      const showBillboard = this.isEnabled && !(isPlayableHero && this.heroRigMode === 'articulated_3d');
+      const isArticulatedEntity =
+        b.id === 'hero_thomas' ||
+        b.id === 'hero_khaterine' ||
+        b.id === 'boss_crucible' ||
+        b.id === 'boss_vane' ||
+        b.id === 'boss_malphas';
+      const showBillboard = this.isEnabled && !(isArticulatedEntity && this.heroRigMode === 'articulated_3d');
       b.mesh.visible = showBillboard;
       if (b.hideProceduralChildren) {
         b.parent.children.forEach(child => {

@@ -1,5 +1,20 @@
 import * as THREE from 'three';
 
+export type ArticulatedRigArchetype3D =
+  | 'thomas'
+  | 'khaterine'
+  | 'cultist'
+  | 'zealot'
+  | 'skeleton'
+  | 'morwenna'
+  | 'inquisitor'
+  | 'crucible_guardian'
+  | 'captain_vane'
+  | 'rex_malphas'
+  | 'bridge_guard'
+  | 'martin_ally'
+  | 'tobias_ally';
+
 export type LowerBodyState3D = 'idle' | 'walk' | 'run' | 'dodge' | 'hurt' | 'death';
 export type UpperBodyState3D =
   | 'none'
@@ -27,7 +42,180 @@ export interface RigUpdateInput3D {
   isArmed: boolean;
   isDefeated: boolean;
   aimYawOffset?: number;
+  windSway?: number;
 }
+
+interface ArchetypeStyleConfig {
+  primaryColor: number;
+  trimColor: number;
+  armorColor: number;
+  skinColor: number;
+  hairColor: number;
+  eyeColor: number;
+  runeColor: number;
+  scale: number;
+  headgear: 'hair' | 'hood' | 'helm' | 'crown' | 'thorns';
+  usesBow: boolean;
+}
+
+const ARCHETYPE_STYLES: Record<ArticulatedRigArchetype3D, ArchetypeStyleConfig> = {
+  thomas: {
+    primaryColor: 0x261d30,
+    trimColor: 0x4c2a59,
+    armorColor: 0x8d889c,
+    skinColor: 0xdcb691,
+    hairColor: 0x3a2416,
+    eyeColor: 0x3b2314,
+    runeColor: 0x9933ff,
+    scale: 1.0,
+    headgear: 'hair',
+    usesBow: false
+  },
+  khaterine: {
+    primaryColor: 0x1e112b,
+    trimColor: 0x3b184f,
+    armorColor: 0x6a5578,
+    skinColor: 0xe8cfc0,
+    hairColor: 0x140f1c,
+    eyeColor: 0xd580ff,
+    runeColor: 0xd580ff,
+    scale: 0.98,
+    headgear: 'hood',
+    usesBow: true
+  },
+  cultist: {
+    primaryColor: 0x22162e,
+    trimColor: 0x4a1d1f,
+    armorColor: 0x7c532c,
+    skinColor: 0xc9bdb3,
+    hairColor: 0x1a141c,
+    eyeColor: 0xff6622,
+    runeColor: 0xff6622,
+    scale: 1.02,
+    headgear: 'hood',
+    usesBow: false
+  },
+  zealot: {
+    primaryColor: 0x3d1015,
+    trimColor: 0x611920,
+    armorColor: 0x6a6a78,
+    skinColor: 0xd4c2b2,
+    hairColor: 0x2a1a18,
+    eyeColor: 0xff2233,
+    runeColor: 0xff2233,
+    scale: 1.08,
+    headgear: 'hood',
+    usesBow: false
+  },
+  skeleton: {
+    primaryColor: 0x1c2530,
+    trimColor: 0x2b3d4a,
+    armorColor: 0x5c6873,
+    skinColor: 0xd8d2c5,
+    hairColor: 0xc5bfb2,
+    eyeColor: 0x00e5ff,
+    runeColor: 0x00e5ff,
+    scale: 1.05,
+    headgear: 'helm',
+    usesBow: false
+  },
+  morwenna: {
+    primaryColor: 0x3b101c,
+    trimColor: 0x7a1c28,
+    armorColor: 0xb8860b,
+    skinColor: 0xe6d4c8,
+    hairColor: 0x24161a,
+    eyeColor: 0xff5511,
+    runeColor: 0xff4400,
+    scale: 1.22,
+    headgear: 'thorns',
+    usesBow: false
+  },
+  inquisitor: {
+    primaryColor: 0x26122e,
+    trimColor: 0x541e66,
+    armorColor: 0x7a6885,
+    skinColor: 0xc9b8c8,
+    hairColor: 0x1c1222,
+    eyeColor: 0xbb55ff,
+    runeColor: 0x9b59b6,
+    scale: 1.18,
+    headgear: 'helm',
+    usesBow: false
+  },
+  crucible_guardian: {
+    primaryColor: 0x2e1e14,
+    trimColor: 0x6e4726,
+    armorColor: 0x8c5a2b,
+    skinColor: 0x3a2a22,
+    hairColor: 0x221612,
+    eyeColor: 0xff5500,
+    runeColor: 0xff5500,
+    scale: 1.32,
+    headgear: 'helm',
+    usesBow: false
+  },
+  captain_vane: {
+    primaryColor: 0xf0ead6,
+    trimColor: 0xd4af37,
+    armorColor: 0xd4af37,
+    skinColor: 0xdfc2a4,
+    hairColor: 0x5c4228,
+    eyeColor: 0xffea77,
+    runeColor: 0xffd700,
+    scale: 1.24,
+    headgear: 'helm',
+    usesBow: false
+  },
+  rex_malphas: {
+    primaryColor: 0x3a1452,
+    trimColor: 0x800018,
+    armorColor: 0xd4af37,
+    skinColor: 0xdec0a8,
+    hairColor: 0x2c1b12,
+    eyeColor: 0xcc66ff,
+    runeColor: 0xcc44ff,
+    scale: 1.26,
+    headgear: 'crown',
+    usesBow: false
+  },
+  bridge_guard: {
+    primaryColor: 0x423318,
+    trimColor: 0xb8860b,
+    armorColor: 0xd4af37,
+    skinColor: 0xd6b898,
+    hairColor: 0x2b1e14,
+    eyeColor: 0xffdd55,
+    runeColor: 0xffd700,
+    scale: 1.05,
+    headgear: 'helm',
+    usesBow: false
+  },
+  martin_ally: {
+    primaryColor: 0x2f3b28,
+    trimColor: 0x5c4429,
+    armorColor: 0x7c7c88,
+    skinColor: 0xd9b38c,
+    hairColor: 0x4a3220,
+    eyeColor: 0x3b2314,
+    runeColor: 0x88ffaa,
+    scale: 0.98,
+    headgear: 'hair',
+    usesBow: false
+  },
+  tobias_ally: {
+    primaryColor: 0x3d2e22,
+    trimColor: 0x2e4a38,
+    armorColor: 0x6e6a64,
+    skinColor: 0xd4aa82,
+    hairColor: 0x2e1f14,
+    eyeColor: 0x3b2314,
+    runeColor: 0x88ffaa,
+    scale: 1.02,
+    headgear: 'hair',
+    usesBow: false
+  }
+};
 
 export interface GothicHeroRigNodes {
   root: THREE.Group;
@@ -57,8 +245,9 @@ export interface GothicHeroRigNodes {
  * - Single-fire `ClipEvent` emission on normalized cycle crossings (`footLeft`, `footRight`, `weaponContact`).
  */
 export class GothicArticulatedRig3D {
-  public readonly heroId: 'thomas' | 'khaterine';
+  public readonly heroId: ArticulatedRigArchetype3D;
   public readonly nodes: GothicHeroRigNodes;
+  private readonly style: ArchetypeStyleConfig;
 
   private stridePhase: number = 0;
   private prevStrideSin: number = 0;
@@ -72,8 +261,9 @@ export class GothicArticulatedRig3D {
   // Reference stride length (meters per full step cycle)
   private readonly strideLength: number = 1.65;
 
-  constructor(heroId: 'thomas' | 'khaterine') {
+  constructor(heroId: ArticulatedRigArchetype3D) {
     this.heroId = heroId;
+    this.style = ARCHETYPE_STYLES[heroId] || ARCHETYPE_STYLES.thomas;
     this.nodes = this.buildArticulatedHierarchy();
   }
 
@@ -98,19 +288,20 @@ export class GothicArticulatedRig3D {
   private buildArticulatedHierarchy(): GothicHeroRigNodes {
     const root = new THREE.Group();
     root.name = `gothic_rig_${this.heroId}`;
+    root.scale.setScalar(this.style.scale);
 
-    const isThomas = this.heroId === 'thomas';
+    const isSlender = this.heroId === 'khaterine' || this.heroId === 'morwenna';
 
-    // Shared Gothic PBR Materials
+    // Shared Gothic PBR Materials derived from archetype config
     const primaryClothMat = new THREE.MeshStandardMaterial({
-      color: isThomas ? 0x261d30 : 0x1e112b,
-      roughness: 0.78,
-      metalness: 0.12
+      color: this.style.primaryColor,
+      roughness: 0.72,
+      metalness: 0.18
     });
     const trimMat = new THREE.MeshStandardMaterial({
-      color: isThomas ? 0x4c2a59 : 0x3b184f,
-      roughness: 0.65,
-      metalness: 0.25
+      color: this.style.trimColor,
+      roughness: 0.58,
+      metalness: 0.28
     });
     const leatherMat = new THREE.MeshStandardMaterial({
       color: 0x3b2618,
@@ -118,20 +309,20 @@ export class GothicArticulatedRig3D {
       metalness: 0.15
     });
     const metalArmorMat = new THREE.MeshStandardMaterial({
-      color: isThomas ? 0x8d889c : 0x6a5578,
-      roughness: 0.35,
-      metalness: 0.82
+      color: this.style.armorColor,
+      roughness: 0.32,
+      metalness: 0.85
     });
     const skinMat = new THREE.MeshStandardMaterial({
-      color: isThomas ? 0xdcb691 : 0xe8cfc0,
+      color: this.style.skinColor,
       roughness: 0.55
     });
     const hairMat = new THREE.MeshStandardMaterial({
-      color: isThomas ? 0x3a2416 : 0x140f1c,
+      color: this.style.hairColor,
       roughness: 0.88
     });
     const runeGlowMat = new THREE.MeshBasicMaterial({
-      color: isThomas ? 0x9933ff : 0xd580ff
+      color: this.style.runeColor
     });
     const goldAccentMat = new THREE.MeshStandardMaterial({
       color: 0xd4af37,
@@ -157,14 +348,14 @@ export class GothicArticulatedRig3D {
     pelvis.add(buckle);
 
     // Tunic / Robe lower skirt flaps around pelvis
-    const skirtGeo = new THREE.CylinderGeometry(0.26, isThomas ? 0.38 : 0.44, isThomas ? 0.42 : 0.54, 10, 1, true);
+    const skirtGeo = new THREE.CylinderGeometry(0.26, isSlender ? 0.44 : 0.38, isSlender ? 0.54 : 0.42, 10, 1, true);
     const skirtMat = new THREE.MeshStandardMaterial({
-      color: isThomas ? 0x201729 : 0x170c24,
+      color: this.style.primaryColor,
       roughness: 0.8,
       side: THREE.DoubleSide
     });
     const skirt = new THREE.Mesh(skirtGeo, skirtMat);
-    skirt.position.y = isThomas ? -0.18 : -0.24;
+    skirt.position.y = isSlender ? -0.24 : -0.18;
     skirt.castShadow = true;
     pelvis.add(skirt);
 
@@ -174,7 +365,7 @@ export class GothicArticulatedRig3D {
     pelvis.add(torso);
 
     const chestMesh = new THREE.Mesh(
-      new THREE.CylinderGeometry(isThomas ? 0.28 : 0.24, 0.23, 0.56, 10),
+      new THREE.CylinderGeometry(isSlender ? 0.24 : 0.28, 0.23, 0.56, 10),
       primaryClothMat
     );
     chestMesh.position.y = 0.28;
@@ -185,7 +376,7 @@ export class GothicArticulatedRig3D {
     [-0.31, 0.31].forEach(sideX => {
       const pauldron = new THREE.Mesh(
         new THREE.SphereGeometry(0.14, 8, 8, 0, Math.PI * 2, 0, Math.PI * 0.6),
-        isThomas ? metalArmorMat : trimMat
+        isSlender ? trimMat : metalArmorMat
       );
       pauldron.position.set(sideX, 0.52, 0);
       pauldron.rotation.z = sideX < 0 ? 0.35 : -0.35;
@@ -193,9 +384,9 @@ export class GothicArticulatedRig3D {
       torso.add(pauldron);
     });
 
-    // Glowing Ash Seal (Thomas) or Willow Sigil (Khaterine) on Chest
+    // Glowing Sigil on Chest
     const sigilRing = new THREE.Mesh(new THREE.RingGeometry(0.06, 0.11, 12), runeGlowMat);
-    sigilRing.position.set(0, 0.34, isThomas ? 0.27 : 0.24);
+    sigilRing.position.set(0, 0.34, isSlender ? 0.24 : 0.27);
     torso.add(sigilRing);
 
     // 3. FLOWING CAPE / VEIL (attached at upper torso back)
@@ -203,9 +394,9 @@ export class GothicArticulatedRig3D {
     capeGroup.position.set(0, 0.52, -0.18);
     torso.add(capeGroup);
 
-    const capeGeo = new THREE.BoxGeometry(isThomas ? 0.56 : 0.52, isThomas ? 0.88 : 1.02, 0.04);
+    const capeGeo = new THREE.BoxGeometry(isSlender ? 0.52 : 0.56, isSlender ? 1.02 : 0.88, 0.04);
     const capeMesh = new THREE.Mesh(capeGeo, trimMat);
-    capeMesh.position.set(0, isThomas ? -0.42 : -0.48, -0.04);
+    capeMesh.position.set(0, isSlender ? -0.48 : -0.42, -0.04);
     capeMesh.rotation.x = 0.14;
     capeMesh.castShadow = true;
     capeGroup.add(capeMesh);
@@ -221,34 +412,49 @@ export class GothicArticulatedRig3D {
     headGroup.position.set(0, 0.62, 0);
     torso.add(headGroup);
 
-    const headMesh = new THREE.Mesh(new THREE.SphereGeometry(isThomas ? 0.21 : 0.195, 12, 12), skinMat);
+    const headMesh = new THREE.Mesh(new THREE.SphereGeometry(isSlender ? 0.195 : 0.21, 12, 12), skinMat);
     headMesh.position.y = 0.18;
     headMesh.castShadow = true;
     headGroup.add(headMesh);
 
     // Eyes
-    const eyeMat = new THREE.MeshBasicMaterial({ color: isThomas ? 0x3b2314 : 0xd580ff });
+    const eyeMat = new THREE.MeshBasicMaterial({ color: this.style.eyeColor });
     [-0.07, 0.07].forEach(ex => {
       const eye = new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 6), eyeMat);
-      eye.position.set(ex, 0.19, isThomas ? 0.185 : 0.172);
+      eye.position.set(ex, 0.19, isSlender ? 0.172 : 0.185);
       headGroup.add(eye);
     });
 
-    // Hair / Hood
+    // Headgear by Archetype (hair, hood, helm, crown, thorns)
     const hairCrown = new THREE.Mesh(
-      new THREE.SphereGeometry(isThomas ? 0.225 : 0.215, 10, 10, 0, Math.PI * 2, 0, Math.PI * 0.72),
+      new THREE.SphereGeometry(isSlender ? 0.215 : 0.225, 10, 10, 0, Math.PI * 2, 0, Math.PI * 0.72),
       hairMat
     );
     hairCrown.position.set(0, 0.21, -0.02);
     hairCrown.rotation.x = -0.35;
     headGroup.add(hairCrown);
 
-    if (!isThomas) {
-      // Khaterine's Outcast Hood & Back Locks
-      const hood = new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.42, 8), trimMat);
+    if (this.style.headgear === 'hood') {
+      const hood = new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.44, 8), trimMat);
       hood.position.set(0, 0.24, -0.06);
       hood.rotation.x = -0.25;
       headGroup.add(hood);
+    } else if (this.style.headgear === 'helm') {
+      const helm = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.24, 0.42, 8), metalArmorMat);
+      helm.position.set(0, 0.21, 0);
+      headGroup.add(helm);
+      const visor = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.05, 0.04), runeGlowMat);
+      visor.position.set(0, 0.2, 0.22);
+      headGroup.add(visor);
+    } else if (this.style.headgear === 'crown') {
+      const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.21, 0.22, 6), goldAccentMat);
+      crown.position.set(0, 0.36, 0);
+      headGroup.add(crown);
+    } else if (this.style.headgear === 'thorns') {
+      const halo = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.03, 6, 12), runeGlowMat);
+      halo.position.set(0, 0.34, -0.04);
+      halo.rotation.x = Math.PI * 0.35;
+      headGroup.add(halo);
     }
 
     // 5. LEFT ARM (Shoulder -> Upper Arm -> Forearm -> WeaponSocketL)
@@ -387,7 +593,8 @@ export class GothicArticulatedRig3D {
       isHeavyAttack,
       isArmed,
       isDefeated,
-      aimYawOffset = 0
+      aimYawOffset = 0,
+      windSway = 0
     } = input;
 
     const n = this.nodes;
@@ -398,6 +605,13 @@ export class GothicArticulatedRig3D {
       n.pelvis.rotation.x = THREE.MathUtils.lerp(n.pelvis.rotation.x, -1.35, delta * 8);
       return;
     }
+
+    // Apply lateral bridge wind to flowing cape/veil
+    n.capeGroup.rotation.z = THREE.MathUtils.lerp(
+      n.capeGroup.rotation.z,
+      windSway * (0.28 + Math.sin(elapsedTime * 7.5) * 0.1),
+      delta * 8
+    );
 
     // =====================================================================
     // 1. LOWER BODY LAYER (STRIDE-CALIBRATED LOCOMOTION)
@@ -456,23 +670,22 @@ export class GothicArticulatedRig3D {
       n.hipR.rotation.x = THREE.MathUtils.lerp(n.hipR.rotation.x, -0.05, delta * 10);
       n.shinL.rotation.x = THREE.MathUtils.lerp(n.shinL.rotation.x, -0.06, delta * 10);
       n.shinR.rotation.x = THREE.MathUtils.lerp(n.shinR.rotation.x, -0.06, delta * 10);
-      n.capeGroup.rotation.x = THREE.MathUtils.lerp(n.capeGroup.rotation.x, 0.14 + breathe * 0.03, delta * 8);
+      n.capeGroup.rotation.x = THREE.MathUtils.lerp(n.capeGroup.rotation.x, 0.14 + breathe * 0.03 + windSway * 0.16, delta * 8);
     }
 
     // =====================================================================
     // 2. UPPER BODY LAYER (INDEPENDENT COMBAT & AIM OVERRIDE)
     // =====================================================================
     if (isAttacking) {
-      const targetUpper: UpperBodyState3D =
-        this.heroId === 'thomas'
-          ? isArmed
-            ? isHeavyAttack
-              ? 'slash_heavy'
-              : 'slash_light'
-            : 'unarmed_punch'
-          : isHeavyAttack
-            ? 'shoot_heavy'
-            : 'shoot_light';
+      const targetUpper: UpperBodyState3D = !this.style.usesBow
+        ? isArmed
+          ? isHeavyAttack
+            ? 'slash_heavy'
+            : 'slash_light'
+          : 'unarmed_punch'
+        : isHeavyAttack
+          ? 'shoot_heavy'
+          : 'shoot_light';
 
       if (this.currentUpperState !== targetUpper) {
         this.currentUpperState = targetUpper;
@@ -489,7 +702,7 @@ export class GothicArticulatedRig3D {
         this.emit('weaponContact');
       }
 
-      if (this.heroId === 'thomas') {
+      if (!this.style.usesBow) {
         if (isArmed) {
           // Dynamic sword cleave arc: windup -> cleave across torso -> follow-through
           const swingArc = Math.sin(t * Math.PI);
@@ -538,7 +751,7 @@ export class GothicArticulatedRig3D {
       return;
     }
 
-    this.currentUpperState = isGuarding ? (this.heroId === 'thomas' ? 'guard' : 'ward') : 'none';
+    this.currentUpperState = isGuarding ? (!this.style.usesBow ? 'guard' : 'ward') : 'none';
 
     if (isGuarding) {
       // Defensive parry stance (Thomas) or Abyssal Ward invocation (Khaterine)

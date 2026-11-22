@@ -215,3 +215,18 @@ export function registerVisualPackAnimations(scene: Phaser.Scene): void {
     });
   }
 }
+
+/**
+ * Planned expansion slots for Acts II - V dedicated PNG sprite sheets
+ * (see Mejoras a futuro/Mejoras visuales/DISENOS_FALTANTES_Y_REQUERIDOS_CANON_COMPLETO.md).
+ * Move entries into VISUAL_PACK_SPRITESHEETS once their PNG files are added under public/assets/.
+ */
+export const FUTURE_CANON_VISUAL_EXPANSION_SLOTS: readonly SpriteSheetSpec[] = [
+  { id: 'crucible_idle', url: '/assets/enemies/crucible_idle.png', frameWidth: 96, frameHeight: 96, frames: 6, frameRate: 8, repeat: -1 },
+  { id: 'vane_idle', url: '/assets/enemies/vane_idle.png', frameWidth: 96, frameHeight: 96, frames: 6, frameRate: 8, repeat: -1 },
+  { id: 'malphas_idle', url: '/assets/enemies/malphas_idle.png', frameWidth: 96, frameHeight: 96, frames: 6, frameRate: 8, repeat: -1 },
+  { id: 'astaroth_idle', url: '/assets/enemies/astaroth_idle.png', frameWidth: 128, frameHeight: 128, frames: 6, frameRate: 10, repeat: -1 },
+  { id: 'shalem_lion_idle', url: '/assets/characters/shalem_lion_idle.png', frameWidth: 96, frameHeight: 96, frames: 6, frameRate: 10, repeat: -1 },
+  { id: 'martin_ally_idle', url: '/assets/characters/martin_ally_idle.png', frameWidth: 64, frameHeight: 64, frames: 4, frameRate: 8, repeat: -1 },
+  { id: 'tobias_ally_idle', url: '/assets/characters/tobias_ally_idle.png', frameWidth: 64, frameHeight: 64, frames: 4, frameRate: 8, repeat: -1 }
+];

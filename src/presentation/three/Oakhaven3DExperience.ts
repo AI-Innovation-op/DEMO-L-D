@@ -59,6 +59,53 @@ export interface DebrisParticle3D {
   maxLife: number;
 }
 
+/**
+ * Computes deterministic 3D terrain height for vertical sub-sectors across Acts I, II and V:
+ * - Act I (`surface`): Colina del Viejo Roble ascends smoothly from 0.0m to +2.2m.
+ * - Act II (`belltower_summit`): Helical western stone stairs ascend smoothly to Elowen's Salt Cell (+2.8m).
+ * - Act V (`inverted_cathedral`): Floating marble slabs ascend progressively to +2.4m toward Astaroth.
+ */
+export function computeWorldTerrainHeight(area: DungeonArea, x: number, z: number): number {
+  if (area === 'surface') {
+    if (x > 4.5 && z >= 0.4 && z <= 9.6) {
+      const t = THREE.MathUtils.clamp((x - 4.5) / 3.9, 0, 1);
+      const smooth = t * t * (3 - 2 * t);
+      return smooth * 2.2;
+    }
+  } else if (area === 'belltower_summit') {
+    if (x < -2.6 && z <= -192.0 && z >= -205.5) {
+      const t = THREE.MathUtils.clamp((-192.0 - z) / 8.5, 0, 1);
+      const smooth = t * t * (3 - 2 * t);
+      return smooth * 2.8;
+    }
+  } else if (area === 'inverted_cathedral') {
+    if (z <= -368.0) {
+      const t = THREE.MathUtils.clamp((-368.0 - z) / 28.0, 0, 1);
+      return t * 2.4;
+    }
+  }
+  return 0;
+}
+
+/**
+ * Evaluates whether a pushed enemy on the Great Stone Bridge (Act III) has crossed a broken
+ * balustrade gap (`z ∈ [-249, -241]` or `z ∈ [-265, -255]`) or outer precipice edge (`|x| >= 4.3`).
+ */
+export function isBridgeAbyssDropZone(x: number, z: number): boolean {
+  const absX = Math.abs(x);
+  const inBrokenGap = (z >= -249 && z <= -241) || (z >= -265 && z <= -255);
+  return (inBrokenGap && absX >= 4.1) || absX >= 4.3;
+}
+
+/**
+ * Computes damage multiplier against Rex Malphas in Act IV based on destroyed narcotic braziers
+ * (+15% per brazier, capped at 3 braziers = +45%).
+ */
+export function computeMalphasBrazierMultiplier(destroyedBraziers: number): number {
+  const clamped = Math.max(0, Math.min(3, Math.floor(destroyedBraziers)));
+  return 1 + clamped * 0.15;
+}
+
 export type InputContext = 'gameplay' | 'dialogue' | 'inventory' | 'skillTree' | 'alchemy' | 'compendium' | 'designs' | 'moralDilemma' | 'defeated';
 
 export class Oakhaven3DExperience {
@@ -364,7 +411,7 @@ export class Oakhaven3DExperience {
   private hasClearedMirrorGallery: boolean = false;
 
   // 3D Proximity Interactions & Modals
-  private activeInteractTarget?: 'elowen' | 'cauldron' | 'cedric' | 'shalem' | 'khaterine' | 'thomas' | 'sword' | 'finisher' | 'cemetery_gate' | 'crypt_entrance' | 'crypt_exit' | 'crypt_sarcophagus_loot' | 'crypt_sarcophagus_ambush' | 'crypt_to_forest' | 'forest_to_crypt' | 'sister_altar' | 'forest_to_belltower' | 'belltower_to_forest' | 'elowen_cell' | 'crucible_furnace' | 'belltower_to_bridge' | 'refugees_cart' | 'vane_gate' | 'mirror_gallery' | 'astral_throne' | 'dawn_grey_altar' | 'black_sun_core' | 'villager_gedeon' | 'villager_marta' | 'oak_hill_bench' | 'tri_hero_synergy';
+  private activeInteractTarget?: 'elowen' | 'cauldron' | 'cedric' | 'shalem' | 'khaterine' | 'thomas' | 'sword' | 'finisher' | 'cemetery_gate' | 'crypt_entrance' | 'crypt_exit' | 'crypt_sarcophagus_loot' | 'crypt_sarcophagus_ambush' | 'crypt_to_forest' | 'forest_to_crypt' | 'sister_altar' | 'forest_to_belltower' | 'belltower_to_forest' | 'elowen_cell' | 'burned_barn_slab' | 'crucible_furnace' | 'belltower_to_bridge' | 'refugees_cart' | 'vane_gate' | 'mirror_gallery' | 'astral_throne' | 'dawn_grey_altar' | 'black_sun_core' | 'villager_gedeon' | 'villager_marta' | 'oak_hill_bench' | 'tri_hero_synergy';
   private proximityBadgeEl?: HTMLDivElement;
   private dialogueModalEl?: HTMLDivElement;
   private inventoryModalEl?: HTMLDivElement;
@@ -389,6 +436,34 @@ export class Oakhaven3DExperience {
   private hemiLightRef?: THREE.HemisphereLight;
   private moonLightRef?: THREE.DirectionalLight;
   private pyreLightRef?: THREE.PointLight;
+
+  // Phase 2 - 4 World Architecture States (Acts II - V & Articulated Boss Rigs)
+  private hasInspectedBurnedBarn: boolean = false;
+  private bridgeGuards: Array<{
+    id: string;
+    group: THREE.Group;
+    rig: GothicArticulatedRig3D;
+    hp: number;
+    maxHp: number;
+    isDead: boolean;
+    fallingToAbyss: boolean;
+    fallVelocity: number;
+    attackTimer: number;
+  }> = [];
+  private martinAllyGroup?: THREE.Group;
+  private martinAllyRig?: GothicArticulatedRig3D;
+  private tobiasAllyGroup?: THREE.Group;
+  private tobiasAllyRig?: GothicArticulatedRig3D;
+  private bridgeAlliesAttackTimer: number = 0;
+  private bridgeWindParticles?: THREE.Points;
+  private destroyedNarcoticBraziersCount: number = 0;
+  private hypnotizedCitizens: Array<{ id: string; group: THREE.Group; hazeLight: THREE.PointLight; awakened: boolean }> = [];
+  private shatteredGuiltMirrors: number = 0;
+  private shalemLionGroup?: THREE.Group;
+  private isShalemLionActive: boolean = false;
+  private shalemLionAttackTimer: number = 0;
+  private epilogueFlowersGroup?: THREE.Group;
+  private bossRigs: Partial<Record<'crucible' | 'vane' | 'malphas', GothicArticulatedRig3D>> = {};
 
   // Arsenal & Munitions Manager
   private arsenalManager: ArsenalManager = new ArsenalManager();
@@ -866,15 +941,7 @@ export class Oakhaven3DExperience {
   // SUB-SECTOR 2: COLINA DEL VIEJO ROBLE (+2.2M ELEVATION) & REACTIVE VILLAGERS
   // =========================================================================
   public getTerrainHeightAt(x: number, z: number): number {
-    if (this.dungeonAreaManager.currentArea === 'surface') {
-      // Ascending stone-and-moss trail from Parish Atrium (x: 4.5, y: 0) up to Old Oak Hill plateau (x >= 8.4, y: 2.2m)
-      if (x > 4.5 && z >= 0.4 && z <= 9.6) {
-        const t = THREE.MathUtils.clamp((x - 4.5) / 3.9, 0, 1);
-        const smooth = t * t * (3 - 2 * t);
-        return smooth * 2.2;
-      }
-    }
-    return 0;
+    return computeWorldTerrainHeight(this.dungeonAreaManager.currentArea, x, z);
   }
 
   private createOldOakHillAndVillagers(): void {
@@ -2850,9 +2917,85 @@ export class Oakhaven3DExperience {
     bellGroup.add(bell, clapper);
     this.belltowerGroup.add(bellGroup);
 
-    // 4. Celda de Sal de Elowen (Octagonal Iron Cage at x: -5.5, z: 0)
+    // 4. Sub-sector 2A: Ruinas del Granero del Sur Quemado (world z: -187..-194, x: 2.2..5.4 -> local z: +15..+8)
+    const charredBeamMat = new THREE.MeshStandardMaterial({ color: 0x1c1310, roughness: 0.96 });
+    const runeSlabMat = new THREE.MeshStandardMaterial({
+      color: 0x352c44,
+      emissive: 0x552288,
+      emissiveIntensity: 0.55,
+      roughness: 0.75
+    });
+    const barnGroup = new THREE.Group();
+    barnGroup.position.set(3.8, 0, 10.5); // World: (3.8, 0, -191.5)
+    const barnBeams = [
+      { x: -1.1, y: 1.1, z: -0.9, rx: 0.25, rz: 0.42 },
+      { x: 1.0, y: 1.25, z: -0.6, rx: -0.2, rz: -0.38 },
+      { x: -0.7, y: 0.9, z: 1.1, rx: -0.3, rz: 0.28 },
+      { x: 0.9, y: 0.85, z: 1.0, rx: 0.22, rz: -0.35 }
+    ];
+    barnBeams.forEach(b => {
+      const beam = new THREE.Mesh(new THREE.BoxGeometry(0.26, 2.8, 0.26), charredBeamMat);
+      beam.position.set(b.x, b.y, b.z);
+      beam.rotation.set(b.rx, 0, b.rz);
+      beam.castShadow = true;
+      barnGroup.add(beam);
+    });
+    const barnSlab = new THREE.Mesh(new THREE.BoxGeometry(1.45, 0.16, 1.15), runeSlabMat);
+    barnSlab.position.set(0, 0.08, 0);
+    barnSlab.receiveShadow = true;
+    const barnRuneLight = new THREE.PointLight(0xaa44ff, 1.8, 4.5);
+    barnRuneLight.position.set(0, 0.75, 0);
+    barnGroup.add(barnSlab, barnRuneLight);
+    this.belltowerGroup.add(barnGroup);
+
+    // 4b. Sub-sector 2B: Escalera Helicoidal Occidental (+2.8m) y Celda de Sal Elevada de Elowen (world -5.0, 2.8, -202)
+    for (let i = 0; i < 7; i++) {
+      const worldZ = -193.0 - i * 1.15;
+      const stepX = -4.2 - (i / 6) * 0.6;
+      const stepY = computeWorldTerrainHeight('belltower_summit', stepX, worldZ);
+      const stepMesh = new THREE.Mesh(new THREE.BoxGeometry(2.3, Math.max(0.35, stepY), 1.3), stoneFloorMat);
+      stepMesh.position.set(stepX, Math.max(0.35, stepY) * 0.5, worldZ + 202);
+      stepMesh.castShadow = true;
+      stepMesh.receiveShadow = true;
+      this.belltowerGroup.add(stepMesh);
+    }
+
+    // Elevated Stone Terrace & Support Pillars under Elowen's Salt Cell
+    const cellTerrace = new THREE.Mesh(new THREE.CylinderGeometry(2.35, 2.55, 0.35, 10), stoneFloorMat);
+    cellTerrace.position.set(-5.0, 2.65, 0);
+    cellTerrace.receiveShadow = true;
+    this.belltowerGroup.add(cellTerrace);
+
+    [
+      { x: -6.4, z: -1.4 },
+      { x: -3.6, z: -1.4 },
+      { x: -6.4, z: 1.4 },
+      { x: -3.6, z: 1.4 }
+    ].forEach(p => {
+      const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 2.65, 8), stoneFloorMat);
+      pillar.position.set(p.x, 1.32, p.z);
+      pillar.castShadow = true;
+      this.belltowerGroup.add(pillar);
+    });
+
+    // Diegetic Trail Markers (Hilos de Lino y Carbón hacia la Celda de Sal)
+    const trailMat = new THREE.MeshBasicMaterial({ color: 0xffdd99 });
+    const trailPoints = [
+      { x: 0.5, y: 0.05, z: -189.0 },
+      { x: -1.5, y: 0.05, z: -191.5 },
+      { x: -3.8, y: 0.42, z: -194.0 },
+      { x: -4.5, y: 1.55, z: -197.5 },
+      { x: -4.8, y: 2.84, z: -200.5 }
+    ];
+    trailPoints.forEach(tp => {
+      const ribbon = new THREE.Mesh(new THREE.OctahedronGeometry(0.11, 0), trailMat);
+      ribbon.position.set(tp.x, tp.y + 0.08, tp.z + 202);
+      this.belltowerGroup.add(ribbon);
+    });
+
+    // Celda de Sal de Elowen (Octagonal Iron Cage elevated at x: -5.0, y: 2.8, z: 0 -> world (-5.0, 2.8, -202))
     const cellGroup = new THREE.Group();
-    cellGroup.position.set(-5.5, 0, 0);
+    cellGroup.position.set(-5.0, 2.8, 0);
 
     // Cage base & Salt Floor
     const cellBase = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 2.0, 0.25, 8), stoneFloorMat);
@@ -2918,48 +3061,38 @@ export class Oakhaven3DExperience {
   }
 
   // =========================================================================
-  // ACT II BOSS: EL GUARDIÁN DEL CRISOL (CRUCIBLE GUARDIAN)
+  // ACT II BOSS: EL GUARDIÁN DEL CRISOL (ARTICULATED 3D BOSS RIG)
   // =========================================================================
   private createCrucibleGuardianBoss(): void {
     this.crucibleGuardianGroup = new THREE.Group();
     this.crucibleGuardianGroup.position.set(0, 0, -204);
 
-    const ironArmorMat = new THREE.MeshStandardMaterial({ color: 0x221a18, metalness: 0.8, roughness: 0.4 });
-    const slagCoreMat = new THREE.MeshBasicMaterial({ color: 0xff3300 });
+    const ironArmorMat = new THREE.MeshStandardMaterial({ color: 0x3b2618, metalness: 0.82, roughness: 0.38 });
+    const slagCoreMat = new THREE.MeshBasicMaterial({ color: 0xff4400 });
 
-    // 1. Heavy Torso & Iron Apron
-    const torso = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.3, 0.75), ironArmorMat);
-    torso.position.y = 1.3;
-    torso.castShadow = true;
-    this.crucibleGuardianGroup.add(torso);
+    const rig = new GothicArticulatedRig3D('crucible_guardian');
+    rig.nodes.root.rotation.y = Math.PI; // Align +Z boss facing with rig forward (-Z)
+    this.bossRigs.crucible = rig;
 
-    // 2. Welder Helmet with Glowing Red Visor
-    const helmet = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.52, 0.52), ironArmorMat);
-    helmet.position.set(0, 2.2, 0);
-    helmet.castShadow = true;
-    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.07, 0.03), slagCoreMat);
-    visor.position.set(0, 0.05, 0.27);
-    helmet.add(visor);
-    this.crucibleGuardianGroup.add(helmet);
-
-    // 3. Massive Foundry Sledgehammer
+    // Mount Massive Foundry Sledgehammer in right articulated weapon socket
     const hammerGroup = new THREE.Group();
-    hammerGroup.position.set(0.7, 1.1, 0.2);
-    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.3, 8), ironArmorMat);
-    handle.rotation.x = Math.PI / 4;
-    const hammerHead = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.55, 0.55), ironArmorMat);
-    hammerHead.position.set(0, 1.0, 0.7);
-    const slagCore = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.35, 0.57), slagCoreMat);
-    slagCore.position.set(0, 1.0, 0.7);
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.9, 8), ironArmorMat);
+    handle.position.y = 0.55;
+    const hammerHead = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.42, 0.44), ironArmorMat);
+    hammerHead.position.set(0, 1.4, 0);
+    const slagCore = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.28, 0.46), slagCoreMat);
+    slagCore.position.set(0, 1.4, 0);
     hammerGroup.add(handle, hammerHead, slagCore);
-    this.crucibleGuardianGroup.add(hammerGroup);
+    hammerGroup.rotation.x = Math.PI / 5;
+    rig.nodes.weaponSocketR.add(hammerGroup);
+    this.crucibleGuardianGroup.add(rig.nodes.root);
 
-    // 4. Glowing Red Slag Core Light
-    const coreLight = new THREE.PointLight(0xff4400, 2.2, 7);
-    coreLight.position.set(0, 1.4, 0.4);
+    // Glowing Red Slag Core Light
+    const coreLight = new THREE.PointLight(0xff4400, 2.5, 8);
+    coreLight.position.set(0, 1.6, 0.4);
     this.crucibleGuardianGroup.add(coreLight);
 
-    // 5. Warning Telegraph Ring
+    // Warning Telegraph Ring
     const warnMat = new THREE.MeshBasicMaterial({ color: 0xff3300, transparent: true, opacity: 0.65, side: THREE.DoubleSide });
     this.crucibleWarningMesh = new THREE.Mesh(new THREE.RingGeometry(1.0, 2.8, 24), warnMat);
     this.crucibleWarningMesh.rotation.x = -Math.PI / 2;
@@ -2987,14 +3120,118 @@ export class Oakhaven3DExperience {
     roadway.receiveShadow = true;
     this.greatStoneBridgeGroup.add(roadway);
 
-    // 2. Heavy Stone Balustrades along left and right
-    const leftBalustrade = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.1, 48), graniteMat);
-    leftBalustrade.position.set(-5.05, 0.55, 0);
-    leftBalustrade.castShadow = true;
-    const rightBalustrade = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.1, 48), graniteMat);
-    rightBalustrade.position.set(5.05, 0.55, 0);
-    rightBalustrade.castShadow = true;
-    this.greatStoneBridgeGroup.add(leftBalustrade, rightBalustrade);
+    // 2. Segmented Heavy Stone Balustrades leaving 2 Broken Gaps on Both Sides:
+    // World z ∈ [-248, -242] (local +7..+13) and World z ∈ [-264, -256] (local -9..-1)
+    const intactSegments = [
+      { zCenter: 18.5, length: 11.0 },
+      { zCenter: 3.0, length: 8.0 },
+      { zCenter: -16.5, length: 15.0 }
+    ];
+    [-5.05, 5.05].forEach(xPos => {
+      intactSegments.forEach(seg => {
+        const wall = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.1, seg.length), graniteMat);
+        wall.position.set(xPos, 0.55, seg.zCenter);
+        wall.castShadow = true;
+        this.greatStoneBridgeGroup.add(wall);
+      });
+
+      // Jagged broken stone posts & blue warning flame torches framing each broken precipice gap
+      const gapEdges = [13.0, 7.0, -1.0, -9.0];
+      const blueFlameMat = new THREE.MeshBasicMaterial({ color: 0x44bbff });
+      gapEdges.forEach(gz => {
+        const brokenPost = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.68, 0.58), graniteMat);
+        brokenPost.position.set(xPos, 0.34, gz);
+        brokenPost.rotation.set(0.12, 0.25, xPos < 0 ? 0.14 : -0.14);
+        this.greatStoneBridgeGroup.add(brokenPost);
+
+        const blueFlame = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.38, 6), blueFlameMat);
+        blueFlame.position.set(xPos, 0.92, gz);
+        this.greatStoneBridgeGroup.add(blueFlame);
+
+        const gapLight = new THREE.PointLight(0x44aaff, 1.3, 5.5);
+        gapLight.position.set(xPos, 1.1, gz);
+        this.greatStoneBridgeGroup.add(gapLight);
+      });
+    });
+
+    // Lateral River Wind / Mist Streaks sweeping across the Great Stone Bridge
+    const windCount = 120;
+    const windGeo = new THREE.BufferGeometry();
+    const windPos = new Float32Array(windCount * 3);
+    for (let i = 0; i < windCount; i++) {
+      windPos[i * 3] = (Math.random() - 0.5) * 14;
+      windPos[i * 3 + 1] = 0.4 + Math.random() * 4.5;
+      windPos[i * 3 + 2] = -278 + Math.random() * 44;
+    }
+    windGeo.setAttribute('position', new THREE.BufferAttribute(windPos, 3));
+    const windMat = new THREE.PointsMaterial({ color: 0x99ccff, size: 0.09, transparent: true, opacity: 0.6 });
+    this.bridgeWindParticles = new THREE.Points(windGeo, windMat);
+    this.scene.add(this.bridgeWindParticles);
+
+    // 2b. Two Vanguard Golden Bridge Guards (positioned beside the broken balustrade gaps for knock-off combat!)
+    const guardSpawns = [
+      { id: 'bridge_guard_1', x: -2.2, z: -245.0 },
+      { id: 'bridge_guard_2', x: 2.4, z: -259.0 }
+    ];
+    const spearMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.85, roughness: 0.25 });
+    const shaftMat = new THREE.MeshStandardMaterial({ color: 0x3b2618, roughness: 0.85 });
+
+    guardSpawns.forEach(gs => {
+      const gGroup = new THREE.Group();
+      gGroup.position.set(gs.x, 0, gs.z);
+      const rig = new GothicArticulatedRig3D('bridge_guard');
+      rig.nodes.root.rotation.y = Math.PI;
+      const halberd = new THREE.Group();
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.75, 6), shaftMat);
+      shaft.position.y = 0.6;
+      const blade = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.35, 5), spearMat);
+      blade.position.y = 1.55;
+      halberd.add(shaft, blade);
+      halberd.rotation.x = Math.PI / 6;
+      rig.nodes.weaponSocketR.add(halberd);
+      gGroup.add(rig.nodes.root);
+      this.scene.add(gGroup);
+
+      this.bridgeGuards.push({
+        id: gs.id,
+        group: gGroup,
+        rig,
+        hp: 90,
+        maxHp: 90,
+        isDead: false,
+        fallingToAbyss: false,
+        fallVelocity: 0,
+        attackTimer: 1.4
+      });
+    });
+
+    // 2c. Active Combat Allies Martín el Armero & Tobías el Leñador (start inside cart, charge Vane once freed)
+    const createAllyWithSpear = (archetype: 'martin_ally' | 'tobias_ally', worldX: number, worldZ: number) => {
+      const group = new THREE.Group();
+      group.position.set(worldX, 0.55, worldZ);
+      const rig = new GothicArticulatedRig3D(archetype);
+      rig.nodes.root.rotation.y = Math.PI;
+      const spear = new THREE.Group();
+      const sShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 1.7, 6), shaftMat);
+      sShaft.position.y = 0.55;
+      const sTip = new THREE.Mesh(
+        new THREE.ConeGeometry(0.09, 0.3, 5),
+        new THREE.MeshStandardMaterial({ color: 0xd0d8e0, metalness: 0.9, roughness: 0.2 })
+      );
+      sTip.position.y = 1.45;
+      spear.add(sShaft, sTip);
+      spear.rotation.x = Math.PI / 5;
+      rig.nodes.weaponSocketR.add(spear);
+      group.add(rig.nodes.root);
+      this.scene.add(group);
+      return { group, rig };
+    };
+    const martin = createAllyWithSpear('martin_ally', -2.9, -248.6);
+    this.martinAllyGroup = martin.group;
+    this.martinAllyRig = martin.rig;
+    const tobias = createAllyWithSpear('tobias_ally', -2.3, -249.4);
+    this.tobiasAllyGroup = tobias.group;
+    this.tobiasAllyRig = tobias.rig;
 
     // 3. Heretic Crosses along the balustrades (6 crosses with braziers)
     [-15, 0, 15].forEach(zPos => {
@@ -3053,61 +3290,48 @@ export class Oakhaven3DExperience {
   }
 
   // =========================================================================
-  // ACT III BOSS: CAPITÁN ÁUREO VANE — EL ESCUDO DE TORRE (CAPTAIN VANE)
+  // ACT III BOSS: CAPITÁN ÁUREO VANE — ARTICULATED 3D TOWER-SHIELD BOSS RIG
   // =========================================================================
   private createCaptainVaneBoss(): void {
     this.captainVaneGroup = new THREE.Group();
     this.captainVaneGroup.position.set(0, 0, -260);
 
     const goldPlateMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.95, roughness: 0.2 });
-    const whiteTabardMat = new THREE.MeshStandardMaterial({ color: 0xf5f5ff, roughness: 0.6 });
     const steelBladeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.9, roughness: 0.15, emissive: 0xffaa00, emissiveIntensity: 0.3 });
 
-    // 1. Armored Torso & White Sun Tabard
-    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.2, 0.6), goldPlateMat);
-    torso.position.y = 1.25;
-    torso.castShadow = true;
-    const tabard = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.22, 0.64), whiteTabardMat);
-    tabard.position.y = 1.25;
-    this.captainVaneGroup.add(torso, tabard);
+    const rig = new GothicArticulatedRig3D('captain_vane');
+    rig.nodes.root.rotation.y = Math.PI;
+    this.bossRigs.vane = rig;
 
-    // 2. Gilded Greathelm with Sun Crest
-    const helm = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.28, 0.5, 8), goldPlateMat);
-    helm.position.y = 2.1;
-    helm.castShadow = true;
-    const crest = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.35, 0.35), goldPlateMat);
-    crest.position.set(0, 2.45, 0);
-    this.captainVaneGroup.add(helm, crest);
-
-    // 3. Massive Tower Shield (Left hand, blocks frontal damage)
-    const shieldGroup = new THREE.Group();
-    shieldGroup.position.set(-0.65, 1.15, 0.45);
-    this.vaneShieldMesh = new THREE.Mesh(new THREE.BoxGeometry(1.25, 2.0, 0.16), goldPlateMat);
+    // Massive Articulated Tower Shield in left weapon socket
+    this.vaneShieldMesh = new THREE.Mesh(new THREE.BoxGeometry(1.05, 1.7, 0.14), goldPlateMat);
     this.vaneShieldMesh.castShadow = true;
-    const sunMedallion = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.05, 12), new THREE.MeshBasicMaterial({ color: 0xffea77 }));
+    this.vaneShieldMesh.position.set(-0.15, 0.15, -0.25);
+    const sunMedallion = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.05, 12), new THREE.MeshBasicMaterial({ color: 0xffea77 }));
     sunMedallion.rotation.x = Math.PI / 2;
-    sunMedallion.position.z = 0.09;
+    sunMedallion.position.z = -0.08;
     this.vaneShieldMesh.add(sunMedallion);
-    shieldGroup.add(this.vaneShieldMesh);
-    this.captainVaneGroup.add(shieldGroup);
+    rig.nodes.weaponSocketL.add(this.vaneShieldMesh);
 
-    // 4. Solar Greatsword (Right hand)
+    // Solar Greatsword in right weapon socket
     const swordGroup = new THREE.Group();
-    swordGroup.position.set(0.65, 1.15, 0.2);
-    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.6, 0.04), steelBladeMat);
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.11, 1.45, 0.04), steelBladeMat);
     blade.position.y = 0.65;
     blade.castShadow = true;
-    const crossguard = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.08, 0.08), goldPlateMat);
-    crossguard.position.y = -0.1;
+    const crossguard = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.07, 0.07), goldPlateMat);
+    crossguard.position.y = -0.05;
     swordGroup.add(blade, crossguard);
-    this.captainVaneGroup.add(swordGroup);
+    swordGroup.rotation.x = Math.PI / 6;
+    rig.nodes.weaponSocketR.add(swordGroup);
 
-    // 5. Radiant Solar Aura Light
-    const solarLight = new THREE.PointLight(0xffdd55, 2.2, 7);
+    this.captainVaneGroup.add(rig.nodes.root);
+
+    // Radiant Solar Aura Light
+    const solarLight = new THREE.PointLight(0xffdd55, 2.4, 8);
     solarLight.position.set(0, 1.8, 0.3);
     this.captainVaneGroup.add(solarLight);
 
-    // 6. Warning Ring
+    // Warning Ring
     const warnMat = new THREE.MeshBasicMaterial({ color: 0xffd700, transparent: true, opacity: 0.65, side: THREE.DoubleSide });
     this.vaneWarningMesh = new THREE.Mesh(new THREE.RingGeometry(0.9, 2.6, 24), warnMat);
     this.vaneWarningMesh.rotation.x = -Math.PI / 2;
@@ -3183,6 +3407,64 @@ export class Oakhaven3DExperience {
 
     this.londiniumCitadelGroup.add(throneGroup);
 
+    // 5. 3 Destructible Royal Narcotic Incense Braziers + Kneeling Hypnotized Noble Citizens (Cap. XIV)
+    const brazierConfigs = [
+      { id: 'narcotic_brazier_1', x: -4.2, z: -304.0, citizenOffsetX: 1.05 },
+      { id: 'narcotic_brazier_2', x: 4.2, z: -311.0, citizenOffsetX: -1.05 },
+      { id: 'narcotic_brazier_3', x: 0.0, z: -317.0, citizenOffsetX: 1.1 }
+    ];
+    const hazeEmissiveMat = new THREE.MeshBasicMaterial({ color: 0xffdd55, transparent: true, opacity: 0.72 });
+    const nobleRobeMat = new THREE.MeshStandardMaterial({ color: 0x4b245c, roughness: 0.75 });
+    const nobleSkinMat = new THREE.MeshStandardMaterial({ color: 0xe2c4a8, roughness: 0.55 });
+
+    brazierConfigs.forEach(cfg => {
+      // Destructible golden narcotic brazier added directly to scene at world coords for destroyProp
+      const brazierMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.32, 1.1, 10), goldMat);
+      brazierMesh.position.set(cfg.x, 0.55, cfg.z);
+      brazierMesh.castShadow = true;
+
+      const incenseDome = new THREE.Mesh(new THREE.SphereGeometry(0.36, 10, 10), hazeEmissiveMat);
+      incenseDome.position.y = 0.65;
+      brazierMesh.add(incenseDome);
+
+      const smokeHalo = new THREE.Mesh(
+        new THREE.TorusGeometry(0.55, 0.06, 8, 20),
+        new THREE.MeshBasicMaterial({ color: 0xffee88, transparent: true, opacity: 0.55 })
+      );
+      smokeHalo.rotation.x = Math.PI / 2;
+      smokeHalo.position.y = 1.05;
+      brazierMesh.add(smokeHalo);
+
+      this.scene.add(brazierMesh);
+      this.destructibles.push({
+        id: cfg.id,
+        mesh: brazierMesh,
+        position: new THREE.Vector3(cfg.x, 0.55, cfg.z),
+        radius: 0.95,
+        isDestroyed: false,
+        name: 'Brasero de Incienso Narcótico'
+      });
+
+      // Kneeling Hypnotized Noble Citizen beside the brazier
+      const citizenGroup = new THREE.Group();
+      citizenGroup.position.set(cfg.x + cfg.citizenOffsetX, 0, cfg.z);
+      const body = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.95, 8), nobleRobeMat);
+      body.position.y = 0.48;
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), nobleSkinMat);
+      head.position.set(0, 1.05, 0.08);
+      const hazeLight = new THREE.PointLight(0xffcc44, 1.9, 5.5);
+      hazeLight.position.set(0, 1.35, 0);
+      citizenGroup.add(body, head, hazeLight);
+      this.scene.add(citizenGroup);
+
+      this.hypnotizedCitizens.push({
+        id: cfg.id,
+        group: citizenGroup,
+        hazeLight,
+        awakened: false
+      });
+    });
+
     // Cosmic Astral Nebula Illumination
     const astralLight = new THREE.PointLight(0x9944ff, 3.5, 30);
     astralLight.position.set(0, 5.5, -6);
@@ -3192,55 +3474,48 @@ export class Oakhaven3DExperience {
   }
 
   // =========================================================================
-  // ACT IV BOSS: REX MALPHAS / ALARIC — LA LEY DEL DESEO (ASTRAL DESPOT)
+  // ACT IV BOSS: REX MALPHAS / ALARIC — ARTICULATED 3D ASTRAL DESPOT RIG
   // =========================================================================
   private createRexMalphasBoss(): void {
     this.rexMalphasGroup = new THREE.Group();
     this.rexMalphasGroup.position.set(0, 0, -325);
 
     const goldMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.95, roughness: 0.2 });
-    const velvetMat = new THREE.MeshStandardMaterial({ color: 0x800010, roughness: 0.6 });
-    const swordBladeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.9, roughness: 0.1, emissive: 0xcc66ff, emissiveIntensity: 0.4 });
+    const swordBladeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.9, roughness: 0.1, emissive: 0xcc66ff, emissiveIntensity: 0.45 });
 
-    // 1. Royal Gilded Armor & Flowing Velvet Cape
-    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.88, 1.2, 0.55), goldMat);
-    torso.position.y = 1.25;
-    torso.castShadow = true;
-    const cape = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.6, 0.08), velvetMat);
-    cape.position.set(0, 1.2, -0.32);
-    this.rexMalphasGroup.add(torso, cape);
+    const rig = new GothicArticulatedRig3D('rex_malphas');
+    rig.nodes.root.rotation.y = Math.PI;
+    this.bossRigs.malphas = rig;
 
-    // 2. Crown of Gold (Jagged 5 points)
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 8, 8), new THREE.MeshStandardMaterial({ color: 0xd9b38c }));
-    head.position.y = 2.05;
-    const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.25, 0.25, 5), goldMat);
-    crown.position.y = 2.25;
-    this.rexMalphasGroup.add(head, crown);
+    // Twin Solar Greatswords mounted in right & left weapon sockets
+    const buildSolarBlade = (length: number) => {
+      const swordGroup = new THREE.Group();
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.11, length, 0.045), swordBladeMat);
+      blade.position.y = length * 0.45;
+      blade.castShadow = true;
+      const crossguard = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.07, 0.07), goldMat);
+      crossguard.position.y = -0.05;
+      swordGroup.add(blade, crossguard);
+      swordGroup.rotation.x = Math.PI / 6;
+      return swordGroup;
+    };
+    rig.nodes.weaponSocketR.add(buildSolarBlade(1.6));
+    rig.nodes.weaponSocketL.add(buildSolarBlade(1.35));
+    this.rexMalphasGroup.add(rig.nodes.root);
 
-    // 3. Mandoble Áureo (Colossal two-handed golden greatsword)
-    const swordGroup = new THREE.Group();
-    swordGroup.position.set(0.65, 1.2, 0.2);
-    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.8, 0.05), swordBladeMat);
-    blade.position.y = 0.75;
-    blade.castShadow = true;
-    const crossguard = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.08, 0.08), goldMat);
-    crossguard.position.y = -0.15;
-    swordGroup.add(blade, crossguard);
-    this.rexMalphasGroup.add(swordGroup);
-
-    // 4. Phase 2 Astral Warp Ring (Ley del Deseo halo)
+    // Phase 2 Astral Warp Ring (Ley del Deseo halo)
     const warpRingMat = new THREE.MeshBasicMaterial({ color: 0xaa22ff, transparent: true, opacity: 0.85, side: THREE.DoubleSide });
     this.malphasWarpRingMesh = new THREE.Mesh(new THREE.TorusGeometry(1.3, 0.08, 12, 32), warpRingMat);
     this.malphasWarpRingMesh.position.set(0, 1.6, -0.4);
     this.malphasWarpRingMesh.visible = false;
     this.rexMalphasGroup.add(this.malphasWarpRingMesh);
 
-    // 5. Astral Light
+    // Astral Light
     const astralLight = new THREE.PointLight(0xaa22ff, 2.5, 9);
     astralLight.position.set(0, 1.8, 0.2);
     this.rexMalphasGroup.add(astralLight);
 
-    // 6. Warning Ring
+    // Warning Ring
     const warnMat = new THREE.MeshBasicMaterial({ color: 0xcc44ff, transparent: true, opacity: 0.65, side: THREE.DoubleSide });
     this.malphasWarningMesh = new THREE.Mesh(new THREE.RingGeometry(1.1, 3.0, 24), warnMat);
     this.malphasWarningMesh.rotation.x = -Math.PI / 2;
@@ -3288,9 +3563,29 @@ export class Oakhaven3DExperience {
       this.invertedCathedralGroup.add(glass);
     });
 
-    // 4. White Communion Altar (Altar de la Comunión Inmaculada at z: 7.0)
+    // 3b. Floating Marble Slabs ascending progressively toward the Communion Altar & Black Sun (+2.4m)
+    const floatingMarbleMat = new THREE.MeshStandardMaterial({
+      color: 0xdce4f5,
+      emissive: 0x3b2266,
+      emissiveIntensity: 0.35,
+      roughness: 0.3
+    });
+    const slabEdgeMat = new THREE.MeshBasicMaterial({ color: 0x88eeff, transparent: true, opacity: 0.65 });
+    for (let i = 0; i < 8; i++) {
+      const worldZ = -369.5 - i * 3.8;
+      const slabY = computeWorldTerrainHeight('inverted_cathedral', 0, worldZ);
+      const slabW = i >= 6 ? 14.0 : 8.5 + (i % 2) * 1.4;
+      const slab = new THREE.Mesh(new THREE.BoxGeometry(slabW, 0.34, 3.3), floatingMarbleMat);
+      slab.position.set(0, slabY - 0.17, worldZ + 385);
+      slab.receiveShadow = true;
+      const glowTrim = new THREE.Mesh(new THREE.BoxGeometry(slabW + 0.12, 0.06, 0.14), slabEdgeMat);
+      glowTrim.position.set(0, slabY - 0.02, worldZ + 385 + 1.65);
+      this.invertedCathedralGroup.add(slab, glowTrim);
+    }
+
+    // 4. White Communion Altar (Altar de la Comunión Inmaculada at world z: -378 -> elevated on floating marble)
     const altarGroup = new THREE.Group();
-    altarGroup.position.set(0, 0, 7.0);
+    altarGroup.position.set(0, computeWorldTerrainHeight('inverted_cathedral', 0, -378), 7.0);
 
     const altarDais = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 2.2, 0.5, 16), whiteAlabasterMat);
     altarDais.position.y = 0.25;
@@ -3507,8 +3802,13 @@ export class Oakhaven3DExperience {
     }
 
     setTimeout(() => {
-      // Hide all boss HUDs upon area transition
+      // Hide all enemy & boss HUDs upon area transition
       [
+        this.enemyHpBarContainer,
+        this.cultistHpBarContainer,
+        this.zealotHpBarContainer,
+        this.skeletonHpBarContainer,
+        this.morwennaHpBarContainer,
         this.inquisitorHpBarContainer,
         this.rootProwlerHpBarContainer,
         this.crucibleHpBarContainer,
@@ -4032,6 +4332,11 @@ export class Oakhaven3DExperience {
     if (this.crucibleGuardianEncounter.isDefeated) {
       this.crucibleGuardianGroup.position.y = -0.4;
       if (this.crucibleSlagLight) this.crucibleSlagLight.intensity = Math.max(0, this.crucibleSlagLight.intensity - delta * 2);
+      this.bossRigs.crucible?.update({
+        delta, elapsedTime: this.clock.elapsedTime, planarSpeed: 0,
+        isMoving: false, isDodging: false, isGuarding: false, isAttacking: false,
+        isHeavyAttack: false, isArmed: true, isDefeated: true
+      });
       return;
     }
 
@@ -4046,6 +4351,22 @@ export class Oakhaven3DExperience {
     if (this.crucibleHpBarContainer) {
       this.crucibleHpBarContainer.style.display = distToPlayer <= 16 ? 'block' : 'none';
     }
+
+    // Update Articulated 3D Boss Rig for Crucible Guardian
+    const crucibleMoving = this.crucibleGuardianEncounter.state === 'CHASE' && distToPlayer > 2.8;
+    const crucibleAttacking = this.crucibleGuardianEncounter.state === 'HAMMER_SLAM' || this.crucibleGuardianEncounter.state === 'SLAG_BURST';
+    this.bossRigs.crucible?.update({
+      delta,
+      elapsedTime: this.clock.elapsedTime,
+      planarSpeed: crucibleMoving ? 2.2 : 0,
+      isMoving: crucibleMoving,
+      isDodging: false,
+      isGuarding: false,
+      isAttacking: crucibleAttacking,
+      isHeavyAttack: this.crucibleGuardianEncounter.state === 'SLAG_BURST',
+      isArmed: true,
+      isDefeated: false
+    });
 
     // Orient towards player
     if (distToPlayer > 0.1) {
@@ -4183,6 +4504,11 @@ export class Oakhaven3DExperience {
 
     if (this.captainVaneEncounter.isDefeated) {
       this.captainVaneGroup.position.y = -0.4;
+      this.bossRigs.vane?.update({
+        delta, elapsedTime: this.clock.elapsedTime, planarSpeed: 0,
+        isMoving: false, isDodging: false, isGuarding: false, isAttacking: false,
+        isHeavyAttack: false, isArmed: true, isDefeated: true, windSway: 0.9
+      });
       return;
     }
 
@@ -4196,6 +4522,28 @@ export class Oakhaven3DExperience {
 
     if (this.vaneHpBarContainer) {
       this.vaneHpBarContainer.style.display = distToPlayer <= 16 ? 'block' : 'none';
+    }
+
+    // Update Articulated 3D Boss Rig for Captain Áureo Vane
+    const vaneMoving = this.captainVaneEncounter.state === 'CHASE' && distToPlayer > 2.6;
+    const vaneAttacking = this.captainVaneEncounter.state === 'BASH' || this.captainVaneEncounter.state === 'GREAT_SLASH';
+    this.bossRigs.vane?.update({
+      delta,
+      elapsedTime: this.clock.elapsedTime,
+      planarSpeed: vaneMoving ? 2.4 : 0,
+      isMoving: vaneMoving,
+      isDodging: false,
+      isGuarding: this.captainVaneEncounter.shieldRaised && !this.hasFreedRefugees,
+      isAttacking: vaneAttacking,
+      isHeavyAttack: this.captainVaneEncounter.state === 'GREAT_SLASH',
+      isArmed: true,
+      isDefeated: false,
+      windSway: 0.9
+    });
+    if (this.vaneShieldMesh) {
+      // Slightly open shield when Martín & Tobías flank Vane
+      const targetShieldRotY = this.hasFreedRefugees ? -0.55 : 0;
+      this.vaneShieldMesh.rotation.y = THREE.MathUtils.lerp(this.vaneShieldMesh.rotation.y, targetShieldRotY, 0.08);
     }
 
     // Orient towards player
@@ -4325,6 +4673,230 @@ export class Oakhaven3DExperience {
     this.updateHUD();
   }
 
+  private checkBridgeAbyssKnockoff(
+    guard: {
+      id: string;
+      group: THREE.Group;
+      rig: GothicArticulatedRig3D;
+      hp: number;
+      maxHp: number;
+      isDead: boolean;
+      fallingToAbyss: boolean;
+      fallVelocity: number;
+      attackTimer: number;
+    },
+    pushDir: THREE.Vector3,
+    isHeavyPush: boolean
+  ): boolean {
+    if (guard.isDead || guard.fallingToAbyss) return false;
+    const flatDir = new THREE.Vector3(pushDir.x, 0, pushDir.z);
+    if (flatDir.lengthSq() < 0.001) {
+      flatDir.set(guard.group.position.x >= 0 ? 1 : -1, 0, 0);
+    } else {
+      flatDir.normalize();
+    }
+
+    const pushDist = isHeavyPush ? 2.4 : 0.75;
+    guard.group.position.x += flatDir.x * pushDist;
+    guard.group.position.z = THREE.MathUtils.clamp(guard.group.position.z + flatDir.z * (pushDist * 0.45), -277, -236);
+
+    if (isHeavyPush && isBridgeAbyssDropZone(guard.group.position.x, guard.group.position.z)) {
+      guard.fallingToAbyss = true;
+      guard.fallVelocity = 0;
+      guard.hp = 0;
+      this.progression.addExp(100);
+      this.audio.playFinisherSound(true);
+      this.triggerScreenShake(0.45);
+      this.spawnFloatingText(
+        guard.group.position.clone(),
+        '🌊 ¡ARROJADO AL ABISMO DEL RÍO! (+100 EXP)',
+        '#66ccff'
+      );
+      this.updateHUD();
+      return true;
+    }
+
+    // Keep inside bridge walkway if not thrown through a broken gap
+    guard.group.position.x = THREE.MathUtils.clamp(guard.group.position.x, -4.4, 4.4);
+    return false;
+  }
+
+  private updateBridgeGuardsAndAllies(delta: number): void {
+    const inBridge = this.dungeonAreaManager.currentArea === 'great_stone_bridge';
+
+    // Animate lateral wind streaks on the bridge
+    if (this.bridgeWindParticles) {
+      this.bridgeWindParticles.visible = inBridge;
+      if (inBridge) {
+        const posAttr = this.bridgeWindParticles.geometry.getAttribute('position') as THREE.BufferAttribute;
+        for (let i = 0; i < posAttr.count; i++) {
+          let x = posAttr.getX(i) + delta * 6.5;
+          if (x > 7.5) x = -7.5;
+          posAttr.setX(i, x);
+        }
+        posAttr.needsUpdate = true;
+      }
+    }
+
+    if (!inBridge || !this.isGameplayActive()) return;
+
+    const pPos = this.playerGroup.position;
+
+    // 1. Update Vanguard Bridge Guards (patrol, lunge, or plummet into river abyss!)
+    for (const guard of this.bridgeGuards) {
+      if (guard.fallingToAbyss) {
+        guard.fallVelocity += 14.0 * delta;
+        guard.group.position.y -= guard.fallVelocity * delta;
+        guard.group.rotation.x += 5.0 * delta;
+        if (guard.group.position.y <= -11.5) {
+          guard.fallingToAbyss = false;
+          guard.isDead = true;
+          guard.group.visible = false;
+        }
+        continue;
+      }
+
+      if (guard.isDead) {
+        guard.group.position.y = -0.35;
+        guard.rig.update({
+          delta, elapsedTime: this.clock.elapsedTime, planarSpeed: 0,
+          isMoving: false, isDodging: false, isGuarding: false, isAttacking: false,
+          isHeavyAttack: false, isArmed: true, isDefeated: true, windSway: 1.0
+        });
+        continue;
+      }
+
+      const toPlayer = pPos.clone().sub(guard.group.position);
+      toPlayer.y = 0;
+      const dist = toPlayer.length();
+      let isMoving = false;
+      let isAttacking = false;
+
+      if (dist <= 11.0) {
+        const angle = Math.atan2(toPlayer.x, toPlayer.z);
+        guard.group.rotation.y = THREE.MathUtils.lerp(guard.group.rotation.y, angle, 0.1);
+        if (dist > 2.1) {
+          toPlayer.normalize();
+          guard.group.position.addScaledVector(toPlayer, 2.2 * delta);
+          guard.group.position.x = THREE.MathUtils.clamp(guard.group.position.x, -4.3, 4.3);
+          guard.group.position.z = THREE.MathUtils.clamp(guard.group.position.z, -276, -238);
+          isMoving = true;
+        } else {
+          guard.attackTimer -= delta;
+          if (guard.attackTimer <= 0) {
+            isAttacking = true;
+            guard.attackTimer = 1.65;
+            if (!this.playerStats.isDodging) {
+              const dmg = this.calculateIncomingDamage(12, 4);
+              this.playerStats.health = Math.max(0, this.playerStats.health - dmg);
+              this.audio.playCombatHit(false);
+              this.spawnFloatingText(pPos, `-${dmg} (GUARDIA DEL PUENTE)`, '#ffdd66');
+              if (this.playerStats.health <= 0) {
+                this.handlePlayerDefeatAndRespawn();
+                return;
+              }
+              this.updateHUD();
+            } else {
+              this.spawnFloatingText(pPos, '⚡ ¡ESQUIVADO!', '#00e5ff');
+            }
+          }
+        }
+      }
+
+      guard.rig.update({
+        delta,
+        elapsedTime: this.clock.elapsedTime,
+        planarSpeed: isMoving ? 2.2 : 0,
+        isMoving,
+        isDodging: false,
+        isGuarding: false,
+        isAttacking,
+        isHeavyAttack: false,
+        isArmed: true,
+        isDefeated: false,
+        windSway: 1.0
+      });
+    }
+
+    // 2. Update Active Combat Allies Martín el Armero & Tobías el Leñador
+    if (this.martinAllyGroup && this.tobiasAllyGroup && this.martinAllyRig && this.tobiasAllyRig) {
+      if (this.hasFreedRefugees && !this.captainVaneEncounter.isDefeated) {
+        const vPos = this.captainVaneGroup.position;
+        const martinTarget = new THREE.Vector3(
+          THREE.MathUtils.clamp(vPos.x - 1.6, -4.1, 4.1),
+          0,
+          THREE.MathUtils.clamp(vPos.z + 1.5, -276, -240)
+        );
+        const tobiasTarget = new THREE.Vector3(
+          THREE.MathUtils.clamp(vPos.x + 1.6, -4.1, 4.1),
+          0,
+          THREE.MathUtils.clamp(vPos.z + 1.5, -276, -240)
+        );
+
+        const moveAlly = (group: THREE.Group, target: THREE.Vector3): boolean => {
+          const toT = target.clone().sub(group.position);
+          const dist = Math.hypot(toT.x, toT.z);
+          group.position.y = THREE.MathUtils.lerp(group.position.y, 0, 1 - Math.exp(-8 * delta));
+          if (dist > 0.35) {
+            const step = Math.min(dist, 3.6 * delta);
+            group.position.x += (toT.x / dist) * step;
+            group.position.z += (toT.z / dist) * step;
+            group.rotation.y = Math.atan2(toT.x, toT.z);
+            return true;
+          }
+          const toVane = vPos.clone().sub(group.position);
+          group.rotation.y = Math.atan2(toVane.x, toVane.z);
+          return false;
+        };
+
+        const martinMoving = moveAlly(this.martinAllyGroup, martinTarget);
+        const tobiasMoving = moveAlly(this.tobiasAllyGroup, tobiasTarget);
+
+        let alliesStruck = false;
+        if (!martinMoving && !tobiasMoving) {
+          this.bridgeAlliesAttackTimer += delta;
+          if (this.bridgeAlliesAttackTimer >= 2.4) {
+            this.bridgeAlliesAttackTimer = 0;
+            alliesStruck = true;
+            const res = this.captainVaneEncounter.takeDamage(18, false, true);
+            this.audio.playCombatHit(false);
+            this.spawnFloatingText(
+              vPos.clone().add(new THREE.Vector3(0, 0.4, 0)),
+              `⚔ ¡MARTÍN Y TOBÍAS FLANQUEAN! -${res.actualDamage}`,
+              '#a3ffc7'
+            );
+            if (res.defeated) {
+              this.handleCaptainVaneDefeat();
+            }
+            this.updateHUD();
+          }
+        }
+
+        this.martinAllyRig.update({
+          delta, elapsedTime: this.clock.elapsedTime, planarSpeed: martinMoving ? 3.6 : 0,
+          isMoving: martinMoving, isDodging: false, isGuarding: false,
+          isAttacking: alliesStruck, isHeavyAttack: false, isArmed: true, isDefeated: false, windSway: 1.0
+        });
+        this.tobiasAllyRig.update({
+          delta, elapsedTime: this.clock.elapsedTime, planarSpeed: tobiasMoving ? 3.6 : 0,
+          isMoving: tobiasMoving, isDodging: false, isGuarding: false,
+          isAttacking: alliesStruck, isHeavyAttack: false, isArmed: true, isDefeated: false, windSway: 1.0
+        });
+      } else {
+        this.martinAllyRig.update({
+          delta, elapsedTime: this.clock.elapsedTime, planarSpeed: 0,
+          isMoving: false, isDodging: false, isGuarding: false,
+          isAttacking: false, isHeavyAttack: false, isArmed: true, isDefeated: false, windSway: 0.7
+        });
+        this.tobiasAllyRig.update({
+          delta, elapsedTime: this.clock.elapsedTime, planarSpeed: 0,
+          isMoving: false, isDodging: false, isGuarding: false,
+          isAttacking: false, isHeavyAttack: false, isArmed: true, isDefeated: false, windSway: 0.7
+        });
+      }
+    }
+  }
+
   // =========================================================================
   // ACT IV BOSS: REX MALPHAS / ALARIC (THE ASTRAL DESPOT UPDATE LOOP)
   // =========================================================================
@@ -4362,6 +4934,11 @@ export class Oakhaven3DExperience {
     if (this.rexMalphasEncounter.isDefeated) {
       this.rexMalphasGroup.position.y = -0.4;
       if (this.malphasWarpRingMesh) this.malphasWarpRingMesh.visible = false;
+      this.bossRigs.malphas?.update({
+        delta, elapsedTime: this.clock.elapsedTime, planarSpeed: 0,
+        isMoving: false, isDodging: false, isGuarding: false, isAttacking: false,
+        isHeavyAttack: false, isArmed: true, isDefeated: true
+      });
       return;
     }
 
@@ -4376,6 +4953,22 @@ export class Oakhaven3DExperience {
     if (this.malphasHpBarContainer) {
       this.malphasHpBarContainer.style.display = distToPlayer <= 18 ? 'block' : 'none';
     }
+
+    // Update Articulated 3D Boss Rig for Rex Malphas
+    const malphasMoving = this.rexMalphasEncounter.state === 'CHASE' && distToPlayer > 2.7;
+    const malphasAttacking = this.rexMalphasEncounter.state === 'SOLAR_COMBO' || this.rexMalphasEncounter.state === 'LEY_DEL_DESEO';
+    this.bossRigs.malphas?.update({
+      delta,
+      elapsedTime: this.clock.elapsedTime,
+      planarSpeed: malphasMoving ? (this.rexMalphasEncounter.phase === 2 ? 3.4 : 2.5) : 0,
+      isMoving: malphasMoving,
+      isDodging: false,
+      isGuarding: false,
+      isAttacking: malphasAttacking,
+      isHeavyAttack: this.rexMalphasEncounter.state === 'LEY_DEL_DESEO',
+      isArmed: true,
+      isDefeated: false
+    });
 
     // Orient towards player
     if (distToPlayer > 0.1) {
@@ -4538,8 +5131,46 @@ export class Oakhaven3DExperience {
       this.astarothHpBarContainer.style.display = distToPlayer <= 25 ? 'block' : 'none';
     }
 
-    // Floating Cosmic Bobbing
-    this.astarothGroup.position.y = Math.sin(this.clock.elapsedTime * 2.2) * 0.25;
+    // Floating Cosmic Bobbing aligned above the elevated floating marble steps
+    const astarothBaseY = computeWorldTerrainHeight('inverted_cathedral', aPos.x, aPos.z);
+    this.astarothGroup.position.y = astarothBaseY + Math.sin(this.clock.elapsedTime * 2.2) * 0.25;
+
+    // Phase 3: Colossal Crimson Ember Lion Shalem actively orbits & strikes Astaroth every 3.0s!
+    if (this.isShalemLionActive && this.shalemLionGroup && !this.astarothEncounter.isDefeated) {
+      const orbitAngle = this.clock.elapsedTime * 1.6;
+      const orbitRadius = 3.8;
+      this.shalemLionGroup.position.set(
+        aPos.x + Math.cos(orbitAngle) * orbitRadius,
+        astarothBaseY + 0.15 + Math.abs(Math.sin(this.clock.elapsedTime * 5.2)) * 0.35,
+        aPos.z + Math.sin(orbitAngle) * orbitRadius
+      );
+      this.shalemLionGroup.lookAt(aPos.x, astarothBaseY + 1.5, aPos.z);
+
+      this.shalemLionAttackTimer += delta;
+      if (this.shalemLionAttackTimer >= 3.0) {
+        this.shalemLionAttackTimer = 0;
+        const hit = this.astarothEncounter.takeDamage(45, true);
+        this.visualDesigns.spawnVfxBillboard(
+          this.scene,
+          aPos.clone().add(new THREE.Vector3(0, 1.8, 0)),
+          2.8,
+          2.8,
+          '/assets/vfx/fx_slash_gold.png',
+          5,
+          20
+        );
+        this.audio.playCombatHit(true);
+        this.spawnFloatingText(aPos, `🦁 ¡SHALEM LEÓN DE BRASAS! -${hit.actualDamage}`, '#ff7722');
+        if (this.astarothHpBarFill) {
+          this.astarothHpBarFill.style.width = `${Math.max(0, (this.astarothEncounter.health / this.astarothEncounter.maxHealth) * 100)}%`;
+        }
+        if (hit.defeated) {
+          this.handleAstarothDefeat();
+          return;
+        }
+        this.updateHUD();
+      }
+    }
 
     if (this.astarothEncounter.state === 'COSMIC_DAWN') {
       if (pPos.z <= -382) {
@@ -4658,6 +5289,216 @@ export class Oakhaven3DExperience {
         if (this.astarothHpBarContainer) this.astarothHpBarContainer.style.display = 'none';
       }, 2500);
     }
+    this.updateHUD();
+  }
+
+  // =========================================================================
+  // PHASE 3: SHALEM COLOSSAL CRIMSON EMBER LION & FIRST DAWN PLAYABLE EPILOGUE
+  // =========================================================================
+  private createOrActivateShalemLion(): void {
+    if (!this.shalemLionGroup) {
+      const lion = new THREE.Group();
+      lion.scale.setScalar(1.9);
+
+      const obsidianFurMat = new THREE.MeshStandardMaterial({ color: 0x120916, roughness: 0.6, metalness: 0.25 });
+      const emberCrimsonMat = new THREE.MeshBasicMaterial({ color: 0xff4411 });
+      const emberGoldMat = new THREE.MeshBasicMaterial({ color: 0xffaa22 });
+      const solarEyeMat = new THREE.MeshBasicMaterial({ color: 0xffdd44 });
+
+      // Muscular leonine obsidian torso & chest
+      const torso = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.56, 1.25), obsidianFurMat);
+      torso.position.set(0, 0.72, 0);
+      torso.castShadow = true;
+      lion.add(torso);
+
+      // Head & snout
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.44, 0.52), obsidianFurMat);
+      head.position.set(0, 0.96, 0.74);
+      const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 8), solarEyeMat);
+      eyeL.position.set(-0.14, 1.02, 0.99);
+      const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 8), solarEyeMat);
+      eyeR.position.set(0.14, 1.02, 0.99);
+      lion.add(head, eyeL, eyeR);
+
+      // Fiery Crimson & Gold Mane (12 radial ember spikes)
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2;
+        const spike = new THREE.Mesh(
+          new THREE.ConeGeometry(0.12, 0.46, 5),
+          i % 2 === 0 ? emberCrimsonMat : emberGoldMat
+        );
+        spike.position.set(Math.cos(a) * 0.34, 0.96 + Math.sin(a) * 0.34, 0.62);
+        spike.rotation.z = a - Math.PI / 2;
+        lion.add(spike);
+      }
+
+      // 4 Articulated Legs with Fiery Claws
+      const legOffsets = [
+        { x: -0.24, z: 0.42 },
+        { x: 0.24, z: 0.42 },
+        { x: -0.24, z: -0.42 },
+        { x: 0.24, z: -0.42 }
+      ];
+      legOffsets.forEach(lo => {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.62, 0.2), obsidianFurMat);
+        leg.position.set(lo.x, 0.34, lo.z);
+        const claw = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.1, 0.24), emberGoldMat);
+        claw.position.set(lo.x, 0.05, lo.z + 0.04);
+        lion.add(leg, claw);
+      });
+
+      // Tail with Black-Crimson Fire Plume
+      const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.06, 0.85, 6), obsidianFurMat);
+      tail.position.set(0, 0.86, -0.82);
+      tail.rotation.x = -0.75;
+      const tailPlume = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.38, 6), emberCrimsonMat);
+      tailPlume.position.set(0, 1.15, -1.16);
+      tailPlume.rotation.x = -0.6;
+      lion.add(tail, tailPlume);
+
+      const lionLight = new THREE.PointLight(0xff4400, 4.5, 12);
+      lionLight.position.set(0, 1.1, 0.5);
+      lion.add(lionLight);
+
+      this.shalemLionGroup = lion;
+      this.scene.add(this.shalemLionGroup);
+    }
+
+    this.shalemLionGroup.visible = true;
+    this.shalemLionGroup.position.set(2.5, 2.0, -392);
+    this.isShalemLionActive = true;
+    this.shalemLionAttackTimer = 1.6;
+    this.audio.playBossPhaseChangeSound?.();
+    this.spawnFloatingText(this.shalemLionGroup.position, '🦁 ¡SHALEM: EL LEÓN DE BRASAS CARMESÍES DESPIERTA!', '#ff6622');
+  }
+
+  public triggerFirstDawnPlayableEpilogue(): void {
+    // 1. Return to Oakhaven Surface & teleport onto Old Oak Hill (+2.2m)
+    this.dungeonAreaManager.exitToSurface();
+    this.oakhavenNarrativePhase = 'FIRST_DAWN_EPILOGUE';
+    this.canonChapterManager.unlockChapter(20);
+    this.currentCanonChapterId = 20;
+
+    // 2. Hide all Boss HUDs & Oakhaven Enemies
+    [
+      this.inquisitorHpBarContainer,
+      this.rootProwlerHpBarContainer,
+      this.crucibleHpBarContainer,
+      this.vaneHpBarContainer,
+      this.malphasHpBarContainer,
+      this.astarothHpBarContainer,
+      this.enemyHpBarContainer,
+      this.cultistHpBarContainer,
+      this.zealotHpBarContainer,
+      this.skeletonHpBarContainer,
+      this.morwennaHpBarContainer
+    ].forEach(hud => {
+      if (hud) hud.style.display = 'none';
+    });
+
+    if (this.enemyGroup) this.enemyGroup.visible = false;
+    if (this.cultistGroup) this.cultistGroup.visible = false;
+    if (this.zealotGroup) this.zealotGroup.visible = false;
+    if (this.morwennaGroup) this.morwennaGroup.visible = false;
+    this.enemyState = 'DEAD';
+    this.cultistState = 'DEAD';
+    this.zealotState = 'DEAD';
+    this.morwennaState = 'DEAD';
+    if (this.shalemLionGroup) this.shalemLionGroup.visible = false;
+    this.isShalemLionActive = false;
+
+    // 3. Golden-Rose First Dawn Atmosphere & Warm Sunrise Lighting
+    this.scene.background = new THREE.Color(0x4a3252);
+    this.scene.fog = new THREE.FogExp2(0x583c5e, 0.008);
+    if (this.ambientLightRef) {
+      this.ambientLightRef.color.setHex(0xffe0b2);
+      this.ambientLightRef.intensity = 3.2;
+    }
+    if (this.hemiLightRef) {
+      this.hemiLightRef.color.setHex(0xfff0d4);
+      this.hemiLightRef.groundColor.setHex(0x6b4b73);
+    }
+    if (this.moonLightRef) {
+      this.moonLightRef.color.setHex(0xffdd88);
+      this.moonLightRef.intensity = 3.5;
+    }
+    if (this.oakHillSunbeamMesh) {
+      (this.oakHillSunbeamMesh.material as THREE.MeshBasicMaterial).color.setHex(0xffe899);
+    }
+
+    // 4. Gather all companions under the Old Oak (+2.2m)
+    if (this.elowenGroup) {
+      this.elowenGroup.visible = true;
+      this.elowenGroup.position.set(9.6, 2.2, 5.0);
+      this.elowenGroup.rotation.y = -Math.PI / 2;
+    }
+    if (this.khaterineGroup) {
+      this.khaterineGroup.visible = this.activeHero === 'thomas';
+      this.khaterineGroup.position.set(9.2, 2.2, 3.8);
+      this.khaterineGroup.rotation.y = -Math.PI / 3;
+    }
+    if (this.thomasNpcGroup) {
+      this.thomasNpcGroup.visible = this.activeHero === 'khaterine';
+      this.thomasNpcGroup.position.set(9.2, 2.2, 3.8);
+      this.thomasNpcGroup.rotation.y = -Math.PI / 3;
+    }
+    if (this.cedricGroup) {
+      this.cedricGroup.visible = true;
+      this.cedricGroup.position.set(8.2, 2.2, 6.2);
+      this.cedricGroup.rotation.y = -Math.PI / 4;
+    }
+    if (this.shalemGroup) {
+      this.shalemGroup.visible = true;
+      this.shalemGroup.position.set(9.5, 2.2, 4.5);
+      const existingAura = this.shalemGroup.getObjectByName('shalem_epilogue_aura');
+      if (!existingAura) {
+        const epilogueAura = new THREE.PointLight(0xffdd77, 2.4, 5.5);
+        epilogueAura.name = 'shalem_epilogue_aura';
+        epilogueAura.position.set(0, 0.7, 0);
+        this.shalemGroup.add(epilogueAura);
+      }
+    }
+
+    // 5. Sprout 16 White Dawn Flowers across Old Oak Hill
+    if (!this.epilogueFlowersGroup) {
+      this.epilogueFlowersGroup = new THREE.Group();
+      const petalMat = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        emissive: 0xffe499,
+        emissiveIntensity: 0.7,
+        roughness: 0.3
+      });
+      const stemMat = new THREE.MeshStandardMaterial({ color: 0x3e7a48, roughness: 0.85 });
+      for (let i = 0; i < 16; i++) {
+        const angle = (i / 16) * Math.PI * 2;
+        const radius = 1.4 + (i % 3) * 0.85;
+        const fx = 10.2 + Math.cos(angle) * radius;
+        const fz = 5.0 + Math.sin(angle) * radius;
+        const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.02, 0.22, 5), stemMat);
+        stem.position.set(fx, 2.31, fz);
+        const blossom = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 8), petalMat);
+        blossom.position.set(fx, 2.44, fz);
+        this.epilogueFlowersGroup.add(stem, blossom);
+      }
+      this.scene.add(this.epilogueFlowersGroup);
+    }
+    this.epilogueFlowersGroup.visible = true;
+
+    // 6. Place hero on Old Oak Hill facing Elowen and the glowing Oak
+    this.setPlayerPosition(8.6, 2.2, 5.0);
+    this.playerGroup.rotation.y = -Math.PI / 2;
+    this.cameraYaw = -Math.PI / 2;
+    this.targetCameraYaw = -Math.PI / 2;
+    this.audio.playCosmicChime?.();
+    this.triggerHolyFlash(1.1);
+    this.spawnFloatingText(this.playerGroup.position, '🌅 ¡EL PRIMER AMANECER DE OAKHAVEN!', '#ffd700');
+
+    // 7. Canonical Chapter XX Epilogue Modal
+    this.showDialogueModal(
+      '🌅 EPÍLOGO CANÓNICO — EL PRIMER AMANECER EN LA COLINA DEL VIEJO ROBLE 🌅',
+      '«Por primera vez en dieciocho años, la niebla de ceniza se abre sobre el valle de Oakhaven y un sol cálido tiñe de oro las hojas del Viejo Roble. Shalem ronronea hecho un ovillo sobre la piedra musgosa, libre al fin de las cadenas del Abismo. Elowen apoya su frente sobre el hombro de Thomas mientras Khaterine contempla el horizonte en paz: "Ya no somos hijos de la noche ni del temor, Thomas. Somos la oscuridad que eligió amar."»',
+      '👑 OBRA COMPLETA (20/20 CAPÍTULOS) — PUEDES CAMINAR LIBREMENTE POR LA COLINA O USAR EL COMPENDIO [N] 👑'
+    );
     this.updateHUD();
   }
 
@@ -6214,18 +7055,51 @@ export class Oakhaven3DExperience {
       }
     }
 
+    // Hit Detection against Act III Vanguard Bridge Guards (with Broken-Balustrade Abyss Knock-Off!)
+    if (this.dungeonAreaManager.currentArea === 'great_stone_bridge') {
+      for (const guard of this.bridgeGuards) {
+        if (guard.isDead || guard.fallingToAbyss) continue;
+        const distToGuard = this.playerGroup.position.distanceTo(guard.group.position);
+        if (distToGuard <= reach + 0.5) {
+          const baseDmg = this.playerStats.isArmed ? (isHeavy ? 44 : 26) : (isHeavy ? 22 : 14);
+          const skillBonus = 1.0 + (this.progression.getDamageBonusPct(this.activeHero) / 100);
+          const dmg = Math.round(baseDmg * this.attackBuffMultiplier * skillBonus);
+          const pushDir = guard.group.position.clone().sub(this.playerGroup.position);
+          const thrownOff = this.checkBridgeAbyssKnockoff(guard, pushDir, isHeavy);
+          if (!thrownOff) {
+            guard.hp = Math.max(0, guard.hp - dmg);
+            this.spawnFloatingText(guard.group.position, `-${dmg}`, isHeavy ? '#ffd700' : '#ffdd88');
+            this.audio.playCombatHit(isHeavy);
+            if (guard.hp <= 0) {
+              guard.isDead = true;
+              guard.group.position.y = -0.35;
+              this.progression.addExp(70);
+              this.audio.playFinisherSound(true);
+              this.spawnFloatingText(guard.group.position, '⚔ ¡GUARDIA DERROTADO! (+70 EXP)', '#ffd700');
+            }
+            this.updateHUD();
+          }
+        }
+      }
+    }
+
     // Hit Detection against Act III Boss: Captain Áureo Vane
     if (this.dungeonAreaManager.currentArea === 'great_stone_bridge' && !this.captainVaneEncounter.isDefeated) {
       const distToVane = this.playerGroup.position.distanceTo(this.captainVaneGroup.position);
       if (distToVane <= reach + 0.8) {
         const baseDmg = this.playerStats.isArmed ? (this.hasForgedAlbaGris ? (isHeavy ? 58 : 38) : (isHeavy ? 44 : 28)) : (isHeavy ? 22 : 14);
         const skillBonus = 1.0 + (this.progression.getDamageBonusPct(this.activeHero) / 100);
-        const dmg = Math.round(baseDmg * this.attackBuffMultiplier * skillBonus);
+        const flankBonus = (this.hasFreedRefugees && this.isLockOnActive) ? 1.25 : 1.0;
+        const dmg = Math.round(baseDmg * this.attackBuffMultiplier * skillBonus * flankBonus);
 
         const toVane = this.captainVaneGroup.position.clone().sub(this.playerGroup.position).normalize();
         const vaneFwd = new THREE.Vector3(0, 0, 1).applyQuaternion(this.captainVaneGroup.quaternion);
         const isFrontal = toVane.dot(vaneFwd) < -0.2;
-        const bypassShield = isHeavy || this.hasForgedAlbaGris || this.inventory.hasItem('relic_false_verdict');
+        const bypassShield =
+          isHeavy ||
+          this.hasForgedAlbaGris ||
+          this.inventory.hasItem('relic_false_verdict') ||
+          (this.hasFreedRefugees && this.isLockOnActive);
 
         if (isHeavy && this.captainVaneEncounter.shieldRaised) {
           this.captainVaneEncounter.breakShield();
@@ -6240,7 +7114,8 @@ export class Oakhaven3DExperience {
           this.spawnFloatingText(this.captainVaneGroup.position, `-${hitRes.actualDamage} (¡ESCUDO BLOQUEA 80%! USA [K] O FLANQUEA)`, '#ffd700');
           this.audio.playShieldCrush();
         } else {
-          this.spawnFloatingText(this.captainVaneGroup.position, `-${hitRes.actualDamage}`, isHeavy ? '#ffd700' : '#ffee88');
+          const flankLabel = (this.hasFreedRefugees && this.isLockOnActive) ? ' (¡FLANQUEO CRÍTICO!)' : '';
+          this.spawnFloatingText(this.captainVaneGroup.position, `-${hitRes.actualDamage}${flankLabel}`, isHeavy ? '#ffd700' : '#ffee88');
           this.audio.playCombatHit(isHeavy);
         }
 
@@ -6251,16 +7126,18 @@ export class Oakhaven3DExperience {
       }
     }
 
-    // Hit Detection against Act IV Boss: Rex Malphas (Alaric)
+    // Hit Detection against Act IV Boss: Rex Malphas (Alaric) — Amplified by Destroyed Narcotic Braziers!
     if (this.dungeonAreaManager.currentArea === 'londinium_citadel' && !this.rexMalphasEncounter.isDefeated) {
       const distToMalphas = this.playerGroup.position.distanceTo(this.rexMalphasGroup.position);
       if (distToMalphas <= reach + 0.8) {
         const baseDmg = this.playerStats.isArmed ? (this.hasForgedAlbaGris ? (isHeavy ? 60 : 40) : (isHeavy ? 46 : 30)) : (isHeavy ? 24 : 15);
         const skillBonus = 1.0 + (this.progression.getDamageBonusPct(this.activeHero) / 100);
-        const dmg = Math.round(baseDmg * this.attackBuffMultiplier * skillBonus);
+        const brazierMult = computeMalphasBrazierMultiplier(this.destroyedNarcoticBraziersCount);
+        const dmg = Math.round(baseDmg * this.attackBuffMultiplier * skillBonus * brazierMult);
 
         const hitRes = this.rexMalphasEncounter.takeDamage(dmg);
-        this.spawnFloatingText(this.rexMalphasGroup.position, `-${hitRes.actualDamage}`, isHeavy ? '#ffd700' : '#cc44ff');
+        const debuffTag = this.destroyedNarcoticBraziersCount > 0 ? ` (+${this.destroyedNarcoticBraziersCount * 15}% SIN INCIENSO)` : '';
+        this.spawnFloatingText(this.rexMalphasGroup.position, `-${hitRes.actualDamage}${debuffTag}`, isHeavy ? '#ffd700' : '#cc44ff');
         this.audio.playCombatHit(isHeavy);
 
         if (isHeavy && !hitRes.transitionedToPhase2 && this.rexMalphasEncounter.state !== 'STUNNED') {
@@ -6697,6 +7574,36 @@ export class Oakhaven3DExperience {
         }
       }
 
+      // 8c-0. Check Act III Vanguard Bridge Guards collision (Silver/Heavy Arrows can knock off bridge!)
+      if (!collided && this.dungeonAreaManager.currentArea === 'great_stone_bridge') {
+        for (const guard of this.bridgeGuards) {
+          if (guard.isDead || guard.fallingToAbyss) continue;
+          const dGuard = p.mesh.position.distanceTo(guard.group.position.clone().add(new THREE.Vector3(0, 1.1, 0)));
+          if (dGuard <= 1.55) {
+            collided = true;
+            if (p.isThrownFlask) {
+              this.explodeHolyFireFlask(p.mesh.position.clone(), p.damage);
+            } else {
+              const thrownOff = this.checkBridgeAbyssKnockoff(guard, p.velocity.clone(), p.isHeavy || p.arrowType === 'silver');
+              if (!thrownOff) {
+                guard.hp = Math.max(0, guard.hp - p.damage);
+                this.spawnFloatingText(guard.group.position, `-${p.damage}`, p.isHeavy ? '#ffd700' : '#d999ff');
+                this.audio.playCombatHit(p.isHeavy);
+                if (guard.hp <= 0) {
+                  guard.isDead = true;
+                  guard.group.position.y = -0.35;
+                  this.progression.addExp(70);
+                  this.audio.playFinisherSound(true);
+                  this.spawnFloatingText(guard.group.position, '⚔ ¡GUARDIA DERROTADO! (+70 EXP)', '#ffd700');
+                }
+                this.updateHUD();
+              }
+            }
+            break;
+          }
+        }
+      }
+
       // 8c. Check Act III Boss: Captain Áureo Vane collision
       if (!collided && this.dungeonAreaManager.currentArea === 'great_stone_bridge' && !this.captainVaneEncounter.isDefeated) {
         const dVane = p.mesh.position.distanceTo(this.captainVaneGroup.position.clone().add(new THREE.Vector3(0, 1.2, 0)));
@@ -6718,12 +7625,13 @@ export class Oakhaven3DExperience {
               this.spawnFloatingText(this.captainVaneGroup.position, '💥 ¡PLATA QUIEBRA EL ESCUDO DE TORRE!', '#66ccff');
             }
 
-            const hitRes = this.captainVaneEncounter.takeDamage(p.damage, isFrontal, isSilver || p.isHeavy);
+            const bypassByFlank = this.hasFreedRefugees && this.isLockOnActive;
+            const hitRes = this.captainVaneEncounter.takeDamage(p.damage, isFrontal, isSilver || p.isHeavy || bypassByFlank);
             if (hitRes.blocked) {
               this.spawnFloatingText(this.captainVaneGroup.position, `-${hitRes.actualDamage} (¡BLOQUEADO! USA FLECHA DE PLATA)`, '#ffd700');
               this.audio.playShieldCrush();
             } else {
-              const label = isSilver ? '¡ANTI-ESCUDO PLATA!' : p.arrowType === 'fire' ? 'FLECHA DE FUEGO' : 'FLECHA ABISAL';
+              const label = isSilver ? '¡ANTI-ESCUDO PLATA!' : bypassByFlank ? '¡FLANQUEO!' : p.arrowType === 'fire' ? 'FLECHA DE FUEGO' : 'FLECHA ABISAL';
               this.spawnFloatingText(this.captainVaneGroup.position, `-${hitRes.actualDamage} (${label})`, isSilver ? '#66ccff' : '#ffd700');
               this.audio.playCombatHit(p.isHeavy || isSilver);
               if (p.arrowType === 'fire') {
@@ -6744,7 +7652,8 @@ export class Oakhaven3DExperience {
           if (p.isThrownFlask) {
             this.explodeHolyFireFlask(p.mesh.position.clone(), p.damage);
           } else {
-            const hitRes = this.rexMalphasEncounter.takeDamage(p.damage);
+            const brazierMult = computeMalphasBrazierMultiplier(this.destroyedNarcoticBraziersCount);
+            const hitRes = this.rexMalphasEncounter.takeDamage(Math.round(p.damage * brazierMult));
             const label = p.arrowType === 'silver' ? 'FLECHA DE PLATA' : p.arrowType === 'fire' ? 'FLECHA DE FUEGO' : 'FLECHA ABISAL';
             this.spawnFloatingText(this.rexMalphasGroup.position, `-${hitRes.actualDamage} (${label})`, '#cc44ff');
             this.audio.playCombatHit(p.isHeavy);
@@ -6871,6 +7780,47 @@ export class Oakhaven3DExperience {
       this.spawnFloatingText(prop.position.clone().add(new THREE.Vector3(0, 0.5, 0)), `🎒 +1 ${mat.name}`, '#2ecc71');
     }
 
+    // Phase 2 Act IV: Destroying a Royal Narcotic Incense Brazier awakens its noble citizen & weakens Rex Malphas (+15% each)
+    if (prop.id.startsWith('narcotic_brazier_')) {
+      this.destroyedNarcoticBraziersCount = Math.min(3, this.destroyedNarcoticBraziersCount + 1);
+      const citizen = this.hypnotizedCitizens.find(c => c.id === prop.id);
+      if (citizen && !citizen.awakened) {
+        citizen.awakened = true;
+        citizen.group.scale.y = 1.35; // Citizen stands up from kneeling trance
+        citizen.hazeLight.color.setHex(0x88eeff);
+        citizen.hazeLight.intensity = 1.2;
+      }
+
+      this.spawnFloatingText(
+        prop.position.clone().add(new THREE.Vector3(0, 0.8, 0)),
+        `🌿 ¡BRASERO NARCÓTICO DESTRUIDO! (CIUDADANO DESPIERTA & MALPHAS +${this.destroyedNarcoticBraziersCount * 15}% DAÑO)`,
+        '#ffd700'
+      );
+
+      if (this.destroyedNarcoticBraziersCount === 1) {
+        this.setDialogueToast(
+          'Ciudadano Despierto (Londinium)',
+          '«¡El humo dorado nos cegaba! ¡El rey Alaric nos hizo creer que el Sol del Abismo era la gracia del Cáliz!»',
+          '/assets/characters/portrait_cedric.png',
+          '#ffd700'
+        );
+      } else if (this.destroyedNarcoticBraziersCount === 2) {
+        this.setDialogueToast(
+          'Noble Liberada (Londinium)',
+          '«¡Huid del Salón de los Espejos! ¡Quien cree sus reflejos entrega su voluntad a la Ley del Deseo!»',
+          '/assets/characters/portrait_elowen.png',
+          '#ffd700'
+        );
+      } else {
+        this.setDialogueToast(
+          'Erudito de Londinium',
+          '«¡Todos los braseros han caído! ¡La armadura solar de Rex Malphas ha perdido su escudo narcótico!»',
+          '/assets/characters/portrait_thomas.png',
+          '#88eeff'
+        );
+      }
+    }
+
     this.updateHUD();
   }
 
@@ -6934,7 +7884,13 @@ export class Oakhaven3DExperience {
     const forward = new THREE.Vector3(0, 0, -1).applyEuler(this.playerGroup.rotation);
     this.playerVelocity.copy(forward.multiplyScalar(speed));
 
-    this.spawnFloatingText(this.playerGroup.position, isShadowStep ? '¡PASO ESPECTRAL (+30%)!' : '¡ESQUIVADO!', '#88ffaa');
+    if (this.dungeonAreaManager.currentArea === 'inverted_cathedral') {
+      // Astral leap impulse across floating marble slabs over the cosmic abyss
+      this.playerGroup.position.y += 0.65;
+      this.spawnFloatingText(this.playerGroup.position, '✨ ¡IMPULSO ASTRAL!', '#88eeff');
+    } else {
+      this.spawnFloatingText(this.playerGroup.position, isShadowStep ? '¡PASO ESPECTRAL (+30%)!' : '¡ESQUIVADO!', '#88ffaa');
+    }
 
     setTimeout(() => {
       this.playerStats.isDodging = false;
@@ -7299,6 +8255,24 @@ export class Oakhaven3DExperience {
       if (hitRes.defeated) this.handleCrucibleGuardianDefeat();
     }
 
+    if (this.dungeonAreaManager.currentArea === 'great_stone_bridge') {
+      for (const guard of this.bridgeGuards) {
+        if (!guard.isDead && !guard.fallingToAbyss && pos.distanceTo(guard.group.position) <= radius + 0.5) {
+          const pushDir = guard.group.position.clone().sub(pos);
+          const thrownOff = this.checkBridgeAbyssKnockoff(guard, pushDir, true);
+          if (!thrownOff) {
+            guard.hp = Math.max(0, guard.hp - dmg);
+            this.spawnFloatingText(guard.group.position, `-${dmg} (FRASCO FATUO)`, '#ff5500');
+            if (guard.hp <= 0) {
+              guard.isDead = true;
+              guard.group.position.y = -0.35;
+              this.progression.addExp(70);
+            }
+          }
+        }
+      }
+    }
+
     if (this.dungeonAreaManager.currentArea === 'great_stone_bridge' && !this.captainVaneEncounter.isDefeated && pos.distanceTo(this.captainVaneGroup.position) <= radius + 0.5) {
       const hitRes = this.captainVaneEncounter.takeDamage(dmg, false, true);
       this.spawnFloatingText(this.captainVaneGroup.position, `-${hitRes.actualDamage} (FRASCO FATUO)`, '#ff5500');
@@ -7307,7 +8281,8 @@ export class Oakhaven3DExperience {
     }
 
     if (this.dungeonAreaManager.currentArea === 'londinium_citadel' && !this.rexMalphasEncounter.isDefeated && pos.distanceTo(this.rexMalphasGroup.position) <= radius + 0.5) {
-      const hitRes = this.rexMalphasEncounter.takeDamage(dmg);
+      const brazierMult = computeMalphasBrazierMultiplier(this.destroyedNarcoticBraziersCount);
+      const hitRes = this.rexMalphasEncounter.takeDamage(Math.round(dmg * brazierMult));
       this.spawnFloatingText(this.rexMalphasGroup.position, `-${hitRes.actualDamage} (FRASCO FATUO)`, '#ff5500');
       this.activeBurnEffects.push({ targetId: 'rex_malphas', ticksLeft: 6, dmgPerTick: 6, timer: 0.5 });
       if (hitRes.transitionedToPhase2) this.triggerRexMalphasPhase2();
@@ -7403,6 +8378,9 @@ export class Oakhaven3DExperience {
         break;
       case 'elowen_cell':
         this.interactWithElowenCell();
+        break;
+      case 'burned_barn_slab':
+        this.interactWithBurnedBarnSlab();
         break;
       case 'crucible_furnace':
         this.interactWithCrucibleFurnace();
@@ -7614,11 +8592,12 @@ export class Oakhaven3DExperience {
         this.moonLightRef.intensity = 3.2;
       }
       this.triggerHolyFlash(1.0);
-      this.spawnFloatingText(this.playerGroup.position, '🌅 ¡ALBA GRIS FORJADA & PACTO DE SHALEM QUEBRADO!', '#ffd700');
+      this.createOrActivateShalemLion();
+      this.spawnFloatingText(this.playerGroup.position, '🌅 ¡ALBA GRIS FORJADA & SHALEM SE ALZA COMO LEÓN DE BRASAS!', '#ffd700');
       this.showDialogueModal(
         '🌅 CAPÍTULO XX (CANON): LA LUZ EN LAS TINIEBLAS & EL SACRIFICIO DE SHALEM 🌅',
-        '«Thomas alza Alba Gris frente al Sol Negro: "¡Solo la Oscuridad que elija amar será la única Luz en las Tinieblas!" Shalem ruge adoptando su forma colosal de León de Brasas Carmesíes y quiebra su pacto milenario: "¡Yo renuncio a mi trono en el Abismo! ¡Vive como un simple gato a su lado, o arde conmigo, Astaroth!" La Gota de Luz y el Fuego Negro se funden en tu hoja (+100% Daño Crítico).»',
-        '✦ CANON ELEGIDO: ALBA GRIS CONSAGRADA • GOLPEA A ASTAROTH PARA ABRIR EL PRIMER AMANECER ✦'
+        '«Thomas alza Alba Gris frente al Sol Negro: "¡Solo la Oscuridad que elija amar será la única Luz en las Tinieblas!" Shalem ruge adoptando su forma colosal de León de Brasas Carmesíes y quiebra su pacto milenario: "¡Yo renuncio a mi trono en el Abismo! ¡Vive como un simple gato a su lado, o arde conmigo, Astaroth!" La Gota de Luz y el Fuego Negro se funden en tu hoja (+100% Daño Crítico) mientras Shalem embiste al Sol Negro.»',
+        '✦ CANON ELEGIDO: ALBA GRIS CONSAGRADA & SHALEM LEÓN ACTIVO • DERROTA A ASTAROTH PARA EL EPÍLOGO ✦'
       );
     } else {
       // Alternative Dark Ending: Eclipse of Ash (with immediate ability to rewind or continue)
@@ -7688,6 +8667,29 @@ export class Oakhaven3DExperience {
     this.canonChapterManager.unlockChapter(10);
   }
 
+  public interactWithBurnedBarnSlab(): void {
+    this.audio.playWillowWhisper?.();
+    if (!this.hasInspectedBurnedBarn) {
+      this.hasInspectedBurnedBarn = true;
+      this.progression.addExp(60);
+      this.canonChapterManager.unlockChapter(8);
+      this.playerStats.posture = Math.min(this.playerStats.maxPosture, this.playerStats.posture + 25);
+      this.spawnFloatingText(new THREE.Vector3(3.8, 0.8, -191.5), '🗡️ ¡MEMORIA DE LA LUNA ROJA! (+60 EXP)', '#d999ff');
+      this.showDialogueModal(
+        '🗡️ EL GRANERO DEL SUR QUEMADO — LA NOCHE DE LA LUNA ROJA (CAP. VIII) 🗡️',
+        '«Bajo las vigas calcinadas del granero donde Khaterine ocultó su pasado, apartas la losa de piedra. Grabados en la roca yacen los nombres de las Nueve Hermanas del Sauce Negro. Khaterine aprieta los puños: "No fue una purga santa, Thomas. Alaric era nuestro aliado; él nos abrió las puertas en la Noche de la Luna Roja para robar el pacto de Malphas y coronarse rey de Londinium sobre las cenizas de mis hermanas."»',
+        '✦ RECOMPENSA: +60 EXP • +25 POSTURA • MEMORIA DE LA LUNA ROJA REVELADA (CAPÍTULO VIII) ✦'
+      );
+      this.updateHUD();
+    } else {
+      this.showDialogueModal(
+        '🗡️ LOSA DEL GRANERO QUEMADO 🗡️',
+        '«Los nombres de las Nueve Hermanas del Sauce Negro permanecen grabados bajo la ceniza. Khaterine guarda silencio, decidida a ajustar cuentas con Alaric en Londinium.»',
+        '✦ CAPÍTULO VIII REGISTRADO EN EL COMPENDIO [N] ✦'
+      );
+    }
+  }
+
   public interactWithRefugeesCart(): void {
     this.audio.playCryptDoor?.();
     if (!this.hasFreedRefugees) {
@@ -7696,18 +8698,18 @@ export class Oakhaven3DExperience {
       this.inventory.addItem(CANONICAL_MATERIALS.ash_purified, 2);
       this.inventory.addItem(CANONICAL_MATERIALS.water_blessed, 2);
       this.canonChapterManager.unlockChapter(11);
-      this.spawnFloatingText(this.playerGroup.position, '🗝️ ¡MARTÍN Y TOBÍAS LIBERADOS! (+75 EXP)', '#ffd700');
+      this.spawnFloatingText(this.playerGroup.position, '🗝️ ¡MARTÍN Y TOBÍAS SE UNEN AL COMBATE! (+75 EXP)', '#a3ffc7');
       this.showDialogueModal(
         '🗝️ CONVOY DE PRISIONEROS — MARTÍN Y TOBÍAS (CAPÍTULO XI) 🗝️',
-        '«Rompes los cerrojos de hierro de la carreta enrejada. Martín el armero y Tobías el leñador emergen agradecidos de entre las cadenas: "¡Bendito seas, Thomas! El Capitán Áureo Vane lleva el edicto del rey Alaric y un escudo de torre impenetrable por el frente. Usa ataques pesados [K] o flechas de plata para quebrar su guardia!"»',
-        '✦ RECOMPENSA: +75 EXP • +2 AGUA BENDITA • +2 CENIZA PURIFICADA ✦'
+        '«Rompes los cerrojos de hierro de la carreta enrejada. Martín el armero y Tobías el leñador empuñan lanzas de hierro y saltan a la calzada: "¡No huiremos, Thomas! ¡Te cubriremos los flancos contra el Capitán Áureo Vane! Mientras distraemos su escudo de torre, fija objetivo con [R] o asesta ataques pesados [K]!"»',
+        '✦ ALIADOS ACTIVOS: MARTÍN Y TOBÍAS FLANQUEAN A VANE (-18 HP) • +75 EXP • +2 AGUA BENDITA • +2 CENIZA ✦'
       );
       this.updateHUD();
     } else {
       this.showDialogueModal(
         '🗝️ CARRETA DE PRISIONEROS LIBERADA 🗝️',
-        '«Martín y Tobías ya han partido a resguardo hacia Oakhaven. Solo queda derrotar al Capitán Áureo Vane para abrir el camino a Londinium.»',
-        '✦ CAPÍTULO XI COMPLETADO ✦'
+        '«Martín y Tobías ya luchan a tu lado sobre el Gran Puente de Piedra, manteniendo abierto el flanco del Capitán Áureo Vane.»',
+        '✦ CAPÍTULO XI COMPLETADO — ALIADOS EN COMBATE ✦'
       );
     }
   }
@@ -7725,21 +8727,41 @@ export class Oakhaven3DExperience {
   public interactWithMirrorGallery(): void {
     this.audio.playGlassShatter?.();
     if (!this.hasClearedMirrorGallery) {
-      this.hasClearedMirrorGallery = true;
-      this.progression.addExp(90);
-      this.canonChapterManager.unlockChapter(15);
-      this.spawnFloatingText(this.playerGroup.position, '🪞 ¡ESPEJO MAESTRO QUEBRADO! (+90 EXP)', '#cc44ff');
-      this.showDialogueModal(
-        '🪞 EL SALÓN DE LOS ESPEJOS — CAPÍTULO XV 🪞',
-        '«Los espejos venecianos proyectan ecos de culpa y humo dorado para quebrar tu voluntad. Al estrellar tu filo contra el cristal maestro, las ilusiones se deshacen en mil esquirlas luminosas revelando el engaño de Alaric.»',
-        '✦ RECOMPENSA: +90 EXP & CAPÍTULO XV DESBLOQUEADO ✦'
-      );
+      this.shatteredGuiltMirrors = Math.min(3, this.shatteredGuiltMirrors + 1);
+      if (this.shatteredGuiltMirrors === 1) {
+        this.progression.addExp(40);
+        this.spawnFloatingText(this.playerGroup.position, '🪞 ¡ESPEJO DE CULPA 1/3 QUEBRADO! (+40 EXP)', '#d999ff');
+        this.showDialogueModal(
+          '🪞 SALÓN DE LOS ESPEJOS — REFLEJO 1 DE 3: LA NOCHE DE LA LUNA ROJA 🪞',
+          '«El primer espejo muestra el granero ardiendo en la Noche de la Luna Roja y una voz susurra a Khaterine: "Tú sobreviviste mientras tus ocho hermanas ardían". Khaterine estrella una flecha abisal contra el cristal: "¡Yo soy su memoria, no su verdugo!"»',
+          '✦ +40 EXP • QUEDAN 2 ESPEJOS DE CULPA (PULSA [E] DE NUEVO PARA ENFRENTAR EL SEGUNDO REFLEJO) ✦'
+        );
+      } else if (this.shatteredGuiltMirrors === 2) {
+        this.progression.addExp(40);
+        this.spawnFloatingText(this.playerGroup.position, '🪞 ¡ESPEJO DE CULPA 2/3 QUEBRADO! (+40 EXP)', '#cc66ff');
+        this.showDialogueModal(
+          '🪞 SALÓN DE LOS ESPEJOS — REFLEJO 2 DE 3: LA SANGRE DE ASTAROTH 🪞',
+          '«El segundo espejo muestra a Thomas coronado de ceniza sobre Oakhaven en llamas: "Llevas la sangre de Astaroth en las venas". Thomas raja el azogue con su espada: "¡Mi sangre es mía, no de mi padre!"»',
+          '✦ +40 EXP • QUEDA EL ESPEJO MAESTRO (PULSA [E] UNA VEZ MÁS PARA QUEBRAR LA ILUSIÓN) ✦'
+        );
+      } else {
+        this.hasClearedMirrorGallery = true;
+        this.progression.addExp(90);
+        this.canonChapterManager.unlockChapter(15);
+        this.triggerHolyFlash(0.65);
+        this.spawnFloatingText(this.playerGroup.position, '🪞 ¡ESPEJO MAESTRO QUEBRADO (3/3)! (+90 EXP)', '#ffd700');
+        this.showDialogueModal(
+          '🪞 EL SALÓN DE LOS ESPEJOS — ESPEJO MAESTRO QUEBRADO (CAPÍTULO XV) 🪞',
+          '«El Espejo Maestro proyecta a Elowen desvaneciéndose en sal, pero Shalem salta sobre el marco dorado y Thomas lo parte en mil esquirlas luminosas. ¡Las ilusiones de Alaric se derrumban y la Ley del Deseo pierde su poder sobre vosotros!»',
+          '✦ RECOMPENSA: +90 EXP & CAPÍTULO XV DESBLOQUEADO ✦'
+        );
+      }
       this.updateHUD();
     } else {
       this.showDialogueModal(
         '🪞 EL SALÓN DE LOS ESPEJOS 🪞',
-        '«Los cristales hechos añicos ya no pueden ocultarte la verdad del linaje del Sauce Negro.»',
-        '✦ CAPÍTULO XV COMPLETADO ✦'
+        '«Los tres espejos venecianos hechos añicos ya no pueden ocultarte la verdad del linaje del Sauce Negro.»',
+        '✦ CAPÍTULO XV COMPLETADO (3/3 ESPEJOS QUEBRADOS) ✦'
       );
     }
   }
@@ -7765,11 +8787,7 @@ export class Oakhaven3DExperience {
   public interactWithBlackSunCore(): void {
     this.audio.playCosmicChime?.();
     if (this.astarothEncounter.isDefeated) {
-      this.showDialogueModal(
-        '🌅 EL PRIMER AMANECER DE ALBION — EPÍLOGO CANÓNICO 🌅',
-        '«Donde antes ardía el Sol Negro de Astaroth ahora solo resplandece la claridad del alba. Has recorrido los 20 capítulos del canon de The Light in the Darkness. Puedes abrir el Compendio Canónico [N] en cualquier momento para revivir cualquier acto.»',
-        '👑 CANON COMPLETO — 20/20 CAPÍTULOS 👑'
-      );
+      this.triggerFirstDawnPlayableEpilogue();
     } else {
       this.showDialogueModal(
         '🌌 EL SOL DEL ABISMO 🌌',
@@ -8359,13 +9377,19 @@ export class Oakhaven3DExperience {
         targetFound = 'finisher';
         badgeText = '⚡ [E] ¡REMATAR AL GUARDIÁN DEL CRISOL!';
         badgeColor = '#ffd700';
+      } else if (pPos.distanceTo(new THREE.Vector3(3.8, 0, -191.5)) <= 2.8) {
+        targetFound = 'burned_barn_slab';
+        badgeText = this.hasInspectedBurnedBarn
+          ? '🗡️ [E] LOSA DEL GRANERO QUEMADO (LUNA ROJA)'
+          : '🗡️ [E] INSPECCIONAR LOSA DEL GRANERO QUEMADO (CAP. VIII)';
+        badgeColor = '#d999ff';
       } else if (pPos.z >= -187.5 && Math.abs(pPos.x) <= 3.0) {
         targetFound = 'belltower_to_forest';
         badgeText = '🌿 [E] DESCENDER AL BOSQUE DEL SAUCE NEGRO';
         badgeColor = '#bb44ff';
-      } else if (pPos.distanceTo(new THREE.Vector3(-5.5, 0, -202)) <= 3.4) {
+      } else if (pPos.distanceTo(new THREE.Vector3(-5.0, 2.8, -202)) <= 3.6) {
         targetFound = 'elowen_cell';
-        badgeText = this.hasCollectedWillowBird ? '🔔 [E] INSPECCIONAR CELDA DE SAL' : '🕊️ [E] RECOGER PÁJARO DE SAUCE (CELDA DE ELOWEN)';
+        badgeText = this.hasCollectedWillowBird ? '🔔 [E] INSPECCIONAR CELDA DE SAL (+2.8m)' : '🕊️ [E] RECOGER PÁJARO DE SAUCE (CELDA ELEVADA DE ELOWEN)';
         badgeColor = '#ffd700';
       } else if (pPos.distanceTo(new THREE.Vector3(0, 0, -214)) <= 3.6) {
         if (this.crucibleGuardianEncounter.isDefeated && pPos.z <= -215.5) {
@@ -8394,7 +9418,7 @@ export class Oakhaven3DExperience {
         badgeColor = '#ffd700';
       } else if (pPos.distanceTo(new THREE.Vector3(-2.6, 0, -249)) <= 3.5) {
         targetFound = 'refugees_cart';
-        badgeText = this.hasFreedRefugees ? '🗝️ [E] CARRETA DE MARTÍN Y TOBÍAS (LIBERADOS)' : '🗝️ [E] LIBERAR A MARTÍN Y TOBÍAS DEL CONVOY';
+        badgeText = this.hasFreedRefugees ? '🗝️ [E] CARRETA DE MARTÍN Y TOBÍAS (EN COMBATE)' : '🗝️ [E] LIBERAR A MARTÍN Y TOBÍAS DEL CONVOY';
         badgeColor = '#ffd700';
       } else if (pPos.z <= -274.5 && Math.abs(pPos.x) <= 3.8) {
         targetFound = 'vane_gate';
@@ -8417,7 +9441,9 @@ export class Oakhaven3DExperience {
         badgeColor = '#cc44ff';
       } else if (pPos.distanceTo(new THREE.Vector3(-7.0, 0, -320)) <= 3.8) {
         targetFound = 'mirror_gallery';
-        badgeText = this.hasClearedMirrorGallery ? '🪞 [E] SALÓN DE LOS ESPEJOS (QUEBRADO)' : '🪞 [E] QUEBRAR EL ESPEJO MAESTRO (SALÓN DE ESPEJOS)';
+        badgeText = this.hasClearedMirrorGallery
+          ? '🪞 [E] SALÓN DE LOS ESPEJOS (3/3 QUEBRADOS)'
+          : `🪞 [E] QUEBRAR ESPEJO DE CULPA (${this.shatteredGuiltMirrors}/3 — SALÓN DE ESPEJOS)`;
         badgeColor = '#cc44ff';
       } else if (pPos.distanceTo(new THREE.Vector3(0, 0, -336)) <= 4.0) {
         targetFound = 'astral_throne';
@@ -8431,19 +9457,20 @@ export class Oakhaven3DExperience {
     // 15. Act V: Inverted Cathedral Interactions
     if (!targetFound && this.dungeonAreaManager.currentArea === 'inverted_cathedral') {
       const distAstarothHoriz = new THREE.Vector2(pPos.x - this.astarothGroup.position.x, pPos.z - this.astarothGroup.position.z).length();
+      const altarPos = new THREE.Vector3(0, computeWorldTerrainHeight('inverted_cathedral', 0, -378), -378);
       if (this.astarothEncounter.state === 'STUNNED' && distAstarothHoriz <= 4.8) {
         targetFound = 'finisher';
         badgeText = '✨ [E] ¡ASESTAR GOLPE FINAL DE ALBA GRIS A ASTAROTH!';
         badgeColor = '#88eeff';
-      } else if (pPos.distanceTo(new THREE.Vector3(0, 0, -378)) <= 3.6) {
+      } else if (pPos.distanceTo(altarPos) <= 3.8) {
         targetFound = 'dawn_grey_altar';
         badgeText = this.hasForgedAlbaGris
           ? '🌌 [E] ALTAR DE LA COMUNIÓN — DILEMA DEL SOL NEGRO (CAP. XX)'
           : '🌌 [E] RECIBIR LA GOTA DE LUZ & ELEGIR EL DESTINO (CAP. XX)';
         badgeColor = '#88eeff';
-      } else if (distAstarothHoriz <= 5.0 && this.astarothEncounter.isDefeated) {
+      } else if (distAstarothHoriz <= 5.2 && this.astarothEncounter.isDefeated) {
         targetFound = 'black_sun_core';
-        badgeText = '🌅 [E] CONTEMPLAR EL PRIMER AMANECER DE ALBION';
+        badgeText = '🌅 [E] ABRIR EL EPÍLOGO DEL PRIMER AMANECER EN OAKHAVEN';
         badgeColor = '#ffd700';
       }
     }
@@ -9293,6 +10320,11 @@ export class Oakhaven3DExperience {
     } else if (area === 'belltower_summit') {
       if (!this.crucibleGuardianEncounter.isDefeated) candidates.push({ group: this.crucibleGuardianGroup, name: 'Guardián del Crisol' });
     } else if (area === 'great_stone_bridge') {
+      for (const guard of this.bridgeGuards) {
+        if (!guard.isDead && !guard.fallingToAbyss) {
+          candidates.push({ group: guard.group, name: 'Guardia del Puente' });
+        }
+      }
       if (!this.captainVaneEncounter.isDefeated) candidates.push({ group: this.captainVaneGroup, name: 'Capitán Áureo Vane' });
     } else if (area === 'londinium_citadel') {
       if (!this.rexMalphasEncounter.isDefeated) candidates.push({ group: this.rexMalphasGroup, name: 'Rex Malphas (Alaric)' });
@@ -9362,7 +10394,11 @@ export class Oakhaven3DExperience {
     let shalemTargetPos: THREE.Vector3 | undefined;
 
     if (area === 'surface') {
-      if (pPos.x > 4.6 && pPos.z >= 0.4 && pPos.z <= 9.6) {
+      if (this.oakhavenNarrativePhase === 'FIRST_DAWN_EPILOGUE') {
+        sectorLabel = `🌅 EPÍLOGO: COLINA DEL VIEJO ROBLE (+${pPos.y.toFixed(1)}m — PRIMER AMANECER)`;
+        guideLabel = '🐾 Shalem ronronea en paz bajo el Viejo Roble • 20/20 Capítulos Completos [N]';
+        shalemTargetPos = new THREE.Vector3(9.5, 2.2, 4.5);
+      } else if (pPos.x > 4.6 && pPos.z >= 0.4 && pPos.z <= 9.6) {
         sectorLabel = `📍 COLINA DEL VIEJO ROBLE (+${pPos.y.toFixed(1)}m — CAP. II)`;
         guideLabel = !this.hasDeliveredBirdOnOakHill
           ? '🐈‍⬛ Shalem guía → Entrega el Pájaro de Sauce a Elowen [E] junto al Viejo Roble'
@@ -9400,29 +10436,39 @@ export class Oakhaven3DExperience {
         ? '🐈‍⬛ Shalem guía → Usa fuego contra el Acechador de Raíces y reclama el Colmillo [E]'
         : '🐈‍⬛ Shalem guía → Asciende por el sendero norte al Campanario del Sur (Acto II) [E]';
     } else if (area === 'belltower_summit') {
-      sectorLabel = '📍 CAMPANARIO DEL SUR & GRAN CRISOL (ACTO II — CAP. VII–IX)';
-      guideLabel = !this.crucibleGuardianEncounter.isDefeated
-        ? '🐈‍⬛ Consejo Táctico → Lanza tu espada [T] al Gran Crisol para derramar bronce sobre el Guardián'
-        : '🐈‍⬛ Shalem guía → Avanza al norte del Crisol hacia el Gran Puente de Piedra (Acto III) [E]';
+      sectorLabel = pPos.y > 0.4
+        ? `📍 CELDA DE SAL ELEVADA (+${pPos.y.toFixed(1)}m — CAP. VII–IX)`
+        : '📍 CAMPANARIO DEL SUR & GRANERO QUEMADO (ACTO II — CAP. VII–IX)';
+      guideLabel = !this.hasInspectedBurnedBarn
+        ? '🐈‍⬛ Shalem guía → Inspecciona la Losa del Granero Quemado [E] al sureste y sube por la rampa oeste (+2.8m)'
+        : (!this.crucibleGuardianEncounter.isDefeated
+          ? '🐈‍⬛ Consejo Táctico → Lanza tu espada [T] al Gran Crisol para derramar bronce sobre el Guardián'
+          : '🐈‍⬛ Shalem guía → Avanza al norte del Crisol hacia el Gran Puente de Piedra (Acto III) [E]');
     } else if (area === 'great_stone_bridge') {
-      sectorLabel = '📍 GRAN PUENTE DE PIEDRA (ACTO III — CAP. X–XIII)';
-      guideLabel = !this.captainVaneEncounter.isDefeated
-        ? '🐈‍⬛ Consejo Táctico → Libera a Martín y Tobías [E] y flanquea el escudo de Vane con Lock-On [R]'
-        : '🐈‍⬛ Shalem guía → Cruza el Portón hacia Londinium — La Ciudadela Dorada (Acto IV) [E]';
+      sectorLabel = '📍 GRAN PUENTE DE PIEDRA — BARANDILLAS ROTAS (ACTO III — CAP. X–XIII)';
+      guideLabel = !this.hasFreedRefugees
+        ? '🐈‍⬛ Consejo Táctico → Empuja guardias al río por las brechas [K] y libera a Martín y Tobías [E]'
+        : (!this.captainVaneEncounter.isDefeated
+          ? '🐈‍⬛ Aliados Activos → Martín y Tobías flanquean a Vane; fija objetivo [R] y golpea su flanco abierto'
+          : '🐈‍⬛ Shalem guía → Cruza el Portón hacia Londinium — La Ciudadela Dorada (Acto IV) [E]');
     } else if (area === 'londinium_citadel') {
-      sectorLabel = '📍 LONDINIUM — CIUDADELA DORADA (ACTO IV — CAP. XIV–XVII)';
-      guideLabel = !this.rexMalphasEncounter.isDefeated
-        ? '🐈‍⬛ Consejo Táctico → Quiebra el Espejo Maestro [E] y desata la Sinergia Tri-Héroe [E] contra Malphas'
-        : '🐈‍⬛ Shalem guía → Desciende desde el Trono Astral a la Catedral Invertida (Acto V) [E]';
+      sectorLabel = `📍 LONDINIUM — CIUDADELA DORADA (BRASEROS: ${this.destroyedNarcoticBraziersCount}/3 | ESPEJOS: ${this.shatteredGuiltMirrors}/3)`;
+      guideLabel = this.destroyedNarcoticBraziersCount < 3
+        ? '🐈‍⬛ Consejo Táctico → Destruye los 3 Braseros Narcóticos [J]/[K] para despertar ciudadanos y debilitar a Malphas'
+        : (!this.hasClearedMirrorGallery
+          ? `🐈‍⬛ Salón de Espejos → Quiebra los 3 Espejos de Culpa [E] (${this.shatteredGuiltMirrors}/3) antes de desafiar a Malphas`
+          : (!this.rexMalphasEncounter.isDefeated
+            ? '🐈‍⬛ Consejo Táctico → Desata la Sinergia Tri-Héroe [E] contra Rex Malphas (+45% daño sin incienso)'
+            : '🐈‍⬛ Shalem guía → Desciende desde el Trono Astral a la Catedral Invertida (Acto V) [E]'));
     } else if (area === 'inverted_cathedral') {
       sectorLabel = this.oakhavenNarrativePhase === 'FIRST_DAWN_EPILOGUE'
-        ? '📍 CATEDRAL INVERTIDA — EL PRIMER AMANECER (CAP. XX)'
-        : '📍 LA CATEDRAL INVERTIDA & EL SOL NEGRO (ACTO V — CAP. XVIII–XX)';
+        ? `📍 CATEDRAL INVERTIDA (+${pPos.y.toFixed(1)}m) — LEÓN DE BRASAS ACTIVO (CAP. XX)`
+        : `📍 LA CATEDRAL INVERTIDA (+${pPos.y.toFixed(1)}m — ESCALADA FLOTANTE ACTO V)`;
       guideLabel = !this.hasForgedAlbaGris
-        ? '🐈‍⬛ Shalem guía → Interactúa con el Altar de la Comunión [E] para elegir en el Dilema del Sol Negro'
+        ? '🐈‍⬛ Shalem guía → Asciende los peldaños flotantes [ESPACIO] hasta el Altar de la Comunión [E]'
         : (!this.astarothEncounter.isDefeated
-          ? '🐈‍⬛ Shalem guía → Derrota a Astaroth con Alba Gris (+100% Daño Crítico)'
-          : '🐈‍⬛ Epílogo Canónico → Pulsa [Y] para contemplar el Primer Amanecer en la Colina del Viejo Roble');
+          ? '🦁 Shalem León de Brasas ataca a Astaroth • Golpea con Alba Gris (+100% Crítico)'
+          : '🌅 Epílogo Jugable → Interactúa con el Núcleo del Sol [E] para el Primer Amanecer en el Viejo Roble');
     }
 
     if (this.currentSubSectorLabel !== sectorLabel) {
@@ -9466,6 +10512,7 @@ export class Oakhaven3DExperience {
     this.updateCryptAmbush(delta);
     this.updateRootProwler(delta);
     this.updateCrucibleGuardian(delta);
+    this.updateBridgeGuardsAndAllies(delta);
     this.updateCaptainVane(delta);
     this.updateRexMalphas(delta);
     this.updateAstarothTitan(delta);
@@ -9853,7 +10900,8 @@ export class Oakhaven3DExperience {
       isAttacking: this.isPlayerAttacking,
       isHeavyAttack: this.attackCooldown > 0.3,
       isArmed: this.playerStats.isArmed,
-      isDefeated: this.isPlayerDefeated
+      isDefeated: this.isPlayerDefeated,
+      windSway: this.dungeonAreaManager.currentArea === 'great_stone_bridge' ? 1.0 : 0
     };
     if (this.thomasRig) this.thomasRig.update(rigInput);
     if (this.khaterineRig) this.khaterineRig.update(rigInput);
@@ -11576,11 +12624,13 @@ export class Oakhaven3DExperience {
       }
     }
 
+    const isOnSurface = this.dungeonAreaManager.currentArea === 'surface';
+
     if (this.enemyHpBarFill) {
       const ePct = Math.max(0, (this.enemyHealth / this.enemyMaxHealth) * 100);
       this.enemyHpBarFill.style.width = `${ePct}%`;
       const dist = this.playerGroup.position.distanceTo(this.enemyGroup.position);
-      if (this.enemyHealth > 0 && dist < 12) {
+      if (isOnSurface && this.enemyHealth > 0 && dist < 12) {
         if (this.enemyHpBarContainer) this.enemyHpBarContainer.style.display = 'block';
       } else {
         if (this.enemyHpBarContainer) this.enemyHpBarContainer.style.display = 'none';
@@ -11591,7 +12641,7 @@ export class Oakhaven3DExperience {
       const cPct = Math.max(0, (this.cultistHealth / this.cultistMaxHealth) * 100);
       this.cultistHpBarFill.style.width = `${cPct}%`;
       const dist = this.playerGroup.position.distanceTo(this.cultistGroup.position);
-      if (this.cultistHealth > 0 && dist < 12) {
+      if (isOnSurface && this.cultistHealth > 0 && dist < 12) {
         if (this.cultistHpBarContainer) this.cultistHpBarContainer.style.display = 'block';
       } else {
         if (this.cultistHpBarContainer) this.cultistHpBarContainer.style.display = 'none';
@@ -11602,7 +12652,7 @@ export class Oakhaven3DExperience {
       const zPct = Math.max(0, (this.zealotHealth / this.zealotMaxHealth) * 100);
       this.zealotHpBarFill.style.width = `${zPct}%`;
       const dist = this.playerGroup.position.distanceTo(this.zealotGroup.position);
-      if (this.zealotHealth > 0 && dist < 13) {
+      if (isOnSurface && this.zealotHealth > 0 && dist < 13) {
         if (this.zealotHpBarContainer) this.zealotHpBarContainer.style.display = 'block';
       } else {
         if (this.zealotHpBarContainer) this.zealotHpBarContainer.style.display = 'none';
@@ -11613,7 +12663,7 @@ export class Oakhaven3DExperience {
       const sPct = Math.max(0, (this.skeletonHealth / this.skeletonMaxHealth) * 100);
       this.skeletonHpBarFill.style.width = `${sPct}%`;
       const dist = this.playerGroup.position.distanceTo(this.skeletonGroup.position);
-      if (this.skeletonHealth > 0 && dist < 13) {
+      if (isOnSurface && this.skeletonHealth > 0 && dist < 13) {
         if (this.skeletonHpBarContainer) this.skeletonHpBarContainer.style.display = 'block';
       } else {
         if (this.skeletonHpBarContainer) this.skeletonHpBarContainer.style.display = 'none';
@@ -12136,6 +13186,17 @@ export class Oakhaven3DExperience {
           0.55,
           'idle',
           { idle: { url: '/assets/props/prop_monumental_sarcophagus.png', frames: 3, fps: 6, loop: false } },
+          false
+        );
+      } else if (prop.id.startsWith('narcotic_brazier_')) {
+        this.visualDesigns.attachAnimatedBillboard(
+          `prop_${prop.id}`,
+          prop.mesh,
+          1.35,
+          1.9,
+          0.55,
+          'idle',
+          { idle: { url: '/assets/props/prop_soul_brazier.png', frames: 4, fps: 8, loop: true } },
           false
         );
       }

@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { GothicArticulatedRig3D, ClipEventType3D } from '../../src/presentation/three/GothicArticulatedRig3D';
+import { GothicArticulatedRig3D, ClipEventType3D, ArticulatedRigArchetype3D } from '../../src/presentation/three/GothicArticulatedRig3D';
+import {
+  computeWorldTerrainHeight,
+  isBridgeAbyssDropZone,
+  computeMalphasBrazierMultiplier
+} from '../../src/presentation/three/Oakhaven3DExperience';
 
 describe('Camera & Input Architecture (Vice City & OpenLara Solution)', () => {
   describe('Shortest Angular Arc & Turning Math', () => {
@@ -237,20 +242,78 @@ describe('Camera & Input Architecture (Vice City & OpenLara Solution)', () => {
   });
 
   describe('Multi-Sector Oakhaven Terrain Elevation (Colina del Viejo Roble +2.2m)', () => {
-    function getTerrainHeightAt(x: number, z: number): number {
-      if (x > 4.5 && z >= 0.4 && z <= 9.6) {
-        const t = THREE.MathUtils.clamp((x - 4.5) / 3.9, 0, 1);
-        const smooth = t * t * (3 - 2 * t);
-        return smooth * 2.2;
-      }
-      return 0;
-    }
-
     it('returns 0m on the main Oakhaven street and rises smoothly to +2.2m on Old Oak Hill', () => {
-      expect(getTerrainHeightAt(0, 4.0)).toBe(0);
-      expect(getTerrainHeightAt(4.5, 5.0)).toBe(0);
-      expect(getTerrainHeightAt(6.45, 5.0)).toBeCloseTo(1.1, 2);
-      expect(getTerrainHeightAt(9.5, 5.0)).toBeCloseTo(2.2, 4);
+      expect(computeWorldTerrainHeight('surface', 0, 4.0)).toBe(0);
+      expect(computeWorldTerrainHeight('surface', 4.5, 5.0)).toBe(0);
+      expect(computeWorldTerrainHeight('surface', 6.45, 5.0)).toBeCloseTo(1.1, 2);
+      expect(computeWorldTerrainHeight('surface', 9.5, 5.0)).toBeCloseTo(2.2, 4);
+    });
+  });
+
+  describe('Phases 2, 3 & 4 World Architecture (Acts II–V Elevation, Bridge Abyss, Narcotic Braziers & Boss Rigs)', () => {
+    it('elevates Act II helical western stone stairs smoothly up to +2.8m at Elowen Salt Cell', () => {
+      expect(computeWorldTerrainHeight('belltower_summit', 0, -195)).toBe(0);
+      expect(computeWorldTerrainHeight('belltower_summit', -4.5, -192.0)).toBe(0);
+      expect(computeWorldTerrainHeight('belltower_summit', -4.5, -196.25)).toBeCloseTo(1.4, 2);
+      expect(computeWorldTerrainHeight('belltower_summit', -5.0, -202.0)).toBeCloseTo(2.8, 4);
+    });
+
+    it('elevates Act V Inverted Cathedral floating marble slabs progressively to +2.4m', () => {
+      expect(computeWorldTerrainHeight('inverted_cathedral', 0, -366)).toBe(0);
+      expect(computeWorldTerrainHeight('inverted_cathedral', 0, -382)).toBeCloseTo(1.2, 2);
+      expect(computeWorldTerrainHeight('inverted_cathedral', 0, -396)).toBeCloseTo(2.4, 4);
+    });
+
+    it('detects Act III Great Stone Bridge broken balustrade abyss knock-off zones accurately', () => {
+      // Center walkway is safe
+      expect(isBridgeAbyssDropZone(0, -245)).toBe(false);
+      // Pushed past |x| >= 4.1 inside broken balustrade gap 1 (z ∈ [-249, -241]) or gap 2 (z ∈ [-265, -255]) -> abyss!
+      expect(isBridgeAbyssDropZone(-4.15, -245)).toBe(true);
+      expect(isBridgeAbyssDropZone(4.2, -260)).toBe(true);
+      // Intact wall zone at |x| = 4.15 stays blocked unless pushed past outer parapet edge |x| >= 4.3
+      expect(isBridgeAbyssDropZone(4.15, -252)).toBe(false);
+      expect(isBridgeAbyssDropZone(4.35, -252)).toBe(true);
+    });
+
+    it('amplifies Act IV damage dealt to Rex Malphas by +15% per destroyed narcotic brazier (up to +45%)', () => {
+      expect(computeMalphasBrazierMultiplier(0)).toBeCloseTo(1.0, 4);
+      expect(computeMalphasBrazierMultiplier(1)).toBeCloseTo(1.15, 4);
+      expect(computeMalphasBrazierMultiplier(2)).toBeCloseTo(1.30, 4);
+      expect(computeMalphasBrazierMultiplier(3)).toBeCloseTo(1.45, 4);
+      expect(computeMalphasBrazierMultiplier(9)).toBeCloseTo(1.45, 4);
+    });
+
+    it('builds Phase 4 articulated 3D rigs for Act II–IV bosses/allies and reacts to lateral bridge windSway', () => {
+      const archetypes: ArticulatedRigArchetype3D[] = [
+        'crucible_guardian',
+        'captain_vane',
+        'rex_malphas',
+        'bridge_guard',
+        'martin_ally',
+        'tobias_ally'
+      ];
+
+      for (const archetype of archetypes) {
+        const rig = new GothicArticulatedRig3D(archetype);
+        expect(rig.nodes.weaponSocketR.parent).toBe(rig.nodes.forearmR);
+        expect(rig.nodes.weaponSocketL.parent).toBe(rig.nodes.forearmL);
+      }
+
+      const vaneCalm = new GothicArticulatedRig3D('captain_vane');
+      const vaneWind = new GothicArticulatedRig3D('captain_vane');
+      vaneCalm.update({
+        delta: 0.05, elapsedTime: 1.0, planarSpeed: 0, isMoving: false,
+        isDodging: false, isGuarding: true, isAttacking: false, isHeavyAttack: false,
+        isArmed: true, isDefeated: false, windSway: 0
+      });
+      vaneWind.update({
+        delta: 0.05, elapsedTime: 1.0, planarSpeed: 0, isMoving: false,
+        isDodging: false, isGuarding: true, isAttacking: false, isHeavyAttack: false,
+        isArmed: true, isDefeated: false, windSway: 1.0
+      });
+
+      expect(vaneWind.nodes.capeGroup.rotation.x).toBeGreaterThan(vaneCalm.nodes.capeGroup.rotation.x);
+      expect(Math.abs(vaneWind.nodes.capeGroup.rotation.z)).toBeGreaterThan(0);
     });
   });
 });
