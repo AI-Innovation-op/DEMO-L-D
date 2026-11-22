@@ -12,6 +12,7 @@ import {
 } from '../../src/presentation/three/Oakhaven3DExperience';
 import { HudCompactController3D } from '../../src/presentation/three/HudCompactController3D';
 import { CombatSpectacleVfx3D } from '../../src/presentation/three/CombatSpectacleVfx3D';
+import { GothicArchitectureBuilder3D } from '../../src/presentation/three/GothicArchitectureBuilder3D';
 
 describe('Camera & Input Architecture (Vice City & OpenLara Solution)', () => {
   describe('Shortest Angular Arc & Turning Math', () => {
@@ -479,6 +480,38 @@ describe('Camera & Input Architecture (Vice City & OpenLara Solution)', () => {
       // Clean dispose wipes everything
       vfx.dispose();
       expect(vfx.activeEffectCount).toBe(0);
+    });
+  });
+
+  describe('Gothic Architectural Detail & Living Atmosphere Across Acts I–V (GothicArchitectureBuilder3D)', () => {
+    it('builds pointed arches, stained-glass rose windows, gears, banners, torches, and monoliths across all 5 Acts', () => {
+      const scene = new THREE.Scene();
+      const act2 = new THREE.Group();
+      const act3 = new THREE.Group();
+      const act4 = new THREE.Group();
+      const act5 = new THREE.Group();
+
+      const builder = new GothicArchitectureBuilder3D();
+      builder.enhanceOakhavenSanJudeAct1(scene);
+      builder.enhanceBelltowerAct2(act2);
+      builder.enhanceGreatStoneBridgeAct3(act3);
+      builder.enhanceLondiniumCitadelAct4(act4);
+      builder.enhanceInvertedCathedralAct5(act5);
+
+      const stats = builder.getStats();
+      expect(stats.archCount).toBeGreaterThanOrEqual(20);
+      expect(stats.stainedGlassCount).toBeGreaterThanOrEqual(6);
+      expect(stats.torchFlameCount).toBeGreaterThanOrEqual(20);
+      expect(stats.animatedGearCount).toBeGreaterThanOrEqual(4);
+      expect(stats.bannerCount).toBe(6);
+      expect(stats.floatingMonolithCount).toBe(8);
+
+      // Verify living architecture animations advance smoothly without error
+      expect(() => {
+        for (let i = 1; i <= 10; i++) {
+          builder.update(i * 0.1, 0.05);
+        }
+      }).not.toThrow();
     });
   });
 });

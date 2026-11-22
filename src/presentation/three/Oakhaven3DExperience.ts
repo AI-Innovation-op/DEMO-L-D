@@ -46,6 +46,7 @@ import {
 } from './GothicModelLoader3D';
 import { HudCompactController3D } from './HudCompactController3D';
 import { CombatSpectacleVfx3D } from './CombatSpectacleVfx3D';
+import { GothicArchitectureBuilder3D } from './GothicArchitectureBuilder3D';
 
 export interface CombatStats3D {
   health: number;
@@ -566,6 +567,7 @@ export class Oakhaven3DExperience {
 
   // 3D Combat Spectacle, Boss Telegraphs, Meteors & Hitstop Engine
   private combatVfx!: CombatSpectacleVfx3D;
+  private gothicArch: GothicArchitectureBuilder3D = new GothicArchitectureBuilder3D();
 
   // Arsenal & Munitions Manager
   private arsenalManager: ArsenalManager = new ArsenalManager();
@@ -638,6 +640,7 @@ export class Oakhaven3DExperience {
     // 4. Build Environment & World
     this.createLighting();
     this.createStreetEnvironment();
+    this.gothicArch.enhanceOakhavenSanJudeAct1(this.scene);
     this.createOldOakHillAndVillagers();
     this.createSceneryProps();
     this.createEmbers();
@@ -3189,6 +3192,7 @@ export class Oakhaven3DExperience {
     belltowerLight.position.set(0, 5.0, 0);
     this.belltowerGroup.add(belltowerLight);
 
+    this.gothicArch.enhanceBelltowerAct2(this.belltowerGroup);
     this.scene.add(this.belltowerGroup);
   }
 
@@ -3428,6 +3432,7 @@ export class Oakhaven3DExperience {
     riverLight.position.set(0, -3.0, 0);
     this.greatStoneBridgeGroup.add(riverLight);
 
+    this.gothicArch.enhanceGreatStoneBridgeAct3(this.greatStoneBridgeGroup);
     this.scene.add(this.greatStoneBridgeGroup);
   }
 
@@ -3630,6 +3635,7 @@ export class Oakhaven3DExperience {
     astralLight.position.set(0, 5.5, -6);
     this.londiniumCitadelGroup.add(astralLight);
 
+    this.gothicArch.enhanceLondiniumCitadelAct4(this.londiniumCitadelGroup);
     this.scene.add(this.londiniumCitadelGroup);
   }
 
@@ -3770,6 +3776,7 @@ export class Oakhaven3DExperience {
     abyssLight.position.set(0, 6.0, 0);
     this.invertedCathedralGroup.add(abyssLight);
 
+    this.gothicArch.enhanceInvertedCathedralAct5(this.invertedCathedralGroup);
     this.scene.add(this.invertedCathedralGroup);
   }
 
@@ -12115,6 +12122,7 @@ export class Oakhaven3DExperience {
     this.checkShalemProximity();
     this.updateBurnEffects(delta);
     this.combatVfx?.update(rawDelta);
+    this.gothicArch.update(this.clock.elapsedTime, rawDelta);
     this.updateScreenPostFx(rawDelta);
     this.updateOfficial3DVisualStates();
     this.visualDesigns.update(delta, this.camera);

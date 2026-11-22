@@ -6,7 +6,9 @@ export type GothicSurfacePattern =
   | 'charred_wood'
   | 'veined_marble'
   | 'forged_metal'
-  | 'woven_cloth';
+  | 'woven_cloth'
+  | 'stained_glass'
+  | 'carved_obsidian';
 
 /**
  * Generates deterministic procedural PBR textures and bump maps on HTMLCanvasElement
@@ -135,6 +137,56 @@ export class GothicMaterialLibrary3D {
         ctx.moveTo(0, (i * 17) % h);
         ctx.bezierCurveTo(w * 0.3, (i * 29) % h, w * 0.7, (i * 43) % h, w, (i * 19 + 40) % h);
         ctx.stroke();
+      }
+    } else if (pattern === 'stained_glass') {
+      // Gothic cathedral stained-glass tracery with jewel panes and dark lead cames
+      const jewelColors = ['#8c2be2', '#d4af37', '#cc2255', '#22aadd', '#5522aa', '#ff7722'];
+      const cell = 16;
+      for (let y = 0; y < h; y += cell) {
+        for (let x = 0; x < w; x += cell) {
+          const idx = Math.abs(Math.floor(x / cell) * 3 + Math.floor(y / cell) * 5) % jewelColors.length;
+          ctx.fillStyle = jewelColors[idx];
+          ctx.fillRect(x + 1, y + 1, cell - 2, cell - 2);
+          ctx.strokeStyle = '#120a1a';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x, y, cell, cell);
+        }
+      }
+      // Pointed gothic lancet arch & rose rosette center lead framing
+      ctx.strokeStyle = '#0c0612';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(w * 0.5, h * 0.35, w * 0.24, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = '#ffd700';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(w * 0.5, h * 0.35, w * 0.14, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (pattern === 'carved_obsidian') {
+      // Dark volcanic ashlar carved with geometric abyssal runes
+      ctx.fillStyle = '#3a3245';
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = '#140e1c';
+      ctx.lineWidth = 2.5;
+      for (let y = 0; y < h; y += 32) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+      }
+      ctx.strokeStyle = '#9a82ba';
+      ctx.lineWidth = 1.4;
+      for (let y = 16; y < h; y += 32) {
+        for (let x = 16; x < w; x += 32) {
+          ctx.beginPath();
+          ctx.moveTo(x, y - 9);
+          ctx.lineTo(x + 9, y);
+          ctx.lineTo(x, y + 9);
+          ctx.lineTo(x - 9, y);
+          ctx.closePath();
+          ctx.stroke();
+        }
       }
     }
   }
