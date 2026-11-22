@@ -15,6 +15,11 @@ import { CatacombInquisitor } from '../../domain/encounters/CatacombInquisitor';
 import { RootProwler } from '../../domain/encounters/RootProwler';
 import { CrucibleGuardian, CaptainVane, RexMalphas, AstarothTitan } from '../../domain/encounters/ActBosses';
 import { CanonChapterManager } from '../../domain/story/CanonChapterCompendium';
+import {
+  resolveActiveCampaignObjective,
+  CAMPAIGN_PROLOGUE_SLIDES,
+  CampaignObjective3D
+} from '../../domain/story/CampaignSequence3D';
 import { ArsenalManager, ArrowType } from '../../domain/combat/ArsenalManager';
 import { ThreeVisualDesignSystem } from './ThreeVisualDesignSystem';
 import { VISUAL_PACK_3D_CONCEPTS } from '../assets/VisualPackCatalog';
@@ -106,7 +111,7 @@ export function computeMalphasBrazierMultiplier(destroyedBraziers: number): numb
   return 1 + clamped * 0.15;
 }
 
-export type InputContext = 'gameplay' | 'dialogue' | 'inventory' | 'skillTree' | 'alchemy' | 'compendium' | 'designs' | 'moralDilemma' | 'defeated';
+export type InputContext = 'gameplay' | 'prologue' | 'dialogue' | 'inventory' | 'skillTree' | 'alchemy' | 'compendium' | 'designs' | 'moralDilemma' | 'defeated';
 
 export class Oakhaven3DExperience {
   private container: HTMLElement;
@@ -465,6 +470,28 @@ export class Oakhaven3DExperience {
   private epilogueFlowersGroup?: THREE.Group;
   private bossRigs: Partial<Record<'crucible' | 'vane' | 'malphas', GothicArticulatedRig3D>> = {};
 
+  // Sequential 3D Story Campaign Director (Prologue -> Chapters I-XX -> First Dawn Epilogue)
+  private hasVisitedApothecary3D: boolean = false;
+  private isPrologueOpen: boolean = false;
+  private prologueSlideIndex: number = 0;
+  private prologueModalEl?: HTMLDivElement;
+  private chapterBannerEl?: HTMLDivElement;
+  private chapterBannerTimer: number = 0;
+  private announcedChapterIds: Set<number> = new Set();
+  private storyBeaconGroup?: THREE.Group;
+  private storyBeaconBeamMat?: THREE.MeshBasicMaterial;
+  private storyBeaconDiamond?: THREE.Mesh;
+  private storyBeaconRingMat?: THREE.MeshBasicMaterial;
+  private storyBeaconLight?: THREE.PointLight;
+  private activeCampaignObjective?: CampaignObjective3D;
+  private actTransitionPortals: Array<{
+    area: DungeonArea;
+    ring: THREE.Mesh;
+    ringMat: THREE.MeshBasicMaterial;
+    light: THREE.PointLight;
+    isUnlocked: () => boolean;
+  }> = [];
+
   // Arsenal & Munitions Manager
   private arsenalManager: ArsenalManager = new ArsenalManager();
   private activeBurnEffects: Array<{ targetId: string; ticksLeft: number; dmgPerTick: number; timer: number }> = [];
@@ -569,17 +596,26 @@ export class Oakhaven3DExperience {
     this.createRexMalphasBoss();
     this.createInvertedCathedralAct5();
     this.createAstarothBoss();
+    this.createStoryWaypointBeacon();
+    this.createActTransitionPortals();
     this.setupOfficial3DVisualDesigns();
 
     // 6. Build 3D UI Overlay
     this.createUIOverlay();
+    const hadExistingSave = GameSaveManager.hasSave();
     this.loadSavedSanctuaryState();
 
     // 7. Bind Inputs
     this.bindInputs();
 
-    // 8. Start Atmospheric BGM
+    // 8. Start Atmospheric BGM & Sequential Campaign Entry
     this.audio.playBgm('bgm_oakhaven_night');
+    this.syncCampaignSequence(0.016);
+    if (!hadExistingSave) {
+      this.openPrologueModal(0);
+    } else {
+      this.showCinematicChapterBanner(this.currentCanonChapterId);
+    }
 
     this.isRunning = true;
     this.animate();
@@ -3824,6 +3860,7 @@ export class Oakhaven3DExperience {
         this.setPlayerPosition(0, 0, -370);
         this.cameraYaw = 0;
         this.targetCameraYaw = 0;
+        this.unlockAndAdvanceCanonChapter(18);
         this.audio.playCosmicChime?.();
         this.setDialogueToast(
           'La Catedral Invertida',
@@ -3836,6 +3873,7 @@ export class Oakhaven3DExperience {
         this.setPlayerPosition(0, 0, -305);
         this.cameraYaw = 0;
         this.targetCameraYaw = 0;
+        this.unlockAndAdvanceCanonChapter(14);
         this.audio.playAstralDistortion?.();
         this.setDialogueToast(
           'Londinium — Ciudadela Dorada',
@@ -3848,6 +3886,7 @@ export class Oakhaven3DExperience {
         this.setPlayerPosition(0, 0, -242);
         this.cameraYaw = 0;
         this.targetCameraYaw = 0;
+        this.unlockAndAdvanceCanonChapter(10);
         this.audio.playShieldCrush?.();
         this.setDialogueToast(
           'Gran Puente de Piedra',
@@ -3860,6 +3899,7 @@ export class Oakhaven3DExperience {
         this.setPlayerPosition(0, 0, -188);
         this.cameraYaw = 0;
         this.targetCameraYaw = 0;
+        this.unlockAndAdvanceCanonChapter(7);
         this.audio.playBellToll?.();
         this.setDialogueToast(
           'Campanario del Sur',
@@ -3872,6 +3912,7 @@ export class Oakhaven3DExperience {
         this.setPlayerPosition(0, 0, -128);
         this.cameraYaw = 0;
         this.targetCameraYaw = 0;
+        this.unlockAndAdvanceCanonChapter(8);
         this.audio.playWillowWhisper?.();
         this.setDialogueToast(
           'Bosque del Sauce Negro',
@@ -3887,6 +3928,7 @@ export class Oakhaven3DExperience {
         } else {
           this.dungeonAreaManager.enterCrypts();
           this.setPlayerPosition(0, 0, -73);
+          this.unlockAndAdvanceCanonChapter(6);
         }
         this.cameraYaw = 0;
         this.targetCameraYaw = 0;
@@ -4024,6 +4066,7 @@ export class Oakhaven3DExperience {
     }
 
     this.inventory.addItem(CANONICAL_WILLOW_RELIC);
+    this.unlockAndAdvanceCanonChapter(8);
     this.audio.playWillowWhisper?.();
     this.triggerHolyFlash(0.5);
 
@@ -4477,7 +4520,7 @@ export class Oakhaven3DExperience {
         `👑 ¡GUARDIÁN DEL CRISOL PURIFICADO! (+${reward.expAwarded} EXP & LAMENTO DE OAKHAVEN)`,
         '#ffaa44'
       );
-      this.canonChapterManager.unlockChapter(9);
+      this.unlockAndAdvanceCanonChapter(9);
       this.setDialogueToast(
         'El Guardián del Crisol Derrotado',
         '«El coloso de bronce colapsa despidiendo ascuas. La celda de sal de Elowen ha quedado abierta y la reliquia del Lamento de Oakhaven es tuya. Avanza hacia el Gran Crisol para marchar al Gran Puente.»',
@@ -4555,6 +4598,7 @@ export class Oakhaven3DExperience {
     if (this.captainVaneEncounter.state === 'GUARDING') {
       if (pPos.z <= -248) {
         this.captainVaneEncounter.setState('CHASE');
+        this.unlockAndAdvanceCanonChapter(12);
         this.audio.playShieldCrush?.();
         this.audio.playSfx('warning');
         this.spawnFloatingText(vPos, '🛡️ ¡EL CAPITÁN ÁUREO VANE ALZA SU ESCUDO!', '#ffd700');
@@ -4657,7 +4701,7 @@ export class Oakhaven3DExperience {
         `👑 ¡CAPITÁN ÁUREO VANE DERROTADO! (+${reward.expAwarded} EXP & FALSO VEREDICTO)`,
         '#ffd700'
       );
-      this.canonChapterManager.unlockChapter(13);
+      this.unlockAndAdvanceCanonChapter(13);
       this.setDialogueToast(
         'Capitán Áureo Vane Derrotado',
         '«El monumental escudo de torre cae con estruendo sobre las losas del puente. Has desarmado el Falso Veredicto y el acceso hacia Londinium al norte está libre.»',
@@ -4985,6 +5029,7 @@ export class Oakhaven3DExperience {
     if (this.rexMalphasEncounter.state === 'ASTRAL_IDLE') {
       if (pPos.z <= -310) {
         this.rexMalphasEncounter.setState('CHASE');
+        this.unlockAndAdvanceCanonChapter(16);
         this.audio.playAstralDistortion?.();
         this.audio.playSfx('warning');
         this.spawnFloatingText(mPos, '👑 ¡REX MALPHAS DESCIENDE DEL TRONO!', '#cc44ff');
@@ -5089,7 +5134,7 @@ export class Oakhaven3DExperience {
         `👑 ¡REX MALPHAS DERROCADO! (+${reward.expAwarded} EXP & ESPEJISMO DE ORO Y HUMO)`,
         '#cc44ff'
       );
-      this.canonChapterManager.unlockChapter(17);
+      this.unlockAndAdvanceCanonChapter(17);
       this.setDialogueToast(
         'Rex Malphas Derrocado',
         '«Alaric cae sobre la escalinata del trono. La corona partida rueda por el mármol. Acércate al Trono Astral [E] para descender a la Catedral Invertida.»',
@@ -5276,12 +5321,12 @@ export class Oakhaven3DExperience {
         `👑 ¡ASTAROTH HA SIDO DESTRUIDO! (+${reward.expAwarded} EXP & EL PRIMER AMANECER)`,
         '#ffd700'
       );
-      this.canonChapterManager.unlockChapter(20);
+      this.unlockAndAdvanceCanonChapter(20);
 
       this.showDialogueModal(
-        '👑 ¡EL PRIMER AMANECER DE ALBION! — CANON COMPLETO 👑',
-        '«El Sol del Abismo se quiebra en un cataclismo de luz celestial. La gravedad invertida se disuelve, regresando la tierra a su orden primordial. Los primeros rayos de un sol cálido y dorado bañan el horizonte de Albion después de dieciocho años de sombras. Elowen, Khaterine, Shalem y Thomas contemplan el nuevo mundo libre de la inquisición. ¡HAS COMPLETADO LOS 20 CAPÍTULOS DEL CANON SAGRADO!»',
-        '✦ RECOMPENSA FINAL: EL PRIMER AMANECER DE ALBION (VICTORIA TOTAL) ✦'
+        '👑 ¡EL SOL DEL ABISMO HA CAÍDO! — CAPÍTULO XX COMPLETADO 👑',
+        '«El Sol Negro de Astaroth se quiebra en un cataclismo de luz dorada. La gravedad invertida se disuelve devolviendo Albion a la calma. Acércate al Núcleo Purificado del Sol [E] —o pulsa [Y]— para regresar a la Colina del Viejo Roble y vivir el Epílogo Jugable del Primer Amanecer junto a Elowen, Khaterine, Padre Cedric y Shalem.»',
+        '🌅 SIGUIENTE PASO: PULSA [E] EN EL NÚCLEO DEL SOL O [Y] PARA EL EPÍLOGO DEL PRIMER AMANECER 🌅'
       );
     }
     if (this.astarothHpBarContainer) {
@@ -5503,6 +5548,311 @@ export class Oakhaven3DExperience {
   }
 
   // =========================================================================
+  // SEQUENTIAL 3D CAMPAIGN DIRECTOR (WAYPOINT BEACON, PORTALS, PROLOGUE & CHAPTER BANNERS)
+  // =========================================================================
+  private createStoryWaypointBeacon(): void {
+    this.storyBeaconGroup = new THREE.Group();
+
+    this.storyBeaconBeamMat = new THREE.MeshBasicMaterial({
+      color: 0xffd700,
+      transparent: true,
+      opacity: 0.24,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.34, 5.6, 12, 1, true), this.storyBeaconBeamMat);
+    beam.position.y = 2.8;
+    this.storyBeaconGroup.add(beam);
+
+    this.storyBeaconDiamond = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.26, 0),
+      new THREE.MeshBasicMaterial({ color: 0xfff2aa })
+    );
+    this.storyBeaconDiamond.position.y = 2.55;
+    this.storyBeaconGroup.add(this.storyBeaconDiamond);
+
+    this.storyBeaconRingMat = new THREE.MeshBasicMaterial({
+      color: 0xffd700,
+      transparent: true,
+      opacity: 0.65,
+      side: THREE.DoubleSide
+    });
+    const groundRing = new THREE.Mesh(new THREE.RingGeometry(0.45, 0.72, 24), this.storyBeaconRingMat);
+    groundRing.rotation.x = -Math.PI / 2;
+    groundRing.position.y = 0.06;
+    this.storyBeaconGroup.add(groundRing);
+
+    this.storyBeaconLight = new THREE.PointLight(0xffd700, 1.8, 7.5);
+    this.storyBeaconLight.position.y = 2.1;
+    this.storyBeaconGroup.add(this.storyBeaconLight);
+
+    this.scene.add(this.storyBeaconGroup);
+  }
+
+  private createActTransitionPortals(): void {
+    const stonePillarMat = new THREE.MeshStandardMaterial({ color: 0x2c2438, roughness: 0.85, metalness: 0.2 });
+
+    const configs: Array<{
+      area: DungeonArea;
+      x: number;
+      y: number;
+      z: number;
+      lockedColor: number;
+      openColor: number;
+      isUnlocked: () => boolean;
+    }> = [
+      {
+        area: 'black_willow_forest',
+        x: 0,
+        y: 0,
+        z: -169.5,
+        lockedColor: 0x664422,
+        openColor: 0xffaa44,
+        isUnlocked: () => this.rootProwlerEncounter.isDefeated
+      },
+      {
+        area: 'belltower_summit',
+        x: 0,
+        y: 0,
+        z: -217.5,
+        lockedColor: 0x552211,
+        openColor: 0xffd700,
+        isUnlocked: () => this.crucibleGuardianEncounter.isDefeated
+      },
+      {
+        area: 'great_stone_bridge',
+        x: 0,
+        y: 0,
+        z: -276.5,
+        lockedColor: 0x443311,
+        openColor: 0xcc66ff,
+        isUnlocked: () => this.captainVaneEncounter.isDefeated
+      },
+      {
+        area: 'londinium_citadel',
+        x: 0,
+        y: 1.0,
+        z: -336.5,
+        lockedColor: 0x3b124d,
+        openColor: 0xff33aa,
+        isUnlocked: () => this.rexMalphasEncounter.isDefeated
+      }
+    ];
+
+    configs.forEach(cfg => {
+      const portalGroup = new THREE.Group();
+      portalGroup.position.set(cfg.x, cfg.y, cfg.z);
+
+      const pillarL = new THREE.Mesh(new THREE.BoxGeometry(0.45, 3.8, 0.45), stonePillarMat);
+      pillarL.position.set(-1.95, 1.9, 0);
+      const pillarR = new THREE.Mesh(new THREE.BoxGeometry(0.45, 3.8, 0.45), stonePillarMat);
+      pillarR.position.set(1.95, 1.9, 0);
+      const lintel = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.42, 0.55), stonePillarMat);
+      lintel.position.set(0, 3.9, 0);
+
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: cfg.lockedColor,
+        transparent: true,
+        opacity: 0.72,
+        side: THREE.DoubleSide
+      });
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(1.25, 0.08, 10, 28), ringMat);
+      ring.position.set(0, 2.0, 0);
+
+      const light = new THREE.PointLight(cfg.openColor, 1.4, 10);
+      light.position.set(0, 2.2, 0.5);
+
+      portalGroup.add(pillarL, pillarR, lintel, ring, light);
+      this.scene.add(portalGroup);
+
+      this.actTransitionPortals.push({
+        area: cfg.area,
+        ring,
+        ringMat,
+        light,
+        isUnlocked: cfg.isUnlocked
+      });
+    });
+  }
+
+  public unlockAndAdvanceCanonChapter(chapterId: number, announce: boolean = true): void {
+    const clamped = Math.max(1, Math.min(20, Math.floor(chapterId)));
+    const wasAlreadyUnlocked = this.canonChapterManager.isChapterUnlocked(clamped);
+    this.canonChapterManager.unlockChapter(clamped);
+    this.canonChapterManager.selectChapter(clamped);
+    this.currentCanonChapterId = clamped;
+
+    if (announce && (!wasAlreadyUnlocked || !this.announcedChapterIds.has(clamped))) {
+      this.showCinematicChapterBanner(clamped);
+    }
+  }
+
+  public showCinematicChapterBanner(chapterId: number): void {
+    const chapter = this.canonChapterManager.getChapter(chapterId);
+    if (!chapter || !this.chapterBannerEl) return;
+
+    this.announcedChapterIds.add(chapterId);
+    const actEl = this.chapterBannerEl.querySelector('#p3d-chapter-banner-act') as HTMLDivElement | null;
+    const titleEl = this.chapterBannerEl.querySelector('#p3d-chapter-banner-title') as HTMLDivElement | null;
+    const subEl = this.chapterBannerEl.querySelector('#p3d-chapter-banner-sub') as HTMLDivElement | null;
+
+    if (actEl) actEl.innerText = `✦ ${chapter.actTitle.toUpperCase()} · CAPÍTULO ${chapter.romanNumber} ✦`;
+    if (titleEl) titleEl.innerText = chapter.title.toUpperCase();
+    if (subEl) subEl.innerText = `📍 ${chapter.location}`;
+
+    this.chapterBannerEl.style.opacity = '1';
+    this.chapterBannerTimer = 4.2;
+  }
+
+  public openPrologueModal(startIndex: number = 0): void {
+    if (!this.prologueModalEl) return;
+    this.releaseAllInputs();
+    this.prologueSlideIndex = Math.max(0, Math.min(CAMPAIGN_PROLOGUE_SLIDES.length - 1, startIndex));
+    this.isPrologueOpen = true;
+    this.prologueModalEl.style.display = 'block';
+    this.renderPrologueSlide();
+  }
+
+  private renderPrologueSlide(): void {
+    if (!this.prologueModalEl) return;
+    const slide = CAMPAIGN_PROLOGUE_SLIDES[this.prologueSlideIndex];
+    if (!slide) return;
+
+    const headerEl = this.prologueModalEl.querySelector('#p3d-prologue-header') as HTMLDivElement | null;
+    const subEl = this.prologueModalEl.querySelector('#p3d-prologue-subtitle') as HTMLDivElement | null;
+    const imgEl = this.prologueModalEl.querySelector('#p3d-prologue-img') as HTMLImageElement | null;
+    const bodyEl = this.prologueModalEl.querySelector('#p3d-prologue-body') as HTMLDivElement | null;
+    const nextBtn = this.prologueModalEl.querySelector('#p3d-prologue-next') as HTMLButtonElement | null;
+
+    this.prologueModalEl.style.borderColor = slide.accentColor;
+    if (headerEl) {
+      headerEl.innerText = slide.header;
+      headerEl.style.color = slide.accentColor;
+    }
+    if (subEl) subEl.innerText = slide.subtitle;
+    if (imgEl) imgEl.src = slide.imageUrl;
+    if (bodyEl) bodyEl.innerText = slide.body;
+    if (nextBtn) {
+      nextBtn.innerText =
+        this.prologueSlideIndex < CAMPAIGN_PROLOGUE_SLIDES.length - 1
+          ? 'SIGUIENTE [E / ESPACIO] ▸'
+          : '⚔️ COMENZAR CAPÍTULO I [E / ESPACIO]';
+    }
+  }
+
+  public advancePrologueSlide(): void {
+    if (!this.isPrologueOpen) return;
+    this.audio.playSfx('menu_select');
+    if (this.prologueSlideIndex < CAMPAIGN_PROLOGUE_SLIDES.length - 1) {
+      this.prologueSlideIndex++;
+      this.renderPrologueSlide();
+    } else {
+      this.closePrologueModal();
+    }
+  }
+
+  public closePrologueModal(): void {
+    if (!this.isPrologueOpen) return;
+    this.isPrologueOpen = false;
+    if (this.prologueModalEl) {
+      this.prologueModalEl.style.display = 'none';
+    }
+    this.showCinematicChapterBanner(this.currentCanonChapterId);
+  }
+
+  private syncCampaignSequence(delta: number): void {
+    // 1. Fade out Cinematic Chapter Banner timer
+    if (this.chapterBannerTimer > 0 && this.chapterBannerEl) {
+      this.chapterBannerTimer -= delta;
+      if (this.chapterBannerTimer <= 0) {
+        this.chapterBannerEl.style.opacity = '0';
+      }
+    }
+
+    // 2. Animate glowing Act Transition Portals
+    for (const portal of this.actTransitionPortals) {
+      const open = portal.isUnlocked();
+      portal.ring.rotation.z += delta * (open ? 2.4 : 0.5);
+      portal.light.intensity = open ? 3.2 + Math.sin(this.clock.elapsedTime * 5) * 0.7 : 0.7;
+      portal.ringMat.opacity = open ? 0.92 : 0.35;
+    }
+
+    // 3. Resolve live active objective from deterministic CampaignSequence3D state machine
+    const objective = resolveActiveCampaignObjective({
+      currentArea: this.dungeonAreaManager.currentArea,
+      narrativePhase: this.oakhavenNarrativePhase,
+      hasAidedVillagersOrCedric: this.hasHealedGedeon || this.hasHealedMarta || this.hasTalkedToCedric3D,
+      hasDeliveredBirdOnOakHill: this.hasDeliveredBirdOnOakHill,
+      hasTalkedToKhaterineOrFought: this.hasTalkedToKhaterine3D || this.enemyState === 'DEAD' || this.cultistState === 'DEAD',
+      hasVisitedApothecary: this.hasVisitedApothecary3D,
+      morwennaAwakened: this.morwennaState !== 'DORMANT',
+      morwennaDefeated: this.morwennaState === 'DEAD',
+      cemeteryGateOpen: this.cemeteryGateOpen,
+      inquisitorDefeated: this.inquisitorEncounter.isDefeated,
+      rootProwlerDefeated: this.rootProwlerEncounter.isDefeated,
+      hasWillowFang: this.inventory.hasWillowFang(),
+      hasInspectedBurnedBarn: this.hasInspectedBurnedBarn,
+      hasCollectedWillowBird: this.hasCollectedWillowBird,
+      crucibleGuardianDefeated: this.crucibleGuardianEncounter.isDefeated,
+      hasFreedRefugees: this.hasFreedRefugees,
+      captainVaneAwakened: this.captainVaneEncounter.state !== 'GUARDING',
+      captainVaneDefeated: this.captainVaneEncounter.isDefeated,
+      destroyedNarcoticBraziersCount: this.destroyedNarcoticBraziersCount,
+      shatteredGuiltMirrors: this.shatteredGuiltMirrors,
+      hasClearedMirrorGallery: this.hasClearedMirrorGallery,
+      rexMalphasAwakened: this.rexMalphasEncounter.state !== 'ASTRAL_IDLE',
+      rexMalphasDefeated: this.rexMalphasEncounter.isDefeated,
+      hasForgedAlbaGris: this.hasForgedAlbaGris,
+      astarothDefeated: this.astarothEncounter.isDefeated
+    });
+    this.activeCampaignObjective = objective;
+
+    // 4. Update 3D Diegetic Story Waypoint Pillar
+    if (this.storyBeaconGroup && this.storyBeaconDiamond && this.storyBeaconBeamMat && this.storyBeaconRingMat && this.storyBeaconLight) {
+      if (objective.waypoint && objective.targetArea === this.dungeonAreaManager.currentArea) {
+        this.storyBeaconGroup.visible = true;
+        const targetVec = new THREE.Vector3(objective.waypoint.x, objective.waypoint.y, objective.waypoint.z);
+        this.storyBeaconGroup.position.lerp(targetVec, 1 - Math.exp(-8 * delta));
+        this.storyBeaconBeamMat.color.setHex(objective.beaconColorHex);
+        this.storyBeaconRingMat.color.setHex(objective.beaconColorHex);
+        this.storyBeaconLight.color.setHex(objective.beaconColorHex);
+        this.storyBeaconDiamond.rotation.y += delta * 2.2;
+        this.storyBeaconDiamond.position.y = 2.55 + Math.sin(this.clock.elapsedTime * 3.5) * 0.22;
+      } else {
+        this.storyBeaconGroup.visible = false;
+      }
+    }
+
+    // 5. Update Top-Left Live Campaign Quest Tracker UI
+    if (this.uiOverlay) {
+      const capEl = this.uiOverlay.querySelector('#p3d-quest-chapter') as HTMLDivElement | null;
+      const objEl = this.uiOverlay.querySelector('#p3d-quest-objective') as HTMLDivElement | null;
+      const distEl = this.uiOverlay.querySelector('#p3d-quest-distance') as HTMLSpanElement | null;
+      const fillEl = this.uiOverlay.querySelector('#p3d-quest-progress-fill') as HTMLDivElement | null;
+
+      const capText = `📜 ${objective.romanLabel} · ${objective.title.toUpperCase()}`;
+      if (capEl && capEl.innerText !== capText) capEl.innerText = capText;
+      if (objEl && objEl.innerText !== `🎯 ${objective.objectiveText}`) {
+        objEl.innerText = `🎯 ${objective.objectiveText}`;
+      }
+      if (fillEl) {
+        fillEl.style.width = `${objective.progressPct}%`;
+      }
+      if (distEl) {
+        if (objective.waypoint && objective.targetArea === this.dungeonAreaManager.currentArea) {
+          const d = Math.hypot(
+            this.playerGroup.position.x - objective.waypoint.x,
+            this.playerGroup.position.z - objective.waypoint.z
+          );
+          distEl.innerText = d <= 3.0 ? '✦ AQUÍ' : `🧭 ${d.toFixed(0)}m`;
+        } else {
+          distEl.innerText = `${objective.progressPct}%`;
+        }
+      }
+    }
+  }
+
+  // =========================================================================
   // HTML / HUD OVERLAY FOR 3D EXPERIENCE
   // =========================================================================
   private createUIOverlay(): void {
@@ -5519,31 +5869,49 @@ export class Oakhaven3DExperience {
 
     this.uiOverlay.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-        <!-- Left: Active Hero 3D Combat HUD -->
-        <div style="display: flex; gap: 8px; background: rgba(14, 9, 23, 0.94); border: 1.2px solid #d4af37; border-radius: 4px; padding: 5px 8px; min-width: 215px; box-shadow: 0 4px 15px rgba(0,0,0,0.85); align-items: center;">
-          <img id="p3d-hero-portrait" src="/assets/characters/portrait_thomas.png" alt="Retrato Héroe" style="width: 36px; height: 36px; border: 1.2px solid #d4af37; border-radius: 4px; object-fit: cover; object-position: center; background: #000; flex-shrink: 0; image-rendering: pixelated;" />
-          <div style="flex: 1;">
-            <div id="p3d-hero-title" style="font-size: 8px; font-weight: bold; letter-spacing: 0.6px; margin-bottom: 3px; color: #ffd700;">
-              ✦ THOMAS — OAKHAVEN 3D ✦
-            </div>
-            <!-- Health Bar -->
-            <div style="display: flex; align-items: center; gap: 5px; font-size: 7.5px; font-family: monospace; color: #ffaaaa; margin-bottom: 3px;">
-              <span>SALUD</span>
-              <div style="flex: 1; height: 6px; background: #2b0c0c; border: 1px solid #7a2222; border-radius: 2px; overflow: hidden;">
-                <div id="p3d-hp" style="width: 100%; height: 100%; background: #22cc44; transition: width 0.15s ease;"></div>
+        <!-- Left Column: Active Hero 3D Combat HUD + Live Campaign Quest Tracker -->
+        <div style="display: flex; flex-direction: column; gap: 5px; max-width: 255px;">
+          <div style="display: flex; gap: 8px; background: rgba(14, 9, 23, 0.94); border: 1.2px solid #d4af37; border-radius: 4px; padding: 5px 8px; min-width: 215px; box-shadow: 0 4px 15px rgba(0,0,0,0.85); align-items: center;">
+            <img id="p3d-hero-portrait" src="/assets/characters/portrait_thomas.png" alt="Retrato Héroe" style="width: 36px; height: 36px; border: 1.2px solid #d4af37; border-radius: 4px; object-fit: cover; object-position: center; background: #000; flex-shrink: 0; image-rendering: pixelated;" />
+            <div style="flex: 1;">
+              <div id="p3d-hero-title" style="font-size: 8px; font-weight: bold; letter-spacing: 0.6px; margin-bottom: 3px; color: #ffd700;">
+                ✦ THOMAS — OAKHAVEN 3D ✦
               </div>
-              <span id="p3d-hp-text">100/100</span>
-            </div>
-            <!-- Posture / Guard Bar -->
-            <div style="display: flex; align-items: center; gap: 5px; font-size: 7.5px; font-family: monospace; color: #aaaaff; margin-bottom: 3px;">
-              <span>POSTURA</span>
-              <div style="flex: 1; height: 4px; background: #0c142b; border: 1px solid #22447a; border-radius: 2px; overflow: hidden;">
-                <div id="p3d-posture" style="width: 100%; height: 100%; background: #4488ff; transition: width 0.15s ease;"></div>
+              <!-- Health Bar -->
+              <div style="display: flex; align-items: center; gap: 5px; font-size: 7.5px; font-family: monospace; color: #ffaaaa; margin-bottom: 3px;">
+                <span>SALUD</span>
+                <div style="flex: 1; height: 6px; background: #2b0c0c; border: 1px solid #7a2222; border-radius: 2px; overflow: hidden;">
+                  <div id="p3d-hp" style="width: 100%; height: 100%; background: #22cc44; transition: width 0.15s ease;"></div>
+                </div>
+                <span id="p3d-hp-text">100/100</span>
+              </div>
+              <!-- Posture / Guard Bar -->
+              <div style="display: flex; align-items: center; gap: 5px; font-size: 7.5px; font-family: monospace; color: #aaaaff; margin-bottom: 3px;">
+                <span>POSTURA</span>
+                <div style="flex: 1; height: 4px; background: #0c142b; border: 1px solid #22447a; border-radius: 2px; overflow: hidden;">
+                  <div id="p3d-posture" style="width: 100%; height: 100%; background: #4488ff; transition: width 0.15s ease;"></div>
+                </div>
+              </div>
+              <!-- Weapon Status Badge -->
+              <div id="p3d-weapon-badge" style="font-size: 7px; font-family: monospace; color: #e2d4f0; background: rgba(35, 20, 50, 0.7); padding: 1px 4px; border-radius: 3px; border: 1px solid #5a3d78; pointer-events: auto; cursor: pointer;">
+                ⚔ ARMA: Espada Corta del Monaguillo
               </div>
             </div>
-            <!-- Weapon Status Badge -->
-            <div id="p3d-weapon-badge" style="font-size: 7px; font-family: monospace; color: #e2d4f0; background: rgba(35, 20, 50, 0.7); padding: 1px 4px; border-radius: 3px; border: 1px solid #5a3d78; pointer-events: auto; cursor: pointer;">
-              ⚔ ARMA: Espada Corta del Monaguillo
+          </div>
+
+          <!-- Live 20-Chapter 3D Campaign Quest Tracker (Click opens Compendium [N]) -->
+          <div id="p3d-quest-tracker" title="Haz clic para abrir el Compendio Canónico [N]" style="background: rgba(14, 9, 24, 0.9); border: 1px solid rgba(212, 175, 55, 0.78); border-radius: 4px; padding: 5px 8px; box-shadow: 0 4px 14px rgba(0,0,0,0.8); pointer-events: auto; cursor: pointer;">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-bottom: 3px;">
+              <div id="p3d-quest-chapter" style="font-size: 7px; font-weight: bold; color: #ffd700; letter-spacing: 0.4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                📜 CAPÍTULO I · EL MONAGUILLO DE LAS SOMBRAS
+              </div>
+              <span id="p3d-quest-distance" style="font-family: monospace; font-size: 7px; color: #a3ffc7; font-weight: bold; flex-shrink: 0;">🧭 --</span>
+            </div>
+            <div style="width: 100%; height: 3px; background: #241736; border-radius: 2px; overflow: hidden; margin-bottom: 4px;">
+              <div id="p3d-quest-progress-fill" style="width: 5%; height: 100%; background: linear-gradient(90deg, #b8860b, #ffd700); transition: width 0.3s ease;"></div>
+            </div>
+            <div id="p3d-quest-objective" style="font-family: monospace; font-size: 6.8px; color: #e6dcf5; line-height: 1.3;">
+              🎯 Auxilia a Gedeón o Marta [E] en el Atrio de San Jude o conversa con Padre Cedric [E]
             </div>
           </div>
         </div>
@@ -5680,7 +6048,7 @@ export class Oakhaven3DExperience {
       </div>
 
       <!-- Sub-boss: Inquisidor de las Catacumbas 3D Target HUD -->
-      <div id="p3d-inquisitor-hud" style="position: absolute; top: 122px; left: 50%; transform: translateX(-50%); background: rgba(22, 8, 22, 0.95); border: 1.2px solid #9b59b6; border-radius: 4px; padding: 4px 12px; width: 225px; text-align: center; box-shadow: 0 4px 20px rgba(155, 89, 182, 0.45); display: none;">
+      <div id="p3d-inquisitor-hud" style="position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(22, 8, 22, 0.95); border: 1.2px solid #9b59b6; border-radius: 4px; padding: 4px 12px; width: 225px; text-align: center; box-shadow: 0 4px 20px rgba(155, 89, 182, 0.45); display: none;">
         <div style="font-size: 7.5px; font-weight: bold; color: #eeddff; margin-bottom: 2px; letter-spacing: 0.5px;">
           ⚔ EL INQUISIDOR CAÍDO DE SAN JUDE ⚔
         </div>
@@ -5690,7 +6058,7 @@ export class Oakhaven3DExperience {
       </div>
 
       <!-- Beast: Acechador de Raíces 3D Target HUD -->
-      <div id="p3d-root-prowler-hud" style="position: absolute; top: 122px; left: 50%; transform: translateX(-50%); background: rgba(18, 12, 28, 0.95); border: 1.2px solid #bb44ff; border-radius: 4px; padding: 4px 12px; width: 235px; text-align: center; box-shadow: 0 4px 20px rgba(187, 68, 255, 0.45); display: none;">
+      <div id="p3d-root-prowler-hud" style="position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(18, 12, 28, 0.95); border: 1.2px solid #bb44ff; border-radius: 4px; padding: 4px 12px; width: 235px; text-align: center; box-shadow: 0 4px 20px rgba(187, 68, 255, 0.45); display: none;">
         <div style="font-size: 7.5px; font-weight: bold; color: #eeddff; margin-bottom: 2px; letter-spacing: 0.5px;">
           🌿 ACECHADOR DE RAÍCES DEL SAUCE NEGRO 🌿
         </div>
@@ -5700,7 +6068,7 @@ export class Oakhaven3DExperience {
       </div>
 
       <!-- Boss Act II: Guardián del Crisol 3D Target HUD -->
-      <div id="p3d-crucible-guardian-hud" style="position: absolute; top: 122px; left: 50%; transform: translateX(-50%); background: rgba(28, 14, 8, 0.95); border: 1.2px solid #ff7722; border-radius: 4px; padding: 4px 12px; width: 235px; text-align: center; box-shadow: 0 4px 20px rgba(255, 119, 34, 0.45); display: none;">
+      <div id="p3d-crucible-guardian-hud" style="position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(28, 14, 8, 0.95); border: 1.2px solid #ff7722; border-radius: 4px; padding: 4px 12px; width: 235px; text-align: center; box-shadow: 0 4px 20px rgba(255, 119, 34, 0.45); display: none;">
         <div style="font-size: 7.5px; font-weight: bold; color: #ffd2aa; margin-bottom: 2px; letter-spacing: 0.5px;">
           🔨 EL GUARDIÁN DEL CRISOL DE BRONCE 🔨
         </div>
@@ -5710,7 +6078,7 @@ export class Oakhaven3DExperience {
       </div>
 
       <!-- Boss Act III: Capitán Áureo Vane 3D Target HUD -->
-      <div id="p3d-captain-vane-hud" style="position: absolute; top: 122px; left: 50%; transform: translateX(-50%); background: rgba(30, 24, 8, 0.95); border: 1.2px solid #ffd700; border-radius: 4px; padding: 4px 12px; width: 235px; text-align: center; box-shadow: 0 4px 20px rgba(255, 215, 0, 0.45); display: none;">
+      <div id="p3d-captain-vane-hud" style="position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(30, 24, 8, 0.95); border: 1.2px solid #ffd700; border-radius: 4px; padding: 4px 12px; width: 235px; text-align: center; box-shadow: 0 4px 20px rgba(255, 215, 0, 0.45); display: none;">
         <div style="font-size: 7.5px; font-weight: bold; color: #fff3aa; margin-bottom: 2px; letter-spacing: 0.5px;">
           🛡️ CAPITÁN ÁUREO VANE — ESCUDO DE TORRE 🛡️
         </div>
@@ -5720,7 +6088,7 @@ export class Oakhaven3DExperience {
       </div>
 
       <!-- Boss Act IV: Rex Malphas 3D Target HUD -->
-      <div id="p3d-rex-malphas-hud" style="position: absolute; top: 122px; left: 50%; transform: translateX(-50%); background: rgba(28, 8, 28, 0.95); border: 1.2px solid #cc44ff; border-radius: 4px; padding: 4px 12px; width: 235px; text-align: center; box-shadow: 0 4px 20px rgba(204, 68, 255, 0.45); display: none;">
+      <div id="p3d-rex-malphas-hud" style="position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(28, 8, 28, 0.95); border: 1.2px solid #cc44ff; border-radius: 4px; padding: 4px 12px; width: 235px; text-align: center; box-shadow: 0 4px 20px rgba(204, 68, 255, 0.45); display: none;">
         <div style="font-size: 7.5px; font-weight: bold; color: #eeddff; margin-bottom: 2px; letter-spacing: 0.5px;">
           👑 REX MALPHAS — EL DESPOTA ASTRAL (ALARIC) 👑
         </div>
@@ -5730,7 +6098,7 @@ export class Oakhaven3DExperience {
       </div>
 
       <!-- Boss Act V: Astaroth Titan 3D Target HUD -->
-      <div id="p3d-astaroth-hud" style="position: absolute; top: 122px; left: 50%; transform: translateX(-50%); background: rgba(16, 5, 26, 0.98); border: 1.5px solid #ff2288; border-radius: 4px; padding: 4px 14px; width: 250px; text-align: center; box-shadow: 0 4px 25px rgba(255, 34, 136, 0.55); display: none;">
+      <div id="p3d-astaroth-hud" style="position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(16, 5, 26, 0.98); border: 1.5px solid #ff2288; border-radius: 4px; padding: 4px 14px; width: 250px; text-align: center; box-shadow: 0 4px 25px rgba(255, 34, 136, 0.55); display: none;">
         <div style="font-size: 7.5px; font-weight: bold; color: #ffaacc; margin-bottom: 2px; letter-spacing: 0.8px;">
           🌌 ASTAROTH: EL PADRE DE LAS CENIZAS — SOL DEL ABISMO 🌌
         </div>
@@ -5740,7 +6108,7 @@ export class Oakhaven3DExperience {
       </div>
 
       <!-- Floating Proximity Action Pill (Interactive [E]) -->
-      <div id="p3d-proximity-badge" style="position: absolute; bottom: 58px; left: 50%; transform: translateX(-50%); background: rgba(18, 9, 32, 0.96); border: 1.5px solid #ffd700; border-radius: 4px; padding: 4px 14px; font-family: monospace; font-size: 8.5px; font-weight: bold; color: #ffd700; display: none; box-shadow: 0 4px 20px rgba(0,0,0,0.85); z-index: 50; cursor: pointer; pointer-events: auto; text-align: center; letter-spacing: 0.5px;">
+      <div id="p3d-proximity-badge" style="position: absolute; bottom: 106px; left: 50%; transform: translateX(-50%); background: rgba(18, 9, 32, 0.96); border: 1.5px solid #ffd700; border-radius: 4px; padding: 4px 14px; font-family: monospace; font-size: 8.5px; font-weight: bold; color: #ffd700; display: none; box-shadow: 0 4px 20px rgba(0,0,0,0.85); z-index: 50; cursor: pointer; pointer-events: auto; text-align: center; letter-spacing: 0.5px;">
         [E] INTERACTUAR
       </div>
 
@@ -5830,7 +6198,10 @@ export class Oakhaven3DExperience {
               Progreso Canónico: 1 / 20 Capítulos (5%)
             </div>
           </div>
-          <button id="p3d-compendium-close" style="background: #2a1440; color: #ffaaaa; border: 1px solid #7a2222; border-radius: 3px; padding: 2px 8px; font-size: 8px; cursor: pointer; font-weight: bold;">[X] CERRAR</button>
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <button id="btn-replay-prologue" style="background: #33162b; color: #ffaa88; border: 1px solid #d46a47; border-radius: 3px; padding: 2px 8px; font-size: 7.5px; cursor: pointer; font-weight: bold;">🌒 VER PRÓLOGO</button>
+            <button id="p3d-compendium-close" style="background: #2a1440; color: #ffaaaa; border: 1px solid #7a2222; border-radius: 3px; padding: 2px 8px; font-size: 8px; cursor: pointer; font-weight: bold;">[X] CERRAR</button>
+          </div>
         </div>
         <!-- Act Tabs -->
         <div id="p3d-compendium-tabs" style="display: flex; gap: 4px; margin-bottom: 8px; overflow-x: auto; padding-bottom: 4px;">
@@ -5843,6 +6214,25 @@ export class Oakhaven3DExperience {
         <!-- Chapter Cards List -->
         <div id="p3d-compendium-list" style="display: flex; flex-direction: column; gap: 7px; max-height: 250px; overflow-y: auto; padding-right: 4px;">
           <!-- Dynamically filled by renderCompendiumModal() -->
+        </div>
+      </div>
+
+      <!-- Non-Blocking Cinematic Chapter Title Card -->
+      <div id="p3d-chapter-banner" style="position: absolute; top: 56px; left: 50%; transform: translateX(-50%); background: linear-gradient(90deg, rgba(14,8,24,0) 0%, rgba(16,9,28,0.92) 18%, rgba(16,9,28,0.92) 82%, rgba(14,8,24,0) 100%); border-top: 1px solid rgba(212,175,55,0.65); border-bottom: 1px solid rgba(212,175,55,0.65); padding: 6px 34px; text-align: center; pointer-events: none; opacity: 0; transition: opacity 0.65s ease; z-index: 60; min-width: 280px;">
+        <div id="p3d-chapter-banner-act" style="font-family: monospace; font-size: 7px; color: #d999ff; letter-spacing: 1.4px; margin-bottom: 2px;">✦ ACTO I · CAPÍTULO I ✦</div>
+        <div id="p3d-chapter-banner-title" style="font-size: 11px; font-weight: bold; color: #ffd700; letter-spacing: 1.2px; text-shadow: 0 2px 8px #000;">EL MONAGUILLO DE LAS SOMBRAS</div>
+        <div id="p3d-chapter-banner-sub" style="font-family: serif; font-size: 7.5px; color: #d8cee8; font-style: italic; margin-top: 1px;">📍 Parroquia de San Jude, Oakhaven</div>
+      </div>
+
+      <!-- Interactive Canonical Prologue Cutscene Modal (La Noche de la Luna Roja) -->
+      <div id="p3d-prologue-modal" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(10, 6, 18, 0.98); border: 2px solid #ff5544; border-radius: 6px; padding: 14px 18px; max-width: 540px; width: 92%; box-shadow: 0 14px 60px rgba(0,0,0,0.98); display: none; z-index: 150; pointer-events: auto; text-align: center;">
+        <div id="p3d-prologue-header" style="font-size: 10px; font-weight: bold; color: #ff5544; letter-spacing: 1px; margin-bottom: 3px;">🌒 PRÓLOGO — LA NOCHE DE LA LUNA ROJA (1/3) 🌒</div>
+        <div id="p3d-prologue-subtitle" style="font-family: monospace; font-size: 7.5px; color: #ffd7aa; margin-bottom: 8px;">La Herejía del Sauce Negro y el Juramento de las Nueve</div>
+        <img id="p3d-prologue-img" src="/assets/loading/shalem-opening.png" alt="Prólogo" style="width: 100%; height: 140px; object-fit: cover; border-radius: 4px; border: 1px solid #5a3d78; margin-bottom: 9px; background: #08040e;" />
+        <div id="p3d-prologue-body" style="font-family: serif; font-size: 9.5px; color: #efe8fa; font-style: italic; line-height: 1.5; margin-bottom: 11px;"></div>
+        <div style="display: flex; justify-content: center; gap: 10px;">
+          <button id="p3d-prologue-next" style="background: #36194a; color: #ffd700; border: 1.2px solid #d4af37; padding: 5px 14px; border-radius: 4px; font-family: monospace; font-size: 8px; font-weight: bold; cursor: pointer;">SIGUIENTE [E / ESPACIO] ▸</button>
+          <button id="p3d-prologue-skip" style="background: #1d1429; color: #bfb2d6; border: 1px solid #5a4475; padding: 5px 11px; border-radius: 4px; font-family: monospace; font-size: 7.5px; cursor: pointer;">SALTAR [ESC]</button>
         </div>
       </div>
 
@@ -5868,7 +6258,7 @@ export class Oakhaven3DExperience {
       </div>
 
       <!-- Compact Tactical Parchment Compass & Sub-Sector Banner (Top Center below enemy bars) -->
-      <div id="p3d-sector-compass" style="position: absolute; bottom: 84px; left: 50%; transform: translateX(-50%); background: rgba(18, 12, 28, 0.92); border: 1.2px solid #d4af37; border-radius: 4px; padding: 3px 12px; display: flex; align-items: center; gap: 10px; box-shadow: 0 4px 14px rgba(0,0,0,0.85); pointer-events: none; z-index: 40;">
+      <div id="p3d-sector-compass" style="position: absolute; bottom: 64px; left: 50%; transform: translateX(-50%); background: rgba(18, 12, 28, 0.92); border: 1.2px solid #d4af37; border-radius: 4px; padding: 3px 12px; display: flex; align-items: center; gap: 10px; box-shadow: 0 4px 14px rgba(0,0,0,0.85); pointer-events: none; z-index: 40;">
         <div id="p3d-sector-name" style="font-size: 7.5px; font-weight: bold; color: #ffd700; letter-spacing: 0.5px;">
           📍 ATRIO DE SAN JUDE (CAP. I — ALBA DE NIEBLA)
         </div>
@@ -6024,12 +6414,39 @@ export class Oakhaven3DExperience {
     const btnDbgColina = this.uiOverlay.querySelector('#btn-dbg-colina') as HTMLButtonElement | null;
     if (btnDbgColina) {
       btnDbgColina.addEventListener('click', () => {
+        if (this.astarothEncounter.isDefeated) {
+          this.triggerFirstDawnPlayableEpilogue();
+          return;
+        }
         this.dungeonAreaManager.exitToSurface();
         this.setPlayerPosition(8.8, 2.2, 5.0);
         this.playerGroup.rotation.y = -Math.PI / 2;
         this.cameraYaw = -Math.PI / 2;
         this.targetCameraYaw = -Math.PI / 2;
         this.updateProximityInteractions();
+      });
+    }
+
+    const questTracker = this.uiOverlay.querySelector('#p3d-quest-tracker') as HTMLDivElement | null;
+    if (questTracker) {
+      questTracker.addEventListener('click', () => this.toggleCompendiumModal());
+    }
+
+    this.chapterBannerEl = this.uiOverlay.querySelector('#p3d-chapter-banner') as HTMLDivElement;
+    this.prologueModalEl = this.uiOverlay.querySelector('#p3d-prologue-modal') as HTMLDivElement;
+    const btnPrologueNext = this.uiOverlay.querySelector('#p3d-prologue-next') as HTMLButtonElement | null;
+    if (btnPrologueNext) {
+      btnPrologueNext.addEventListener('click', () => this.advancePrologueSlide());
+    }
+    const btnPrologueSkip = this.uiOverlay.querySelector('#p3d-prologue-skip') as HTMLButtonElement | null;
+    if (btnPrologueSkip) {
+      btnPrologueSkip.addEventListener('click', () => this.closePrologueModal());
+    }
+    const btnReplayPrologue = this.uiOverlay.querySelector('#btn-replay-prologue') as HTMLButtonElement | null;
+    if (btnReplayPrologue) {
+      btnReplayPrologue.addEventListener('click', () => {
+        if (this.isCompendiumOpen) this.toggleCompendiumModal();
+        this.openPrologueModal(0);
       });
     }
 
@@ -6243,6 +6660,7 @@ export class Oakhaven3DExperience {
   // =========================================================================
   public getInputContext(): InputContext {
     if (this.isPlayerDefeated) return 'defeated';
+    if (this.isPrologueOpen) return 'prologue';
     if (this.isMoralDilemmaOpen) return 'moralDilemma';
     if (this.isDesignsModalOpen) return 'designs';
     if (this.isCompendiumOpen) return 'compendium';
@@ -6327,6 +6745,17 @@ export class Oakhaven3DExperience {
     // Universal: Audio toggle with [M] (single-pulse)
     if (key === 'm') {
       if (!e.repeat) this.toggleAudio();
+      return;
+    }
+
+    // --- CONTEXT: PROLOGUE CUTSCENE MODAL ---
+    if (context === 'prologue') {
+      if (!e.repeat && (e.code === 'Space' || key === 'e' || e.key === 'Enter')) {
+        e.preventDefault();
+        this.advancePrologueSlide();
+      } else if (!e.repeat && e.key === 'Escape') {
+        this.closePrologueModal();
+      }
       return;
     }
 
@@ -6494,6 +6923,10 @@ export class Oakhaven3DExperience {
       return;
     }
     if (key === 'y' && !e.repeat) {
+      if (this.astarothEncounter.isDefeated) {
+        this.triggerFirstDawnPlayableEpilogue();
+        return;
+      }
       this.dungeonAreaManager.exitToSurface();
       this.setPlayerPosition(8.8, 2.2, 5.0);
       this.playerGroup.rotation.y = -Math.PI / 2;
@@ -8472,8 +8905,7 @@ export class Oakhaven3DExperience {
     }
     this.oakhavenNarrativePhase = 'MIDNIGHT_SIEGE';
     this.canonChapterManager.unlockChapter(2);
-    this.canonChapterManager.unlockChapter(3);
-    this.currentCanonChapterId = 3;
+    this.unlockAndAdvanceCanonChapter(3);
 
     // 1. Dynamic Atmosphere Transition: Dawn Mist -> Midnight Ember Siege
     this.scene.background = new THREE.Color(0x161228);
@@ -8567,9 +8999,8 @@ export class Oakhaven3DExperience {
 
   public resolveChapter20MoralDilemma(choice: 'canon' | 'eclipse'): void {
     this.closeMoralDilemmaModal();
-    this.canonChapterManager.unlockChapter(19);
-    this.canonChapterManager.unlockChapter(20);
-    this.currentCanonChapterId = 20;
+    this.unlockAndAdvanceCanonChapter(19, false);
+    this.unlockAndAdvanceCanonChapter(20);
 
     if (choice === 'canon') {
       if (!this.hasForgedAlbaGris) {
@@ -8620,7 +9051,7 @@ export class Oakhaven3DExperience {
       this.hasCollectedWillowBird = true;
       if (this.willowBirdMesh) this.willowBirdMesh.visible = false;
       this.progression.addExp(50);
-      this.canonChapterManager.unlockChapter(7);
+      this.unlockAndAdvanceCanonChapter(7);
       this.inventory.addItem({
         id: 'item_willow_bird',
         name: 'Pájaro de Madera de Sauce',
@@ -8672,7 +9103,7 @@ export class Oakhaven3DExperience {
     if (!this.hasInspectedBurnedBarn) {
       this.hasInspectedBurnedBarn = true;
       this.progression.addExp(60);
-      this.canonChapterManager.unlockChapter(8);
+      this.unlockAndAdvanceCanonChapter(8);
       this.playerStats.posture = Math.min(this.playerStats.maxPosture, this.playerStats.posture + 25);
       this.spawnFloatingText(new THREE.Vector3(3.8, 0.8, -191.5), '🗡️ ¡MEMORIA DE LA LUNA ROJA! (+60 EXP)', '#d999ff');
       this.showDialogueModal(
@@ -8697,7 +9128,7 @@ export class Oakhaven3DExperience {
       this.progression.addExp(75);
       this.inventory.addItem(CANONICAL_MATERIALS.ash_purified, 2);
       this.inventory.addItem(CANONICAL_MATERIALS.water_blessed, 2);
-      this.canonChapterManager.unlockChapter(11);
+      this.unlockAndAdvanceCanonChapter(11);
       this.spawnFloatingText(this.playerGroup.position, '🗝️ ¡MARTÍN Y TOBÍAS SE UNEN AL COMBATE! (+75 EXP)', '#a3ffc7');
       this.showDialogueModal(
         '🗝️ CONVOY DE PRISIONEROS — MARTÍN Y TOBÍAS (CAPÍTULO XI) 🗝️',
@@ -8747,7 +9178,7 @@ export class Oakhaven3DExperience {
       } else {
         this.hasClearedMirrorGallery = true;
         this.progression.addExp(90);
-        this.canonChapterManager.unlockChapter(15);
+        this.unlockAndAdvanceCanonChapter(15);
         this.triggerHolyFlash(0.65);
         this.spawnFloatingText(this.playerGroup.position, '🪞 ¡ESPEJO MAESTRO QUEBRADO (3/3)! (+90 EXP)', '#ffd700');
         this.showDialogueModal(
@@ -8830,6 +9261,14 @@ export class Oakhaven3DExperience {
     this.hasTalkedToThomas3D = true;
     this.audio.playSfx('menu_select');
     this.playerStats.posture = this.playerStats.maxPosture;
+    if (this.oakhavenNarrativePhase === 'FIRST_DAWN_EPILOGUE') {
+      this.showDialogueModal(
+        '🌅 HERMANO THOMAS — EPÍLOGO DEL PRIMER AMANECER 🌅',
+        '«Khaterine... Gracias por sacarme de aquella pira en la Noche de la Luna Roja y creer que mi sangre podía elegir la piedad. Mira Oakhaven: por primera vez el humo ha desaparecido y las flores crecen sobre la ceniza.»',
+        '👑 EPÍLOGO CANÓNICO — LA OSCURIDAD QUE ELIGIÓ AMAR 👑'
+      );
+      return;
+    }
     this.spawnFloatingText(this.playerGroup.position, '+25 POSTURA • BENDICIÓN FRATERNAL', '#ffd700');
     this.updateHUD();
 
@@ -8846,10 +9285,20 @@ export class Oakhaven3DExperience {
     this.playerStats.health = Math.min(this.playerStats.maxHealth, this.playerStats.health + 35);
     this.playerStats.posture = this.playerStats.maxPosture;
 
+    if (this.oakhavenNarrativePhase === 'FIRST_DAWN_EPILOGUE') {
+      this.showDialogueModal(
+        '🌅 ELOWEN DE OAKHAVEN — BAJO EL VIEJO ROBLE EN PAZ 🌅',
+        '«Thomas... ¿Recuerdas cuando subíamos a escondidas a esta colina a mirar las estrellas esperando una luz que no quemara? El Sol del Abismo se ha apagado y el pájaro de madera ya no conoce jaula alguna. Hoy comienza nuestra vida de verdad.»',
+        '👑 EPÍLOGO CANÓNICO — 20/20 CAPÍTULOS COMPLETOS 👑'
+      );
+      this.updateHUD();
+      return;
+    }
+
     if (!this.hasDeliveredBirdOnOakHill) {
       this.hasDeliveredBirdOnOakHill = true;
       this.progression.addExp(50);
-      this.canonChapterManager.unlockChapter(2);
+      this.unlockAndAdvanceCanonChapter(2, false);
       this.spawnFloatingText(this.playerGroup.position, '🕊️ ¡PÁJARO DE SAUCE ENTREGADO A ELOWEN! (+50 EXP)', '#ffd700');
       this.triggerOakhavenMidnightSiege();
       this.showDialogueModal(
@@ -8875,6 +9324,14 @@ export class Oakhaven3DExperience {
     this.hasTalkedToCedric3D = true;
     this.audio.playSfx('menu_select');
     this.playerStats.posture = this.playerStats.maxPosture;
+    if (this.oakhavenNarrativePhase === 'FIRST_DAWN_EPILOGUE') {
+      this.showDialogueModal(
+        '🌅 PADRE CEDRIC — BENDICIÓN DEL PRIMER AMANECER 🌅',
+        '«Hijo mío... Sabía desde la primera vez que limpiaste las heridas de los leprosos que ningún fuego del Abismo podría corromper un corazón tan limpio. Que las campanas de San Jude solo vuelvan a repicar para celebrar la vida.»',
+        '✞ EPÍLOGO CANÓNICO — PARROQUIA DE OAKHAVEN EN PAZ ✞'
+      );
+      return;
+    }
     this.spawnFloatingText(this.playerGroup.position, '+30 EXP • BENDICIÓN SAGRADA', '#ffd700');
     this.updateHUD();
 
@@ -8888,6 +9345,14 @@ export class Oakhaven3DExperience {
   public interactWithShalem(): void {
     this.audio.playSfx('menu_select');
     this.playerStats.posture = this.playerStats.maxPosture;
+    if (this.oakhavenNarrativePhase === 'FIRST_DAWN_EPILOGUE') {
+      this.showDialogueModal(
+        '🌅 SHALEM — EL MARQUÉS LIBERADO 🌅',
+        '«¡Prrr...! Deja de mirarme así, monaguillo. Sí, renuncié a un trono de fuego eterno en el Abismo por quedarme hecho un ovillo al sol junto a vosotros... Y no pienso admitir jamás que este calor en la hierba es mejor que gobernar diez mil legiones. Ahora ráscame detrás de las orejas.»',
+        '🐾 EPÍLOGO CANÓNICO — PACTO DE SHALEM QUEBRADO POR AMOR 🐾'
+      );
+      return;
+    }
     this.spawnFloatingText(this.playerGroup.position, 'POSTURA AL MÁXIMO • RONRONEO FELINO', '#aaaaff');
     this.updateHUD();
 
@@ -8901,6 +9366,15 @@ export class Oakhaven3DExperience {
   public interactWithKhaterine(): void {
     this.hasTalkedToKhaterine3D = true;
     this.audio.playSfx('menu_select');
+    if (this.oakhavenNarrativePhase === 'FIRST_DAWN_EPILOGUE') {
+      this.showDialogueModal(
+        '🌅 KHATERINE — MEMORIA DEL SAUCE NEGRO EN PAZ 🌅',
+        '«Mis ocho hermanas descansan al fin, Thomas. Alaric cayó bajo el peso de su propia codicia y Astaroth no volverá a devorar Albion. Ya no necesito esconderme bajo un velo prestado: el Sauce Negro vuelve a florecer en el bosque.»',
+        '👑 EPÍLOGO CANÓNICO — EL JURAMENTO DE LAS NUEVE CUMPLIDO 👑'
+      );
+      return;
+    }
+    this.unlockAndAdvanceCanonChapter(3, false);
     this.spawnFloatingText(this.playerGroup.position, '+15% AGILIDAD • PACTO OSCURO', '#d999ff');
 
     this.showDialogueModal(
@@ -9501,6 +9975,7 @@ export class Oakhaven3DExperience {
       // Trigger awakening when player crosses z <= -8
       if (this.playerGroup.position.z <= -8) {
         this.morwennaState = 'CHASE';
+        this.unlockAndAdvanceCanonChapter(5);
         if (this.morwennaHpBarContainer) {
           this.morwennaHpBarContainer.style.display = 'block';
         }
@@ -9697,6 +10172,7 @@ export class Oakhaven3DExperience {
 
     // Automatically open the cemetery gate
     this.openCemeteryGate();
+    this.unlockAndAdvanceCanonChapter(6);
 
     if (this.morwennaHpBarContainer) {
       this.morwennaHpBarContainer.style.borderColor = '#ffd700';
@@ -10498,6 +10974,7 @@ export class Oakhaven3DExperience {
     this.updatePlayer(delta);
     this.updateLockOn(delta);
     this.updateSectorCompassAndShalemGuide(delta);
+    this.syncCampaignSequence(delta);
     this.updateEnemy(delta);
     this.updateCultist(delta);
     this.updateZealot(delta);
@@ -11833,6 +12310,8 @@ export class Oakhaven3DExperience {
     if (!this.alchemyModalEl) return;
 
     if (this.isAlchemyOpen) {
+      this.hasVisitedApothecary3D = true;
+      this.unlockAndAdvanceCanonChapter(4);
       this.releaseAllInputs();
       this.alchemyModalEl.style.display = 'block';
       this.renderAlchemyModal();
@@ -12256,11 +12735,20 @@ export class Oakhaven3DExperience {
         morwennaPhase2: this.morwennaPhase === 2,
         cemeteryGateOpen: this.cemeteryGateOpen,
         checkpoint: { x: this.playerGroup.position.x, y: this.playerGroup.position.y, z: this.playerGroup.position.z },
-        destroyedPropIds: this.destructibles.filter((p: DestructibleProp3D) => p.isDestroyed).map((p: DestructibleProp3D) => p.id)
+        destroyedPropIds: this.destructibles.filter((p: DestructibleProp3D) => p.isDestroyed).map((p: DestructibleProp3D) => p.id),
+        unlockedChapterIds: this.canonChapterManager
+          .getAllChapters()
+          .filter(c => this.canonChapterManager.isChapterUnlocked(c.id))
+          .map(c => c.id),
+        currentChapterId: this.currentCanonChapterId
       }
     });
 
     this.updateHUD();
+  }
+
+  public getActiveCampaignObjective(): CampaignObjective3D | undefined {
+    return this.activeCampaignObjective;
   }
 
   private loadSavedSanctuaryState(): void {
@@ -12337,6 +12825,16 @@ export class Oakhaven3DExperience {
               prop.mesh.visible = false;
             }
           }
+        }
+        if (Array.isArray(save.world.unlockedChapterIds)) {
+          for (const chId of save.world.unlockedChapterIds) {
+            this.canonChapterManager.unlockChapter(chId);
+          }
+        }
+        if (typeof save.world.currentChapterId === 'number' && Number.isFinite(save.world.currentChapterId)) {
+          this.currentCanonChapterId = save.world.currentChapterId;
+          this.canonChapterManager.unlockChapter(save.world.currentChapterId);
+          this.canonChapterManager.selectChapter(save.world.currentChapterId);
         }
       }
 

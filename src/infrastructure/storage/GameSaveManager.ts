@@ -11,6 +11,8 @@ export interface WorldSaveState {
   cemeteryGateOpen: boolean;
   checkpoint: { x: number; y: number; z: number };
   destroyedPropIds: string[];
+  unlockedChapterIds?: number[];
+  currentChapterId?: number;
 }
 
 export interface GameSaveDataV2 {
@@ -219,7 +221,13 @@ export class GameSaveManager {
         y: save.world?.checkpoint?.y ?? 0,
         z: save.world?.checkpoint?.z ?? 4
       },
-      destroyedPropIds: Array.isArray(save.world?.destroyedPropIds) ? save.world.destroyedPropIds : []
+      destroyedPropIds: Array.isArray(save.world?.destroyedPropIds) ? save.world.destroyedPropIds : [],
+      ...(Array.isArray(save.world?.unlockedChapterIds)
+        ? { unlockedChapterIds: save.world.unlockedChapterIds.filter((n: unknown) => typeof n === 'number' && Number.isFinite(n)) }
+        : {}),
+      ...(typeof save.world?.currentChapterId === 'number' && Number.isFinite(save.world.currentChapterId)
+        ? { currentChapterId: save.world.currentChapterId }
+        : {})
     };
 
     return {
