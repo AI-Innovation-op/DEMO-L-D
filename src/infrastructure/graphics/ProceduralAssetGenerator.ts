@@ -689,393 +689,762 @@ export class ProceduralAssetGenerator {
     }
 
     // ==========================================
-    // 7. BACKGROUNDS (640x360)
+    // 7. PANORAMIC GOTHIC 2.5D BACKGROUNDS (1180x360, Horizon y = 202)
     // ==========================================
+    const BG_W = 1180;
+    const BG_H = 360;
+    const HORIZON_Y = 202;
+
+    const seeded = (n: number): number => {
+      const s = Math.sin(n * 12.9898 + 78.233) * 43758.5453;
+      return s - Math.floor(s);
+    };
+
+    const drawStarsAndClouds = (ctx: CanvasRenderingContext2D, starColor: string, cloudColor: string, count: number) => {
+      ctx.fillStyle = starColor;
+      for (let i = 0; i < count; i++) {
+        const sx = Math.floor(seeded(i * 3.1) * BG_W);
+        const sy = Math.floor(seeded(i * 7.3) * 128);
+        const sz = seeded(i * 11.7) > 0.8 ? 2 : 1;
+        ctx.globalAlpha = 0.25 + seeded(i * 5.9) * 0.55;
+        ctx.fillRect(sx, sy, sz, sz);
+      }
+      ctx.globalAlpha = 1;
+
+      for (let c = 0; c < 14; c++) {
+        const cx = Math.floor(seeded(c * 17.3 + 4) * BG_W);
+        const cy = 22 + Math.floor(seeded(c * 9.7 + 1) * 78);
+        const cw = 70 + Math.floor(seeded(c * 23.1) * 90);
+        const ch = 12 + Math.floor(seeded(c * 13.7) * 14);
+        ctx.fillStyle = cloudColor;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, cw * 0.5, ch * 0.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    };
+
+    const drawGothicLancetWindow = (
+      ctx: CanvasRenderingContext2D,
+      cx: number,
+      topY: number,
+      w: number,
+      h: number,
+      topColor: string,
+      botColor: string,
+      glowColor: string
+    ) => {
+      const halfW = w / 2;
+      const archH = Math.min(w * 0.85, h * 0.42);
+      const glow = ctx.createRadialGradient(cx, topY + h * 0.5, 2, cx, topY + h * 0.5, w * 1.9);
+      glow.addColorStop(0, glowColor);
+      glow.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(cx - w * 2, topY - w, w * 4, h + w * 2);
+
+      // Stone recess frame
+      ctx.fillStyle = '#0d0b14';
+      ctx.beginPath();
+      ctx.moveTo(cx - halfW - 2, topY + h + 2);
+      ctx.lineTo(cx - halfW - 2, topY + archH);
+      ctx.quadraticCurveTo(cx - halfW - 2, topY - 2, cx, topY - 3);
+      ctx.quadraticCurveTo(cx + halfW + 2, topY - 2, cx + halfW + 2, topY + archH);
+      ctx.lineTo(cx + halfW + 2, topY + h + 2);
+      ctx.closePath();
+      ctx.fill();
+
+      // Stained glass fill
+      const g = ctx.createLinearGradient(cx, topY, cx, topY + h);
+      g.addColorStop(0, topColor);
+      g.addColorStop(1, botColor);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(cx - halfW, topY + h);
+      ctx.lineTo(cx - halfW, topY + archH);
+      ctx.quadraticCurveTo(cx - halfW, topY + 2, cx, topY);
+      ctx.quadraticCurveTo(cx + halfW, topY + 2, cx + halfW, topY + archH);
+      ctx.lineTo(cx + halfW, topY + h);
+      ctx.closePath();
+      ctx.fill();
+
+      // Iron mullions & leaded crossbars
+      ctx.fillStyle = '#14111c';
+      ctx.fillRect(cx - 1, topY + 2, 2, h - 2);
+      ctx.fillRect(cx - halfW, topY + Math.floor(h * 0.45), w, 2);
+      ctx.fillRect(cx - halfW, topY + Math.floor(h * 0.72), w, 2);
+      ctx.fillStyle = '#312a40';
+      ctx.fillRect(cx - halfW - 3, topY + h, w + 6, 3);
+    };
+
+    const drawPerspectiveCobblestones = (
+      ctx: CanvasRenderingContext2D,
+      baseTop: string,
+      baseBot: string,
+      stoneA: string,
+      stoneB: string,
+      seamColor: string,
+      curbColor: string,
+      curbHighlight: string
+    ) => {
+      const floorGrad = ctx.createLinearGradient(0, HORIZON_Y, 0, BG_H);
+      floorGrad.addColorStop(0, baseTop);
+      floorGrad.addColorStop(1, baseBot);
+      ctx.fillStyle = floorGrad;
+      ctx.fillRect(0, HORIZON_Y, BG_W, BG_H - HORIZON_Y);
+
+      // Perspective horizontal stone courses (tighter near horizon, wider in foreground)
+      let y = HORIZON_Y + 4;
+      let row = 0;
+      while (y < BG_H) {
+        const rowH = Math.round(7 + row * 1.45);
+        const stoneW = Math.round(20 + row * 3.6);
+        const offset = (row % 2) * Math.floor(stoneW / 2);
+
+        for (let x = -stoneW; x < BG_W + stoneW; x += stoneW) {
+          const sx = x + offset;
+          const r = seeded(row * 97 + x * 0.37);
+          ctx.fillStyle = r > 0.55 ? stoneA : stoneB;
+          ctx.globalAlpha = 0.28 + r * 0.25;
+          ctx.fillRect(sx + 1, y + 1, stoneW - 2, rowH - 2);
+          ctx.globalAlpha = 0.22;
+          ctx.fillStyle = curbHighlight;
+          ctx.fillRect(sx + 1, y + 1, stoneW - 3, 1);
+        }
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = seamColor;
+        ctx.fillRect(0, y, BG_W, 1);
+        y += rowH;
+        row++;
+      }
+
+      // Grounded stone curb separating architecture from walkable belt
+      ctx.fillStyle = curbColor;
+      ctx.fillRect(0, HORIZON_Y - 2, BG_W, 5);
+      ctx.fillStyle = curbHighlight;
+      ctx.fillRect(0, HORIZON_Y - 2, BG_W, 1);
+    };
+
+    const drawIronFence = (ctx: CanvasRenderingContext2D, x1: number, x2: number, baseY: number) => {
+      ctx.fillStyle = '#1b1d28';
+      ctx.fillRect(x1, baseY - 12, x2 - x1, 12);
+      ctx.fillStyle = '#2d3042';
+      ctx.fillRect(x1, baseY - 12, x2 - x1, 2);
+
+      ctx.fillStyle = '#0d0e15';
+      ctx.fillRect(x1, baseY - 34, x2 - x1, 2);
+      ctx.fillRect(x1, baseY - 20, x2 - x1, 2);
+      for (let fx = x1; fx <= x2; fx += 10) {
+        ctx.fillStyle = '#11131c';
+        ctx.fillRect(fx, baseY - 38, 2, 26);
+        ctx.fillStyle = '#383d52';
+        ctx.fillRect(fx, baseY - 41, 2, 3);
+      }
+      // Stone fence piers every 90px
+      for (let px = x1; px <= x2; px += 90) {
+        drawShadedRect(ctx, px - 5, baseY - 44, 12, 44, '#242634', '#3d4157', '#11121a');
+        drawShadedRect(ctx, px - 7, baseY - 48, 16, 5, '#303447', '#4e5470', '#161822');
+      }
+    };
+
+    const drawMedievalHouse = (
+      ctx: CanvasRenderingContext2D,
+      x: number,
+      w: number,
+      wallH: number,
+      roofH: number,
+      litWindows: boolean
+    ) => {
+      const topY = HORIZON_Y - wallH;
+      // Stone lower foundation & plaster upper wall
+      drawShadedRect(ctx, x, topY, w, wallH, '#181a24', '#272b3b', '#0d0e14');
+      drawShadedRect(ctx, x, HORIZON_Y - 24, w, 24, '#20222f', '#313547', '#10121a');
+
+      // Half-timbered oak beams
+      ctx.fillStyle = '#100d12';
+      ctx.fillRect(x, topY, w, 3);
+      ctx.fillRect(x, topY + Math.floor(wallH * 0.48), w, 3);
+      ctx.fillRect(x + 3, topY, 3, wallH);
+      ctx.fillRect(x + w - 6, topY, 3, wallH);
+      ctx.fillRect(x + Math.floor(w / 2) - 1, topY, 3, wallH);
+
+      // Steep gothic slate gable roof
+      ctx.fillStyle = '#141724';
+      ctx.beginPath();
+      ctx.moveTo(x - 8, topY + 2);
+      ctx.lineTo(x + w / 2, topY - roofH);
+      ctx.lineTo(x + w + 8, topY + 2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#32374f';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x - 8, topY + 2);
+      ctx.lineTo(x + w / 2, topY - roofH);
+      ctx.lineTo(x + w + 8, topY + 2);
+      ctx.stroke();
+
+      // Stone chimney
+      drawShadedRect(ctx, x + Math.floor(w * 0.72), topY - roofH + 8, 10, Math.max(18, roofH - 4), '#232635', '#373c52', '#10121b');
+
+      // Mullioned arched windows (muted warm amber candle glow, never flat neon yellow!)
+      const winCount = w >= 85 ? 2 : 1;
+      for (let i = 0; i < winCount; i++) {
+        const wx = winCount === 2 ? x + Math.floor(w * (i === 0 ? 0.3 : 0.7)) : x + Math.floor(w * 0.5);
+        if (litWindows) {
+          drawGothicLancetWindow(
+            ctx,
+            wx,
+            topY + 14,
+            14,
+            24,
+            '#8d5a2b',
+            '#d69848',
+            'rgba(220, 145, 55, 0.24)'
+          );
+        } else {
+          drawGothicLancetWindow(
+            ctx,
+            wx,
+            topY + 14,
+            14,
+            24,
+            '#182033',
+            '#24304a',
+            'rgba(90, 120, 175, 0.14)'
+          );
+        }
+      }
+    };
+
+    const drawCypressOrWillow = (ctx: CanvasRenderingContext2D, x: number, baseY: number, h: number, color: string) => {
+      ctx.fillStyle = color;
+      ctx.fillRect(x - 3, baseY - 18, 6, 18);
+      ctx.beginPath();
+      ctx.moveTo(x, baseY - h);
+      ctx.quadraticCurveTo(x - 16, baseY - h * 0.45, x - 12, baseY - 12);
+      ctx.lineTo(x + 12, baseY - 12);
+      ctx.quadraticCurveTo(x + 16, baseY - h * 0.45, x, baseY - h);
+      ctx.fill();
+    };
+
+    // --- 7.1 ACT I: OAKHAVEN (1180x360 PANORAMIC — 4 CANONICAL SUB-SECTORS) ---
     if (!textures.exists('bg_oakhaven')) {
-      const c = textures.createCanvas('bg_oakhaven', 640, 360);
+      const c = textures.createCanvas('bg_oakhaven', BG_W, BG_H);
       if (c) {
         const ctx = c.getContext();
-        const sky = ctx.createLinearGradient(0, 0, 0, 260);
-        sky.addColorStop(0, '#0c1017');
-        sky.addColorStop(0.4, '#1b202e');
-        sky.addColorStop(1, '#171924');
+        const sky = ctx.createLinearGradient(0, 0, 0, HORIZON_Y);
+        sky.addColorStop(0, '#070912');
+        sky.addColorStop(0.5, '#131829');
+        sky.addColorStop(1, '#1d2133');
         ctx.fillStyle = sky;
-        ctx.fillRect(0, 0, 640, 360);
+        ctx.fillRect(0, 0, BG_W, HORIZON_Y);
 
-        const moonGlow = ctx.createRadialGradient(480, 55, 4, 480, 55, 55);
-        moonGlow.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
-        moonGlow.addColorStop(0.3, 'rgba(220, 235, 255, 0.35)');
-        moonGlow.addColorStop(1, 'rgba(100, 130, 180, 0)');
+        drawStarsAndClouds(ctx, '#dce6ff', 'rgba(30, 36, 58, 0.42)', 75);
+
+        // Pale Full Moon over Old Oak Hill / Pyre Plaza
+        const moonX = 560;
+        const moonY = 52;
+        const moonGlow = ctx.createRadialGradient(moonX, moonY, 6, moonX, moonY, 85);
+        moonGlow.addColorStop(0, 'rgba(235, 242, 255, 0.9)');
+        moonGlow.addColorStop(0.3, 'rgba(165, 190, 235, 0.28)');
+        moonGlow.addColorStop(1, 'rgba(70, 90, 140, 0)');
         ctx.fillStyle = moonGlow;
-        ctx.fillRect(425, 0, 110, 110);
-        ctx.fillStyle = '#f0f5fa';
+        ctx.fillRect(moonX - 85, 0, 170, 145);
+        ctx.fillStyle = '#e8effa';
         ctx.beginPath();
-        ctx.arc(480, 55, 18, 0, Math.PI * 2);
+        ctx.arc(moonX, moonY, 18, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#c4d2e6';
+        ctx.beginPath();
+        ctx.arc(moonX - 5, moonY - 4, 4, 0, Math.PI * 2);
+        ctx.arc(moonX + 6, moonY + 5, 3, 0, Math.PI * 2);
         ctx.fill();
 
-        ctx.fillStyle = '#10151c';
+        // Distant Rolling Hills & Pine Ridge Silhouette
+        ctx.fillStyle = '#0f1320';
         ctx.beginPath();
-        ctx.moveTo(350, 260);
-        ctx.lineTo(550, 90);
-        ctx.lineTo(640, 140);
-        ctx.lineTo(640, 260);
-        ctx.fill();
-        ctx.fillStyle = '#00ff88';
-        ctx.fillRect(548, 85, 4, 8);
-
-        ctx.fillStyle = '#181b24';
-        ctx.fillRect(240, 90, 140, 170);
-        ctx.beginPath();
-        ctx.moveTo(310, 25);
-        ctx.lineTo(270, 90);
-        ctx.lineTo(350, 90);
-        ctx.fill();
-        ctx.fillStyle = '#d4c29a';
-        ctx.fillRect(308, 12, 4, 20);
-        ctx.fillRect(302, 17, 16, 4);
-
-        ctx.fillStyle = '#ffaa22';
-        ctx.fillRect(285, 115, 14, 28);
-        ctx.fillRect(321, 115, 14, 28);
-
-        ctx.fillStyle = '#13151b';
-        ctx.fillRect(20, 150, 100, 110);
-        ctx.fillRect(130, 165, 80, 95);
-        ctx.fillRect(450, 160, 140, 100);
-
-        ctx.fillStyle = '#ffbb33';
-        ctx.fillRect(45, 175, 16, 16);
-        ctx.fillRect(80, 175, 16, 16);
-        ctx.fillRect(160, 190, 14, 14);
-        ctx.fillRect(480, 185, 18, 18);
-
-        ctx.fillStyle = '#261b14';
-        ctx.beginPath();
-        ctx.arc(50, 60, 70, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#3d2b1f';
-        ctx.beginPath();
-        ctx.arc(80, 80, 50, 0, Math.PI * 2);
+        ctx.moveTo(0, HORIZON_Y);
+        ctx.lineTo(0, 152);
+        ctx.quadraticCurveTo(180, 118, 360, 138);
+        ctx.quadraticCurveTo(540, 108, 720, 142);
+        ctx.quadraticCurveTo(940, 112, BG_W, 146);
+        ctx.lineTo(BG_W, HORIZON_Y);
+        ctx.closePath();
         ctx.fill();
 
-        ctx.fillStyle = '#2b2c36';
-        ctx.fillRect(28, 200, 10, 60);
-        ctx.fillRect(18, 215, 30, 8);
-        ctx.beginPath();
-        ctx.arc(33, 219, 14, 0, Math.PI * 2);
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = '#2b2c36';
-        ctx.stroke();
-
-        ctx.fillStyle = '#181b22';
-        ctx.fillRect(0, 260, 640, 100);
-
-        ctx.fillStyle = '#28303d';
-        ctx.fillRect(140, 285, 80, 8);
-        ctx.fillRect(330, 295, 110, 10);
-        ctx.fillRect(490, 280, 70, 7);
-
-        const fireGlow = ctx.createRadialGradient(280, 255, 5, 280, 255, 60);
-        fireGlow.addColorStop(0, 'rgba(255, 120, 0, 0.7)');
-        fireGlow.addColorStop(0.5, 'rgba(255, 60, 0, 0.25)');
-        fireGlow.addColorStop(1, 'rgba(255, 0, 0, 0)');
-        ctx.fillStyle = fireGlow;
-        ctx.fillRect(220, 195, 120, 120);
-
-        ctx.fillStyle = '#ff6600';
-        ctx.fillRect(276, 248, 8, 16);
-        ctx.fillStyle = '#ffff66';
-        ctx.fillRect(278, 252, 4, 8);
-        c.refresh();
-      }
-    }
-
-    if (!textures.exists('bg_londinium')) {
-      const c = textures.createCanvas('bg_londinium', 640, 360);
-      if (c) {
-        const ctx = c.getContext();
-        const sky = ctx.createLinearGradient(0, 0, 0, 360);
-        sky.addColorStop(0, '#1d122b');
-        sky.addColorStop(0.5, '#3b1f47');
-        sky.addColorStop(1, '#1b1224');
-        ctx.fillStyle = sky;
-        ctx.fillRect(0, 0, 640, 360);
-
-        const sunHalo = ctx.createRadialGradient(320, 90, 10, 320, 90, 120);
-        sunHalo.addColorStop(0, 'rgba(255, 235, 140, 0.9)');
-        sunHalo.addColorStop(0.4, 'rgba(255, 180, 50, 0.45)');
-        sunHalo.addColorStop(1, 'rgba(150, 40, 120, 0)');
-        ctx.fillStyle = sunHalo;
-        ctx.fillRect(180, 0, 280, 220);
-
-        ctx.fillStyle = '#2c1e38';
-        ctx.fillRect(200, 60, 240, 200);
-        ctx.fillStyle = '#422a57';
-        ctx.beginPath();
-        ctx.moveTo(220, 60);
-        ctx.lineTo(240, 10);
-        ctx.lineTo(260, 60);
-        ctx.fill();
-
-        ctx.beginPath();
-        ctx.moveTo(380, 60);
-        ctx.lineTo(400, 10);
-        ctx.lineTo(420, 60);
-        ctx.fill();
-
-        ctx.fillStyle = '#661a80';
-        ctx.fillRect(230, 110, 22, 80);
-        ctx.fillRect(390, 110, 22, 80);
-        ctx.fillStyle = '#ffd700';
-        ctx.fillRect(238, 120, 6, 24);
-        ctx.fillRect(398, 120, 6, 24);
-
-        ctx.fillStyle = '#251a30';
-        ctx.fillRect(0, 260, 640, 100);
-
-        const mist = ctx.createLinearGradient(0, 250, 0, 300);
-        mist.addColorStop(0, 'rgba(130, 40, 200, 0.4)');
-        mist.addColorStop(1, 'rgba(40, 10, 60, 0)');
-        ctx.fillStyle = mist;
-        ctx.fillRect(0, 250, 640, 50);
-        c.refresh();
-      }
-    }
-
-    if (!textures.exists('bg_cathedral')) {
-      const c = textures.createCanvas('bg_cathedral', 640, 360);
-      if (c) {
-        const ctx = c.getContext();
-        ctx.fillStyle = '#07050d';
-        ctx.fillRect(0, 0, 640, 360);
-
-        ctx.fillStyle = '#1a1329';
-        for (let i = 40; i < 640; i += 120) {
-          ctx.beginPath();
-          ctx.moveTo(i, 0);
-          ctx.lineTo(i + 25, 140);
-          ctx.lineTo(i + 50, 0);
-          ctx.fill();
+        // Distant cypress/pine silhouettes across horizon
+        for (let tx = 18; tx < BG_W; tx += 36) {
+          const th = 28 + Math.floor(seeded(tx * 1.9) * 32);
+          drawCypressOrWillow(ctx, tx, HORIZON_Y - 12, th, '#0c101b');
         }
 
-        const vortex = ctx.createRadialGradient(320, 160, 20, 320, 160, 110);
-        vortex.addColorStop(0, '#000000');
-        vortex.addColorStop(0.35, '#5c167d');
-        vortex.addColorStop(0.8, '#1b0629');
-        vortex.addColorStop(1, 'transparent');
-        ctx.fillStyle = vortex;
-        ctx.fillRect(180, 30, 280, 260);
-
-        ctx.strokeStyle = 'rgba(230, 240, 255, 0.85)';
-        ctx.lineWidth = 4;
+        // SUB-SECTOR 1 (x: 0..235): Parroquia de San Jude (Gothic Stone Church & Bellspire)
+        drawShadedRect(ctx, 24, 92, 168, HORIZON_Y - 92, '#1b1d2b', '#2b2f45', '#0e1018');
+        // Stepped stone buttresses
+        drawShadedRect(ctx, 18, 120, 12, HORIZON_Y - 120, '#222536', '#363b54', '#10121c');
+        drawShadedRect(ctx, 186, 120, 12, HORIZON_Y - 120, '#222536', '#363b54', '#10121c');
+        // Church pitched roof + gothic spire + cross
+        ctx.fillStyle = '#141724';
         ctx.beginPath();
-        ctx.moveTo(320, 0);
-        ctx.lineTo(320, 280);
+        ctx.moveTo(14, 94);
+        ctx.lineTo(108, 44);
+        ctx.lineTo(202, 94);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#1b1f30';
+        ctx.beginPath();
+        ctx.moveTo(96, 48);
+        ctx.lineTo(108, 14);
+        ctx.lineTo(120, 48);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#c8b27c';
+        ctx.fillRect(107, 4, 2, 14);
+        ctx.fillRect(103, 8, 10, 2);
+        // Rose window + twin stained glass lancets
+        ctx.fillStyle = '#100c18';
+        ctx.beginPath();
+        ctx.arc(108, 76, 11, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#6b3b7d';
+        ctx.beginPath();
+        ctx.arc(108, 76, 8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#d4af37';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        drawGothicLancetWindow(ctx, 62, 116, 18, 44, '#7d4d25', '#d99a44', 'rgba(235, 160, 65, 0.28)');
+        drawGothicLancetWindow(ctx, 154, 116, 18, 44, '#7d4d25', '#d99a44', 'rgba(235, 160, 65, 0.28)');
+        // Pointed gothic parish doorway
+        ctx.fillStyle = '#0b0912';
+        ctx.beginPath();
+        ctx.moveTo(92, HORIZON_Y);
+        ctx.lineTo(92, 158);
+        ctx.quadraticCurveTo(108, 134, 124, 158);
+        ctx.lineTo(124, HORIZON_Y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#3a3f59';
+        ctx.lineWidth = 2;
         ctx.stroke();
 
-        ctx.fillStyle = '#140f21';
-        ctx.fillRect(0, 260, 640, 100);
+        // SUB-SECTOR 2 (x: 235..435): Colina del Viejo Roble (Ancient Moonlit Oak & Mossy Rise)
+        // Soft moonbeam shaft over the Old Oak
+        const oakBeam = ctx.createLinearGradient(340, 30, 340, 212);
+        oakBeam.addColorStop(0, 'rgba(205, 225, 255, 0.04)');
+        oakBeam.addColorStop(0.7, 'rgba(205, 225, 255, 0.14)');
+        oakBeam.addColorStop(1, 'rgba(205, 225, 255, 0.02)');
+        ctx.fillStyle = oakBeam;
+        ctx.beginPath();
+        ctx.moveTo(295, 30);
+        ctx.lineTo(395, 30);
+        ctx.lineTo(430, 212);
+        ctx.lineTo(245, 212);
+        ctx.closePath();
+        ctx.fill();
+
+        // Gnarled Ancient Oak Trunk & Branches
+        ctx.fillStyle = '#241812';
+        ctx.fillRect(342, 108, 22, 74);
+        ctx.fillStyle = '#36241b';
+        ctx.fillRect(346, 112, 6, 68);
+        // Spreading branches
+        ctx.strokeStyle = '#241812';
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.moveTo(350, 122);
+        ctx.lineTo(306, 96);
+        ctx.moveTo(356, 120);
+        ctx.lineTo(400, 94);
+        ctx.stroke();
+        // Rich layered oak canopy (deep twilight green-amber foliage clusters)
+        const foliageClusters = [
+          { x: 304, y: 94, rx: 38, ry: 22, col: '#1e2c22' },
+          { x: 398, y: 94, rx: 40, ry: 22, col: '#1e2c22' },
+          { x: 352, y: 78, rx: 56, ry: 28, col: '#263829' },
+          { x: 325, y: 86, rx: 34, ry: 18, col: '#354832' },
+          { x: 378, y: 82, rx: 36, ry: 18, col: '#3b4e34' },
+          { x: 352, y: 66, rx: 38, ry: 16, col: '#4a5c3a' }
+        ];
+        foliageClusters.forEach(fc => {
+          ctx.fillStyle = fc.col;
+          ctx.beginPath();
+          ctx.ellipse(fc.x, fc.y, fc.rx, fc.ry, 0, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        // SUB-SECTOR 3 (x: 440..725): Plaza de la Gran Pira (Medieval Village Gables & Iron Fence)
+        drawMedievalHouse(ctx, 446, 92, 82, 42, true);
+        drawMedievalHouse(ctx, 548, 86, 72, 38, false);
+        drawMedievalHouse(ctx, 642, 82, 78, 40, true);
+
+        // SUB-SECTOR 4 (x: 730..1180): Cementerio Antiguo y Criptas de San Jude
+        drawCypressOrWillow(ctx, 760, HORIZON_Y, 82, '#101521');
+        drawCypressOrWillow(ctx, 845, HORIZON_Y, 96, '#0d121d');
+        drawCypressOrWillow(ctx, 940, HORIZON_Y, 88, '#101521');
+        drawCypressOrWillow(ctx, 1138, HORIZON_Y, 92, '#0d121d');
+        drawIronFence(ctx, 730, 1170, HORIZON_Y);
+
+        // Perspective wet cobblestone road (y = 202..360)
+        drawPerspectiveCobblestones(
+          ctx,
+          '#1b1e2b',
+          '#11131c',
+          '#292e42',
+          '#202435',
+          '#0d0f17',
+          '#2d3245',
+          '#48506b'
+        );
+
+        // Mossy elevated Colina del Viejo Roble knoll + stone stair steps seamlessly blending at y = 178..210
+        const hillGrad = ctx.createRadialGradient(335, 192, 16, 335, 194, 108);
+        hillGrad.addColorStop(0, '#2c402f');
+        hillGrad.addColorStop(0.65, '#1d2b22');
+        hillGrad.addColorStop(1, 'rgba(24, 30, 38, 0)');
+        ctx.fillStyle = hillGrad;
+        ctx.beginPath();
+        ctx.ellipse(335, 196, 105, 24, 0, 0, Math.PI * 2);
+        ctx.fill();
+        drawShadedRect(ctx, 250, 200, 26, 7, '#3c4252', '#586075', '#1d2029');
+        drawShadedRect(ctx, 268, 192, 26, 7, '#3c4252', '#586075', '#1d2029');
+
+        // Subtle moonlit rain puddles on cobblestones
+        ctx.fillStyle = 'rgba(130, 165, 215, 0.12)';
+        ctx.beginPath();
+        ctx.ellipse(165, 268, 36, 7, 0, 0, Math.PI * 2);
+        ctx.ellipse(515, 286, 48, 8, 0, 0, Math.PI * 2);
+        ctx.ellipse(860, 272, 42, 7, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Low horizon mist veil
+        const mist = ctx.createLinearGradient(0, HORIZON_Y - 18, 0, HORIZON_Y + 28);
+        mist.addColorStop(0, 'rgba(120, 140, 185, 0)');
+        mist.addColorStop(0.5, 'rgba(110, 130, 175, 0.14)');
+        mist.addColorStop(1, 'rgba(110, 130, 175, 0)');
+        ctx.fillStyle = mist;
+        ctx.fillRect(0, HORIZON_Y - 18, BG_W, 46);
+
         c.refresh();
       }
     }
 
+    // --- 7.2 ACT II: EL CAMPANARIO Y GRANERO DEL SUR (1180x360 PANORAMIC) ---
     if (!textures.exists('bg_belltower')) {
-      const c = textures.createCanvas('bg_belltower', 640, 360);
+      const c = textures.createCanvas('bg_belltower', BG_W, BG_H);
       if (c) {
         const ctx = c.getContext();
-        // Dark interior walls with stone masonry pattern
-        ctx.fillStyle = '#111019';
-        ctx.fillRect(0, 0, 640, 360);
+        const wallGrad = ctx.createLinearGradient(0, 0, 0, HORIZON_Y);
+        wallGrad.addColorStop(0, '#0d0c14');
+        wallGrad.addColorStop(1, '#1c1828');
+        ctx.fillStyle = wallGrad;
+        ctx.fillRect(0, 0, BG_W, HORIZON_Y);
 
-        // Stone blocks shading
-        ctx.strokeStyle = '#1d1929';
+        // Ashlar masonry blocks
+        ctx.strokeStyle = '#241f33';
         ctx.lineWidth = 1;
-        for (let y = 0; y < 260; y += 24) {
+        for (let y = 26; y < HORIZON_Y; y += 22) {
           ctx.beginPath();
           ctx.moveTo(0, y);
-          ctx.lineTo(640, y);
+          ctx.lineTo(BG_W, y);
           ctx.stroke();
-          const offset = (y % 48 === 0) ? 0 : 30;
-          for (let x = offset; x < 640; x += 60) {
+          const off = (y % 44 === 0) ? 0 : 28;
+          for (let x = off; x < BG_W; x += 56) {
             ctx.beginPath();
             ctx.moveTo(x, y);
-            ctx.lineTo(x, y + 24);
+            ctx.lineTo(x, y + 22);
             ctx.stroke();
           }
         }
 
-        // Heavy oak ceiling beams
-        ctx.fillStyle = '#261b16';
-        ctx.fillRect(0, 0, 640, 36);
-        ctx.fillRect(80, 0, 24, 260);
-        ctx.fillRect(360, 0, 24, 260);
-
-        // Center High Arched Window with Moonlight
-        const winX = 200;
-        const winY = 40;
-        const winW = 120;
-        const winH = 170;
-
-        const skyGlow = ctx.createLinearGradient(winX, winY, winX, winY + winH);
-        skyGlow.addColorStop(0, '#1c2538');
-        skyGlow.addColorStop(0.5, '#2e3a54');
-        skyGlow.addColorStop(1, '#182030');
-        ctx.fillStyle = skyGlow;
-        ctx.fillRect(winX, winY + 40, winW, winH - 40);
-        ctx.beginPath();
-        ctx.arc(winX + winW / 2, winY + 40, winW / 2, Math.PI, 0);
-        ctx.fill();
-
-        // Cold Moon visible through the window
-        ctx.fillStyle = '#f0f5fa';
-        ctx.beginPath();
-        ctx.arc(winX + 45, winY + 50, 16, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Iron Bars on window
-        ctx.strokeStyle = '#0d0d14';
-        ctx.lineWidth = 3;
-        for (let bx = winX + 20; bx < winX + winW; bx += 20) {
-          ctx.beginPath();
-          ctx.moveTo(bx, winY + 10);
-          ctx.lineTo(bx, winY + winH);
-          ctx.stroke();
+        // Heavy gothic stone ribs & oak ceiling trusses
+        drawShadedRect(ctx, 0, 0, BG_W, 24, '#241914', '#382720', '#120c09');
+        for (let bx = 90; bx < BG_W; bx += 220) {
+          drawShadedRect(ctx, bx, 24, 18, HORIZON_Y - 24, '#231915', '#382821', '#120d0b');
         }
 
-        // Window Frame
-        ctx.lineWidth = 5;
-        ctx.strokeStyle = '#382f42';
-        ctx.strokeRect(winX, winY + 40, winW, winH - 40);
-        ctx.beginPath();
-        ctx.arc(winX + winW / 2, winY + 40, winW / 2, Math.PI, 0);
-        ctx.stroke();
+        // Tall barred belltower moonlight lancet windows
+        [220, 480, 740, 980].forEach((wx, idx) => {
+          const isFurnaceSide = idx >= 2;
+          drawGothicLancetWindow(
+            ctx,
+            wx,
+            42,
+            56,
+            132,
+            isFurnaceSide ? '#4a231b' : '#1b2740',
+            isFurnaceSide ? '#a84722' : '#394f75',
+            isFurnaceSide ? 'rgba(255, 110, 40, 0.24)' : 'rgba(165, 200, 255, 0.20)'
+          );
+          // Iron prison bars across window
+          ctx.fillStyle = '#0d0c12';
+          for (let bx = wx - 18; bx <= wx + 18; bx += 12) {
+            ctx.fillRect(bx, 48, 2, 126);
+          }
+        });
 
-        // Moonlight shaft on the stone floor
-        const lightBeam = ctx.createLinearGradient(winX + winW / 2, winY + winH, winX + winW / 2, 340);
-        lightBeam.addColorStop(0, 'rgba(180, 210, 255, 0.22)');
-        lightBeam.addColorStop(1, 'rgba(180, 210, 255, 0.02)');
-        ctx.fillStyle = lightBeam;
+        // Great Crucible furnace arch glow on eastern half
+        const furnaceGlow = ctx.createRadialGradient(840, 195, 10, 840, 195, 165);
+        furnaceGlow.addColorStop(0, 'rgba(255, 115, 35, 0.34)');
+        furnaceGlow.addColorStop(1, 'rgba(255, 60, 0, 0)');
+        ctx.fillStyle = furnaceGlow;
+        ctx.fillRect(670, 30, 340, 220);
+
+        drawPerspectiveCobblestones(
+          ctx,
+          '#1b1826',
+          '#110f19',
+          '#2b263b',
+          '#221e30',
+          '#0d0b14',
+          '#38314d',
+          '#554c73'
+        );
+
+        // Moonlight floor shaft under Elowen's Salt Cell balcony (x: 170..290)
+        const beam = ctx.createLinearGradient(220, 174, 220, 300);
+        beam.addColorStop(0, 'rgba(180, 212, 255, 0.20)');
+        beam.addColorStop(1, 'rgba(180, 212, 255, 0)');
+        ctx.fillStyle = beam;
         ctx.beginPath();
-        ctx.moveTo(winX + 10, winY + winH);
-        ctx.lineTo(winX + winW - 10, winY + winH);
-        ctx.lineTo(winX + winW + 90, 320);
-        ctx.lineTo(winX - 50, 320);
+        ctx.moveTo(192, 174);
+        ctx.lineTo(248, 174);
+        ctx.lineTo(295, 305);
+        ctx.lineTo(155, 305);
+        ctx.closePath();
         ctx.fill();
 
-        // Torch Wall Sconces
-        const drawTorch = (tx: number, ty: number) => {
-          ctx.fillStyle = '#423326';
-          ctx.fillRect(tx, ty, 6, 26);
-          const tGlow = ctx.createRadialGradient(tx + 3, ty, 3, tx + 3, ty, 45);
-          tGlow.addColorStop(0, 'rgba(255, 170, 50, 0.7)');
-          tGlow.addColorStop(0.5, 'rgba(255, 90, 20, 0.25)');
-          tGlow.addColorStop(1, 'transparent');
-          ctx.fillStyle = tGlow;
-          ctx.fillRect(tx - 40, ty - 40, 86, 86);
-          ctx.fillStyle = '#ffbb33';
-          ctx.fillRect(tx + 1, ty - 6, 4, 8);
-        };
-        drawTorch(50, 130);
-        drawTorch(580, 130);
-
-        // Hay bales & salt bags
-        ctx.fillStyle = '#614d28';
-        ctx.fillRect(20, 230, 48, 30);
-        ctx.fillStyle = '#8a703b';
-        ctx.fillRect(24, 234, 40, 22);
-
-        // Stone Ground Floor
-        ctx.fillStyle = '#171521';
-        ctx.fillRect(0, 260, 640, 100);
         c.refresh();
       }
     }
 
+    // --- 7.3 ACT III: EL GRAN PUENTE DE PIEDRA (1180x360 PANORAMIC) ---
     if (!textures.exists('bg_bridge')) {
-      const c = textures.createCanvas('bg_bridge', 640, 360);
+      const c = textures.createCanvas('bg_bridge', BG_W, BG_H);
       if (c) {
         const ctx = c.getContext();
-        // Night sky with heavy violet clouds
-        const sky = ctx.createLinearGradient(0, 0, 0, 260);
-        sky.addColorStop(0, '#0c0a17');
-        sky.addColorStop(0.5, '#1e1633');
-        sky.addColorStop(1, '#141224');
+        const sky = ctx.createLinearGradient(0, 0, 0, HORIZON_Y);
+        sky.addColorStop(0, '#090814');
+        sky.addColorStop(0.55, '#1d1636');
+        sky.addColorStop(1, '#261d40');
         ctx.fillStyle = sky;
-        ctx.fillRect(0, 0, 640, 360);
+        ctx.fillRect(0, 0, BG_W, HORIZON_Y);
 
-        // Distant Londinium Skyline (Spires, golden silhouettes, banners)
-        ctx.fillStyle = '#1c172e';
+        drawStarsAndClouds(ctx, '#e4dcff', 'rgba(42, 32, 72, 0.45)', 70);
+
+        // Distant Londinium Golden Spire Skyline on the eastern horizon
+        const goldHalo = ctx.createRadialGradient(940, 145, 12, 940, 145, 195);
+        goldHalo.addColorStop(0, 'rgba(255, 210, 95, 0.36)');
+        goldHalo.addColorStop(0.5, 'rgba(180, 120, 65, 0.14)');
+        goldHalo.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = goldHalo;
+        ctx.fillRect(720, 0, 460, HORIZON_Y);
+
+        ctx.fillStyle = '#18132b';
         ctx.beginPath();
-        ctx.moveTo(420, 220);
-        ctx.lineTo(440, 90);
-        ctx.lineTo(460, 220);
-        ctx.lineTo(480, 70);
-        ctx.lineTo(500, 220);
-        ctx.lineTo(540, 110);
-        ctx.lineTo(570, 220);
-        ctx.lineTo(640, 140);
-        ctx.lineTo(640, 240);
-        ctx.lineTo(420, 240);
+        ctx.moveTo(740, HORIZON_Y);
+        ctx.lineTo(780, 122);
+        ctx.lineTo(808, 165);
+        ctx.lineTo(852, 72);
+        ctx.lineTo(884, 152);
+        ctx.lineTo(942, 48);
+        ctx.lineTo(975, 145);
+        ctx.lineTo(1035, 92);
+        ctx.lineTo(1080, 155);
+        ctx.lineTo(1140, 112);
+        ctx.lineTo(BG_W, 155);
+        ctx.lineTo(BG_W, HORIZON_Y);
+        ctx.closePath();
         ctx.fill();
 
-        // Golden glow on Londinium horizon
-        const goldHalo = ctx.createRadialGradient(500, 120, 10, 500, 120, 100);
-        goldHalo.addColorStop(0, 'rgba(255, 215, 80, 0.4)');
-        goldHalo.addColorStop(1, 'transparent');
-        ctx.fillStyle = goldHalo;
-        ctx.fillRect(400, 40, 240, 180);
+        // Dark mist-filled river chasm visible through balustrade gaps
+        ctx.fillStyle = '#090a14';
+        ctx.fillRect(0, 174, BG_W, 30);
 
-        // Cold river chasm below bridge
-        ctx.fillStyle = '#06060d';
-        ctx.fillRect(0, 220, 640, 140);
-
-        // Massive Stone Arches
-        ctx.fillStyle = '#211d2d';
-        ctx.fillRect(0, 170, 640, 70);
-        ctx.fillStyle = '#06060d';
-        for (let ax = 60; ax < 640; ax += 180) {
-          ctx.beginPath();
-          ctx.arc(ax, 240, 50, Math.PI, 0);
-          ctx.fill();
-        }
-
-        // Bridge Roadway & Balustrade
-        ctx.fillStyle = '#312b42';
-        ctx.fillRect(0, 205, 640, 15);
-        ctx.fillStyle = '#423b59';
-        for (let px = 20; px < 640; px += 35) {
-          ctx.fillRect(px, 190, 8, 20);
-        }
-        ctx.fillRect(0, 188, 640, 6);
-
-        // Street Lanterns along the bridge
-        const drawLantern = (lx: number, ly: number) => {
-          ctx.fillStyle = '#1a1624';
-          ctx.fillRect(lx, ly, 4, 30);
-          ctx.fillRect(lx - 4, ly - 8, 12, 10);
-          const lGlow = ctx.createRadialGradient(lx + 2, ly - 3, 2, lx + 2, ly - 3, 30);
-          lGlow.addColorStop(0, 'rgba(255, 230, 120, 0.8)');
-          lGlow.addColorStop(0.5, 'rgba(255, 170, 40, 0.3)');
-          lGlow.addColorStop(1, 'transparent');
-          ctx.fillStyle = lGlow;
-          ctx.fillRect(lx - 25, ly - 30, 54, 54);
-          ctx.fillStyle = '#fff4a3';
-          ctx.fillRect(lx - 1, ly - 6, 6, 6);
+        // Gothic Stone Balustrade along y = 176..202 with 2 dramatic broken gaps (x: 345..445 & 750..845)
+        const drawBalustradeSegment = (sx: number, ex: number) => {
+          drawShadedRect(ctx, sx, 176, ex - sx, 5, '#413a59', '#615780', '#1d192b');
+          drawShadedRect(ctx, sx, 196, ex - sx, 7, '#332d47', '#4e466b', '#171421');
+          for (let px = sx + 8; px < ex - 6; px += 18) {
+            drawShadedRect(ctx, px, 181, 6, 15, '#2b263d', '#433b5c', '#14111f');
+          }
+          // Heavy buttress piers
+          for (let bp = sx; bp <= ex - 14; bp += 110) {
+            drawShadedRect(ctx, bp, 168, 16, 35, '#352f4a', '#554c73', '#181424');
+          }
         };
-        drawLantern(70, 175);
-        drawLantern(250, 175);
-        drawLantern(430, 175);
+        drawBalustradeSegment(0, 345);
+        drawBalustradeSegment(445, 750);
+        drawBalustradeSegment(845, BG_W);
 
-        // Cobblestone walking deck (2.5D floor)
-        ctx.fillStyle = '#1e1929';
-        ctx.fillRect(0, 240, 640, 120);
+        drawPerspectiveCobblestones(
+          ctx,
+          '#221d33',
+          '#13101f',
+          '#332c4a',
+          '#28223b',
+          '#0e0b17',
+          '#453d61',
+          '#695e8f'
+        );
 
-        // River Mist swirling on bridge deck
-        const riverMist = ctx.createLinearGradient(0, 230, 0, 290);
-        riverMist.addColorStop(0, 'rgba(120, 140, 190, 0.35)');
-        riverMist.addColorStop(1, 'rgba(20, 15, 35, 0)');
-        ctx.fillStyle = riverMist;
-        ctx.fillRect(0, 230, 640, 60);
+        // Cold river fog rolling across the bridge deck
+        const riverFog = ctx.createLinearGradient(0, HORIZON_Y - 12, 0, HORIZON_Y + 42);
+        riverFog.addColorStop(0, 'rgba(130, 155, 210, 0.24)');
+        riverFog.addColorStop(1, 'rgba(20, 16, 36, 0)');
+        ctx.fillStyle = riverFog;
+        ctx.fillRect(0, HORIZON_Y - 12, BG_W, 54);
+
+        c.refresh();
+      }
+    }
+
+    // --- 7.4 ACT IV: LONDINIUM — LA CIUDADELA DORADA (1180x360 PANORAMIC) ---
+    if (!textures.exists('bg_londinium')) {
+      const c = textures.createCanvas('bg_londinium', BG_W, BG_H);
+      if (c) {
+        const ctx = c.getContext();
+        const hallGrad = ctx.createLinearGradient(0, 0, 0, HORIZON_Y);
+        hallGrad.addColorStop(0, '#140c21');
+        hallGrad.addColorStop(0.55, '#28163a');
+        hallGrad.addColorStop(1, '#1d112b');
+        ctx.fillStyle = hallGrad;
+        ctx.fillRect(0, 0, BG_W, HORIZON_Y);
+
+        // Golden Astral Sun Rose Glow behind Throne
+        const sunHalo = ctx.createRadialGradient(880, 92, 10, 880, 92, 150);
+        sunHalo.addColorStop(0, 'rgba(255, 226, 130, 0.55)');
+        sunHalo.addColorStop(0.45, 'rgba(195, 115, 225, 0.22)');
+        sunHalo.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = sunHalo;
+        ctx.fillRect(710, 0, 340, HORIZON_Y);
+
+        // Vaulted Cathedral Arches & Fluted Marble Columns
+        for (let cx = 60; cx < BG_W; cx += 150) {
+          drawShadedRect(ctx, cx, 18, 22, HORIZON_Y - 18, '#362945', '#544269', '#1c1426');
+          drawShadedRect(ctx, cx - 4, 18, 30, 10, '#a68232', '#e0ba58', '#5c4412');
+          drawShadedRect(ctx, cx - 4, HORIZON_Y - 12, 30, 12, '#a68232', '#e0ba58', '#5c4412');
+          // Pointed gothic arch between pillars
+          ctx.strokeStyle = '#694e80';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(cx + 22, 62);
+          ctx.quadraticCurveTo(cx + 85, 8, cx + 150, 62);
+          ctx.stroke();
+        }
+
+        // Tall Golden Venetian Mirrors & Stained Glass Windows between pillars
+        for (let mx = 146; mx < BG_W - 60; mx += 150) {
+          const isMirrorZone = mx < 560;
+          drawGothicLancetWindow(
+            ctx,
+            mx,
+            56,
+            34,
+            116,
+            isMirrorZone ? '#3d4f7a' : '#732c8a',
+            isMirrorZone ? '#8eb0d9' : '#d4a33b',
+            isMirrorZone ? 'rgba(175, 210, 255, 0.22)' : 'rgba(255, 210, 95, 0.24)'
+          );
+          ctx.strokeStyle = '#c9a13c';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(mx - 18, 78, 36, 94);
+        }
+
+        // Polished Marble Basilica Floor (y = 202..360)
+        drawPerspectiveCobblestones(
+          ctx,
+          '#281d38',
+          '#160f21',
+          '#3a2a52',
+          '#2e2142',
+          '#140d1f',
+          '#9e7c30',
+          '#e3be5c'
+        );
+
+        // Royal Crimson & Gold Carpet Runner along center walkway
+        ctx.fillStyle = 'rgba(115, 22, 46, 0.42)';
+        ctx.fillRect(0, 242, BG_W, 44);
+        ctx.fillStyle = 'rgba(218, 175, 65, 0.55)';
+        ctx.fillRect(0, 242, BG_W, 2);
+        ctx.fillRect(0, 284, BG_W, 2);
+
+        c.refresh();
+      }
+    }
+
+    // --- 7.5 ACT V: LA CATEDRAL INVERTIDA — EL SOL DEL ABISMO (1180x360 PANORAMIC) ---
+    if (!textures.exists('bg_cathedral')) {
+      const c = textures.createCanvas('bg_cathedral', BG_W, BG_H);
+      if (c) {
+        const ctx = c.getContext();
+        const voidGrad = ctx.createLinearGradient(0, 0, 0, HORIZON_Y);
+        voidGrad.addColorStop(0, '#05030a');
+        voidGrad.addColorStop(0.5, '#160824');
+        voidGrad.addColorStop(1, '#240c36');
+        ctx.fillStyle = voidGrad;
+        ctx.fillRect(0, 0, BG_W, HORIZON_Y);
+
+        drawStarsAndClouds(ctx, '#f0d6ff', 'rgba(72, 20, 105, 0.30)', 110);
+
+        // Inverted Hanging Gothic Spires & Rib Vaults descending from the void ceiling
+        for (let sx = 45; sx < BG_W; sx += 118) {
+          const spireLen = 78 + Math.floor(seeded(sx * 0.7) * 52);
+          ctx.fillStyle = '#181026';
+          ctx.beginPath();
+          ctx.moveTo(sx - 24, 0);
+          ctx.lineTo(sx, spireLen);
+          ctx.lineTo(sx + 24, 0);
+          ctx.closePath();
+          ctx.fill();
+          ctx.strokeStyle = '#3f2661';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        }
+
+        // Colossal Eclipsed Black Sun of Astaroth over the eastern altar
+        const sunX = 760;
+        const sunY = 104;
+        const corona = ctx.createRadialGradient(sunX, sunY, 22, sunX, sunY, 128);
+        corona.addColorStop(0, '#040208');
+        corona.addColorStop(0.28, '#08030f');
+        corona.addColorStop(0.36, 'rgba(255, 85, 165, 0.92)');
+        corona.addColorStop(0.55, 'rgba(150, 35, 210, 0.45)');
+        corona.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = corona;
+        ctx.fillRect(sunX - 130, 0, 260, 235);
+
+        // Vertical beam of Alba Gris / Dawn Light descending near Elowen's Communion Altar (x = 180)
+        const dawnBeam = ctx.createLinearGradient(180, 0, 180, HORIZON_Y + 40);
+        dawnBeam.addColorStop(0, 'rgba(215, 240, 255, 0.45)');
+        dawnBeam.addColorStop(0.6, 'rgba(180, 225, 255, 0.18)');
+        dawnBeam.addColorStop(1, 'rgba(180, 225, 255, 0)');
+        ctx.fillStyle = dawnBeam;
+        ctx.fillRect(156, 0, 48, HORIZON_Y + 40);
+
+        // Fractured Obsidian & Marble Causeway Floor (y = 202..360)
+        drawPerspectiveCobblestones(
+          ctx,
+          '#1b132b',
+          '#0d0817',
+          '#2c1f45',
+          '#211636',
+          '#090510',
+          '#5b3880',
+          '#9d6ee0'
+        );
+
+        // Glowing cosmic rifts across the fractured marble causeway
+        ctx.strokeStyle = 'rgba(215, 110, 255, 0.35)';
+        ctx.lineWidth = 1.5;
+        for (let rx = 120; rx < BG_W; rx += 210) {
+          ctx.beginPath();
+          ctx.moveTo(rx, HORIZON_Y + 6);
+          ctx.lineTo(rx + 18, HORIZON_Y + 44);
+          ctx.lineTo(rx - 10, HORIZON_Y + 86);
+          ctx.stroke();
+        }
+
         c.refresh();
       }
     }

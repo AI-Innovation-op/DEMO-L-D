@@ -16,6 +16,15 @@ import { SessionStateStore } from '../../domain/save/SessionStateStore';
 import { EventBus } from '../../domain/shared/DomainEvent';
 import { FinisherStyle, FinisherTriggeredEvent } from '../../domain/combat/CombatTypes';
 import { registerVisualPackAnimations } from '../assets/VisualPackCatalog';
+import { GamepadInputAdapter3D } from '../../infrastructure/input/GamepadInputAdapter3D';
+import {
+  WORLD_2D,
+  computeFacingFlipX,
+  computeDepthScale2D,
+  clampWorldX2D,
+  clampWorldY2D,
+  resolveActEnemyClearInfo
+} from './SpriteOrientation2D';
 
 export class GameScene extends Phaser.Scene {
   // Dual Characters (Thomas & Khaterine)
@@ -29,8 +38,8 @@ export class GameScene extends Phaser.Scene {
 
   // Visual Sprites & Ground Shadows
   private bgImage!: Phaser.GameObjects.Image;
-  private bgImageEast!: Phaser.GameObjects.Image;
-  private sectorBannerText?: Phaser.GameObjects.Text;
+  private currentSectorCompassLabel: string = '📍 ATRIO DE SAN JUDE (CAP. I) · 🐈‍⬛ Habla con Padre Cedric [E] o sube al Roble';
+  private gamepadAdapter: GamepadInputAdapter3D = new GamepadInputAdapter3D();
   private playerSprite!: Phaser.GameObjects.Sprite;
   private playerShadow!: Phaser.GameObjects.Ellipse;
   private allySprite!: Phaser.GameObjects.Sprite;
@@ -205,7 +214,7 @@ export class GameScene extends Phaser.Scene {
     session.hydrateCharacter(this.allyChar, true);
 
     this.shalem = new ShalemCompanion();
-    this.audio = new WebAudioSoundAdapter();
+    this.audio = WebAudioSoundAdapter.getInstance();
     this.dialogues = new DialogueRepository();
 
     // Reset scene lifecycle and transition state flags so new acts are fully playable!
@@ -261,26 +270,28 @@ export class GameScene extends Phaser.Scene {
     this.isTransitioningAct = false;
     this.isActCleared = false;
 
-    // 1. Wide Scrolling 2.5D Multi-Sector Background (1180x360 across 4 connected canonical sub-sectors)
-    this.bgImage = this.add.image(320, 180, 'bg_oakhaven').setDisplaySize(640, 360).setDepth(0);
-    this.bgImageEast = this.add.image(900, 180, 'bg_oakhaven').setDisplaySize(640, 360).setFlipX(true).setDepth(0);
+    // 1. Seamless Panoramic 2.5D Multi-Sector Background (1180x360 across 4 connected canonical sub-sectors)
+    this.bgImage = this.add.image(0, 0, 'bg_oakhaven')
+      .setOrigin(0, 0)
+      .setDisplaySize(WORLD_2D.WIDTH, WORLD_2D.HEIGHT)
+      .setDepth(0);
 
     // 2. Atmospheric Fog Particles
     this.add.particles(320, 270, 'particle_fog', {
       speedX: { min: -15, max: 15 },
       speedY: { min: -5, max: 5 },
       scale: { start: 1, end: 1.8 },
-      alpha: { start: 0.35, end: 0 },
+      alpha: { start: 0.28, end: 0 },
       lifespan: 4000,
-      frequency: 600
+      frequency: 650
     }).setDepth(5);
 
     // 3. Floating Ember Particles from Bonfires
-    this.emberParticles = this.add.particles(280, 255, 'particle_ember', {
+    this.emberParticles = this.add.particles(555, 224, 'particle_ember', {
       speedX: { min: -25, max: 35 },
       speedY: { min: -40, max: -90 },
-      scale: { start: 1.2, end: 0.2 },
-      alpha: { start: 0.9, end: 0 },
+      scale: { start: 1.1, end: 0.2 },
+      alpha: { start: 0.85, end: 0 },
       lifespan: 1600,
       frequency: 180
     }).setDepth(6);
@@ -289,17 +300,18 @@ export class GameScene extends Phaser.Scene {
     this.audio.playBgm('bgm_oakhaven_night');
 
     // 4.1 Atmospheric Vignette (Fixed to camera viewport)
-    this.add.image(320, 180, 'fx_vignette').setDisplaySize(640, 360).setDepth(350).setAlpha(0.6).setScrollFactor(0);
+    this.add.image(320, 180, 'fx_vignette').setDisplaySize(640, 360).setDepth(350).setAlpha(0.55).setScrollFactor(0);
 
     // 4.2 Register All Multi-Frame Animations from the Visual Pack
     registerVisualPackAnimations(this);
 
-    // 5. Player & Shadows (2.5D Depth Arena)
+    // 5. Player & Shadows (2.5D Depth Arena — standardized positive scale + setFlipX)
     const initX = 110;
     const initY = 260;
     this.player.position = new Vector2(initX, initY);
+    const initScale = computeDepthScale2D(initY);
 
-    this.playerShadow = this.add.ellipse(initX, initY, 26, 8, 0x000000, 0.45).setDepth(initY - 1);
+    this.playerShadow = this.add.ellipse(initX, initY, 26, 8, 0x000000, 0.45).setDepth(initY - 1).setScale(initScale);
     const playerTex = this.player.id === 'thomas' ? 'thomas_idle' : 'khaterine_idle';
     const playerOriginY = 0.9;
     this.playerSprite = this.normalizeSprite(
@@ -309,28 +321,20 @@ export class GameScene extends Phaser.Scene {
       0.5,
       playerOriginY
     ).setDepth(initY);
+    this.playerSprite.setScale(initScale);
+    this.playerSprite.setFlipX(this.player.facingDirection < 0);
     this.playAnimSafe(this.playerSprite, playerTex);
 
     // Configure 2.5D Scrolling Camera Follow across the 1180x360 multi-sector world
-    this.cameras.main.setBounds(0, 0, 1180, 360);
+    this.cameras.main.setBounds(0, 0, WORLD_2D.WIDTH, WORLD_2D.HEIGHT);
     this.cameras.main.startFollow(this.playerSprite, true, 0.12, 0.12);
-
-    // 5.1 Compact Tactical Sub-Sector & Shalem Compass Banner (Fixed to camera)
-    this.add.rectangle(320, 56, 390, 16, 0x120a1f, 0.88)
-      .setStrokeStyle(1, 0xd4af37)
-      .setDepth(342)
-      .setScrollFactor(0);
-    this.sectorBannerText = this.add.text(320, 56, '📍 ATRIO DE SAN JUDE (CAP. I) • 🐈‍⬛ Sube a la Colina del Viejo Roble', {
-      fontFamily: 'Cinzel, monospace',
-      fontSize: '7.5px',
-      color: '#ffd700'
-    }).setOrigin(0.5).setDepth(343).setScrollFactor(0);
 
     // 6. Ally Companion (Walking alongside in 2.5D)
     const allyInitX = 65;
-    const allyInitY = 250;
+    const allyInitY = 252;
     this.allyChar.position = new Vector2(allyInitX, allyInitY);
-    this.allyShadow = this.add.ellipse(allyInitX, allyInitY, 24, 7, 0x000000, 0.4).setDepth(allyInitY - 1);
+    const allyScale = computeDepthScale2D(allyInitY);
+    this.allyShadow = this.add.ellipse(allyInitX, allyInitY, 24, 7, 0x000000, 0.4).setDepth(allyInitY - 1).setScale(allyScale);
     const allyTex = this.allyChar.id === 'thomas' ? 'thomas_idle' : 'khaterine_idle';
     const allyOriginY = 0.9;
     this.allySprite = this.normalizeSprite(
@@ -339,13 +343,15 @@ export class GameScene extends Phaser.Scene {
       64,
       0.5,
       allyOriginY
-    ).setAlpha(0.92).setDepth(allyInitY);
+    ).setAlpha(0.95).setDepth(allyInitY);
+    this.allySprite.setScale(allyScale);
     this.playAnimSafe(this.allySprite, allyTex);
 
     // 7. Shalem Sprite (Animated Cat Companion in 2.5D)
     const catInitX = 85;
     const catInitY = 268;
-    this.shalemShadow = this.add.ellipse(catInitX, catInitY, 20, 6, 0x000000, 0.45).setDepth(catInitY - 1);
+    const catScale = computeDepthScale2D(catInitY);
+    this.shalemShadow = this.add.ellipse(catInitX, catInitY, 20, 6, 0x000000, 0.45).setDepth(catInitY - 1).setScale(catScale);
     const shalemKey = this.textures.exists('shalem_sit_idle') ? 'shalem_sit_idle' : 'shalem_cat';
     this.shalemSprite = this.normalizeSprite(
       this.add.sprite(catInitX, catInitY, shalemKey, 0),
@@ -356,26 +362,28 @@ export class GameScene extends Phaser.Scene {
     ).setDepth(catInitY);
     this.playAnimSafe(this.shalemSprite, 'shalem_sit_idle');
 
-    // 8. Floating Interaction Badge (Follows nearest interactable target)
-    this.floatingPromptBadge = this.add.text(0, 0, '[E] HABLAR', {
+    // 8. Minimal Floating Target Marker (detailed [E] prompt sits cleanly in HUDScene to avoid duplicate text!)
+    this.floatingPromptBadge = this.add.text(0, 0, '▼', {
       fontFamily: 'monospace',
-      fontSize: '8px',
+      fontSize: '9px',
       color: '#ffd700',
-      backgroundColor: 'rgba(15, 8, 26, 0.9)',
-      padding: { x: 5, y: 2 }
+      stroke: '#000000',
+      strokeThickness: 2
     }).setOrigin(0.5).setDepth(340).setVisible(false);
 
-    // 9. Shalem Dialogue Balloon (Fixed to camera viewport)
-    this.shalemBalloonBg = this.add.rectangle(320, 310, 540, 24, 0x140f21, 0.94)
+    // 9. Shalem Dialogue Balloon (Fixed to camera viewport, auto-wrapped so long lines never overflow!)
+    this.shalemBalloonBg = this.add.rectangle(320, 294, 550, 30, 0x140f21, 0.94)
       .setStrokeStyle(1, 0xd4af37)
       .setDepth(345)
       .setScrollFactor(0)
       .setVisible(false);
 
-    this.shalemBalloonText = this.add.text(320, 310, '', {
-      fontFamily: 'Cinzel, sans-serif',
+    this.shalemBalloonText = this.add.text(320, 294, '', {
+      fontFamily: 'sans-serif',
       fontSize: '9px',
-      color: '#ffd700'
+      color: '#ffd700',
+      align: 'center',
+      wordWrap: { width: 526 }
     }).setOrigin(0.5).setDepth(346).setScrollFactor(0).setVisible(false);
 
     // 10. Setup Inputs
@@ -472,15 +480,16 @@ export class GameScene extends Phaser.Scene {
     this.updateDroppedWeapons();
     this.updateProximityInteractions();
 
-    // Proximity next-level auto-transition when walking to the right screen boundary of a cleared act!
-    if (this.isActCleared && !this.isTransitioningAct && this.player.position.x >= 595) {
+    // Proximity next-level auto-transition when walking into the eastern exit portal of a cleared act!
+    const exitTriggerX = this.exitPortalZone ? this.exitPortalZone.x - 22 : WORLD_2D.MAX_X - 35;
+    if (this.isActCleared && !this.isTransitioningAct && this.player.position.x >= exitTriggerX) {
       const nextAct = this.currentScenario < 5 ? (this.currentScenario + 1) : 1;
       this.clearActExit();
       this.transitionToActWithLoading(nextAct);
       return;
     }
 
-    // Sync HUD with active character & dynamic interaction target
+    // Sync HUD with active character, dynamic interaction target & bottom sector compass
     const hud = this.scene.get('HUDScene') as HUDScene;
     if (hud && this.scene.isActive('HUDScene')) {
       hud.updateHUD(
@@ -488,7 +497,8 @@ export class GameScene extends Phaser.Scene {
         this.currentBoss,
         this.storyProgress,
         this.activeInteractionTarget,
-        this.allyChar.name
+        this.allyChar.name,
+        this.currentSectorCompassLabel
       );
     }
   }
@@ -497,6 +507,8 @@ export class GameScene extends Phaser.Scene {
     if (this.attackCooldown > 0) {
       this.attackCooldown -= delta;
     }
+
+    const gp = this.gamepadAdapter.poll();
 
     // Quick Next-Level actions when Act is cleared
     if (this.isActCleared && !this.isTransitioningAct) {
@@ -509,7 +521,8 @@ export class GameScene extends Phaser.Scene {
         this.transitionToActWithLoading(nextAct);
         return;
       }
-      if (this.keyE && Phaser.Input.Keyboard.JustDown(this.keyE) && this.player.position.x > 500) {
+      const nearExit = this.exitPortalZone ? Math.abs(this.player.position.x - this.exitPortalZone.x) < 75 : this.player.position.x > WORLD_2D.MAX_X - 100;
+      if ((this.keyE && Phaser.Input.Keyboard.JustDown(this.keyE) || gp.interactOrConfirmPressed) && nearExit) {
         const nextAct = this.currentScenario < 5 ? (this.currentScenario + 1) : 1;
         this.clearActExit();
         this.transitionToActWithLoading(nextAct);
@@ -544,14 +557,14 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Swap Character with [TAB]
-    if (Phaser.Input.Keyboard.JustDown(this.keyTab)) {
+    // Swap Character with [TAB] or Gamepad RT
+    if (Phaser.Input.Keyboard.JustDown(this.keyTab) || gp.swapHeroPressed) {
       this.swapActiveCharacter();
       return;
     }
 
-    // Open Menu Modal with [P]
-    if (Phaser.Input.Keyboard.JustDown(this.keyP)) {
+    // Open Menu Modal with [P] or Gamepad Start
+    if (Phaser.Input.Keyboard.JustDown(this.keyP) || gp.pausePressed) {
       this.scene.pause('GameScene');
       this.scene.launch('MenuModalScene', { player: this.player, audio: this.audio });
       return;
@@ -594,8 +607,8 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Dodge [SPACE] with ghost afterimage trail
-    if (Phaser.Input.Keyboard.JustDown(this.keySpace)) {
+    // Dodge [SPACE] / Gamepad B — actual forward dash (no yoyo snap-back!) with ghost afterimage
+    if (Phaser.Input.Keyboard.JustDown(this.keySpace) || gp.dodgeOrBackPressed) {
       if (this.player.startDodge()) {
         this.audio.playSfx('dodge');
         const dashDir = this.player.facingDirection;
@@ -604,31 +617,36 @@ export class GameScene extends Phaser.Scene {
         const dodgeAnim = this.player.id === 'thomas' ? 'thomas_dodge' : 'khaterine_dodge';
         this.playAnimSafe(this.playerSprite, dodgeAnim, true);
 
-        // Spawn afterimage ghost
+        // Spawn afterimage ghost using positive scale + flipX
         const ghost = this.add.sprite(this.playerSprite.x, this.playerSprite.y, this.playerSprite.texture.key, this.playerSprite.frame?.name ?? 0)
           .setOrigin(0.5, this.playerSprite.originY)
           .setAlpha(0.6)
-          .setScale(this.playerSprite.scaleX, this.playerSprite.scaleY)
+          .setScale(Math.abs(this.playerSprite.scaleX), Math.abs(this.playerSprite.scaleY))
+          .setFlipX(this.playerSprite.flipX)
           .setTint(0x9933ff)
           .setDepth(this.playerSprite.depth - 1);
 
         this.tweens.add({
           targets: ghost,
           alpha: 0,
-          scaleX: ghost.scaleX * 1.25,
-          duration: 250,
+          scaleX: ghost.scaleX * 1.2,
+          duration: 240,
           onComplete: () => ghost.destroy()
         });
 
-        const targetX = Phaser.Math.Clamp(this.playerSprite.x + dashDir * 60, 35, 1145);
+        const targetX = clampWorldX2D(this.playerSprite.x + dashDir * 68);
         this.tweens.add({
           targets: this.playerSprite,
           x: targetX,
-          alpha: 0.5,
-          duration: 180,
-          yoyo: true,
+          duration: 210,
+          ease: 'Cubic.easeOut',
+          onUpdate: () => {
+            this.player.position = new Vector2(this.playerSprite.x, this.playerSprite.y);
+            this.playerShadow.setPosition(this.playerSprite.x, this.playerSprite.y);
+          },
           onComplete: () => {
             this.player.position = new Vector2(this.playerSprite.x, this.playerSprite.y);
+            this.playerShadow.setPosition(this.playerSprite.x, this.playerSprite.y);
             this.player.finishDodge();
             const isDisarmed = this.player.disarmManager.isPlayerDisarmed();
             const idleAnim = this.player.id === 'thomas' ? (isDisarmed ? 'thomas_unarmed_idle' : 'thomas_idle') : 'khaterine_idle';
@@ -638,12 +656,19 @@ export class GameScene extends Phaser.Scene {
             }
           }
         });
+        this.tweens.add({
+          targets: this.playerSprite,
+          alpha: 0.45,
+          duration: 105,
+          yoyo: true
+        });
       }
     }
 
-    // Block [L] (Held)
-    if (this.keyL.isDown) {
-      if (Phaser.Input.Keyboard.JustDown(this.keyL)) {
+    // Block [L] / Gamepad LB (Held + Perfect Parry on justPressed)
+    const guardHeld = this.keyL.isDown || gp.guardHeld;
+    if (guardHeld) {
+      if (Phaser.Input.Keyboard.JustDown(this.keyL) || gp.guardJustPressed) {
         this.lastGuardPressTime = this.time.now;
         const guardAnim = this.player.id === 'thomas' ? 'thomas_guard' : 'khaterine_ward';
         this.playAnimSafe(this.playerSprite, guardAnim, true);
@@ -658,32 +683,32 @@ export class GameScene extends Phaser.Scene {
       this.playAnimSafe(this.playerSprite, idleAnim);
     }
 
-    // Light Attack [J]
-    if (Phaser.Input.Keyboard.JustDown(this.keyJ) && this.attackCooldown <= 0) {
+    // Light Attack [J] / Gamepad X
+    if ((Phaser.Input.Keyboard.JustDown(this.keyJ) || gp.lightAttackPressed) && this.attackCooldown <= 0) {
       this.executeAttack(false);
       this.attackCooldown = 240;
     }
 
-    // Heavy Attack [K]
-    if (Phaser.Input.Keyboard.JustDown(this.keyK) && this.attackCooldown <= 0) {
+    // Heavy Attack [K] / Gamepad Y
+    if ((Phaser.Input.Keyboard.JustDown(this.keyK) || gp.heavyAttackPressed) && this.attackCooldown <= 0) {
       this.executeAttack(true);
       this.attackCooldown = 420;
     }
 
-    // Voluntary Weapon Throw (Option B) [T] or [Q]
-    if (Phaser.Input.Keyboard.JustDown(this.keyT) || Phaser.Input.Keyboard.JustDown(this.keyQ)) {
+    // Voluntary Weapon Throw (Option B) [T] / [Q] / Gamepad RB
+    if (Phaser.Input.Keyboard.JustDown(this.keyT) || Phaser.Input.Keyboard.JustDown(this.keyQ) || gp.specialThrowOrEchoPressed) {
       this.executeWeaponThrow();
       if (this.isTutorialActive && this.tutorialStep === 4) {
         this.time.delayedCall(300, () => this.finishTrainingAndSpawnRealEnemies());
       }
     }
 
-    // Proximity Interaction / Pick Up [E]
-    if (Phaser.Input.Keyboard.JustDown(this.keyE)) {
+    // Proximity Interaction / Pick Up [E] / Gamepad A
+    if (Phaser.Input.Keyboard.JustDown(this.keyE) || gp.interactOrConfirmPressed) {
       this.executeContextInteraction();
     }
 
-    // 2.5D Movement (A / D / W / S or Arrows) across 1180x360 Multi-Sector World
+    // 2.5D Movement (WASD / Arrows / Gamepad Left Stick) across 1180x360 Panoramic World
     let moveX = 0;
     let moveY = 0;
 
@@ -691,8 +716,12 @@ export class GameScene extends Phaser.Scene {
     if (this.keyD.isDown || this.cursors.right.isDown) moveX += 1;
     if (this.keyW.isDown || this.cursors.up.isDown) moveY -= 1;
     if (this.keyS.isDown || this.cursors.down.isDown) moveY += 1;
+    if (moveX === 0 && moveY === 0 && (Math.abs(gp.moveX) > 0.1 || Math.abs(gp.moveZ) > 0.1)) {
+      moveX = gp.moveX;
+      moveY = gp.moveZ;
+    }
 
-    if ((moveX !== 0 || moveY !== 0) &&
+    if ((Math.abs(moveX) > 0.05 || Math.abs(moveY) > 0.05) &&
         this.player.state !== CharacterState.BLOCKING &&
         this.player.state !== CharacterState.ATTACKING &&
         this.player.state !== CharacterState.DODGING) {
@@ -705,18 +734,17 @@ export class GameScene extends Phaser.Scene {
       const vx = normX * baseSpeed * 1.05 * (delta / 1000);
       const vy = normY * baseSpeed * 0.72 * (delta / 1000);
 
-      const nextX = Phaser.Math.Clamp(this.playerSprite.x + vx, 35, 1145);
+      const nextX = clampWorldX2D(this.playerSprite.x + vx);
       // Allow climbing elevated terraces: Act I Old Oak Hill (x: 225..425) & Act II Elevated Salt Cell (x: 170..290)
       const isOnElevatedTerrace =
         (this.currentScenario === 1 && nextX >= 225 && nextX <= 425) ||
         (this.currentScenario === 2 && nextX >= 170 && nextX <= 290);
-      const minY = isOnElevatedTerrace ? 178 : 205;
-      const nextY = Phaser.Math.Clamp(this.playerSprite.y + vy, minY, 315);
+      const nextY = clampWorldY2D(this.playerSprite.y + vy, isOnElevatedTerrace);
 
       this.playerSprite.setPosition(nextX, nextY);
       this.player.position = new Vector2(nextX, nextY);
 
-      if (moveX !== 0) {
+      if (Math.abs(moveX) > 0.08) {
         this.player.facingDirection = moveX > 0 ? 1 : -1;
       }
       this.player.move(moveX, moveY);
@@ -725,9 +753,10 @@ export class GameScene extends Phaser.Scene {
       const moveAnim = this.player.id === 'thomas' ? 'thomas_run' : 'khaterine_run';
       this.playAnimSafe(this.playerSprite, moveAnim);
 
-      // 2.5D Perspective Scaling (scale smoothly between 0.90 and 1.12)
-      const scale = 0.90 + ((nextY - 205) / 110) * 0.22;
-      this.playerSprite.setScale(this.player.facingDirection > 0 ? scale : -scale, scale);
+      // 2.5D Perspective Scaling + Unified setFlipX (never negative scaleX!)
+      const scale = computeDepthScale2D(nextY);
+      this.playerSprite.setScale(scale, scale);
+      this.playerSprite.setFlipX(this.player.facingDirection < 0);
 
       // Depth sorting
       this.playerSprite.setDepth(nextY);
@@ -749,42 +778,39 @@ export class GameScene extends Phaser.Scene {
   }
 
   private update2DSectorCompass(): void {
-    if (!this.sectorBannerText) return;
     const px = this.playerSprite.x;
     const py = this.playerSprite.y;
     let label = '';
 
     if (this.currentScenario === 1) {
       if (px < 225) {
-        label = '📍 ATRIO DE SAN JUDE (CAP. I) • 🐈‍⬛ Habla con Padre Cedric [E] o sube al Roble';
+        label = '📍 ATRIO DE SAN JUDE (CAP. I) · 🐈‍⬛ Habla con Padre Cedric [E] o sube al Roble';
       } else if (px <= 425 && py < 215) {
-        label = '📍 COLINA DEL VIEJO ROBLE (ELEVADA — CAP. II) • 🐈‍⬛ Entrega el Pájaro a Elowen [E]';
-      } else if (px <= 760) {
-        label = '📍 PLAZA DE LA GRAN PIRA (CAP. III) • 🐈‍⬛ Derrota a Madre Morwenna y sus cohortes';
+        label = '📍 COLINA DEL VIEJO ROBLE (CAP. II) · 🐈‍⬛ Entrega el Pájaro de Sauce a Elowen [E]';
+      } else if (px <= 740) {
+        label = '📍 PLAZA DE LA GRAN PIRA (CAP. III) · 🐈‍⬛ Derrota a Madre Morwenna y sus cohortes';
       } else {
-        label = '📍 CEMENTERIO ANTIGUO Y CRIPTAS (CAP. IV–VI) • 🐈‍⬛ Avanza al Mausoleo oriental';
+        label = '📍 CEMENTERIO ANTIGUO Y CRIPTAS (CAP. IV–VI) · 🐈‍⬛ Explora hacia el Mausoleo oriental';
       }
     } else if (this.currentScenario === 2) {
       label = px < 380
-        ? '📍 CELDA DE SAL DE ELOWEN (CAP. VII) • 🐈‍⬛ Habla con Elowen [E] para el Pájaro de Sauce'
-        : '📍 GRAN CRISOL DEL CAMPANARIO (CAP. VIII–IX) • 🐈‍⬛ Derrota al Guardián del Crisol';
+        ? '📍 CELDA DE SAL DE ELOWEN (CAP. VII) · 🐈‍⬛ Habla con Elowen [E] para el Pájaro de Sauce'
+        : '📍 GRAN CRISOL DEL CAMPANARIO (CAP. VIII–IX) · 🐈‍⬛ Lanza tu espada [T] o vence al Guardián';
     } else if (this.currentScenario === 3) {
       label = px < 350
-        ? '📍 CONVOY DE REFUGIADOS EN EL GRAN PUENTE (CAP. X–XI) • 🐈‍⬛ Protege a Elowen y los aldeanos'
-        : '📍 ARCO CENTRAL DEL GRAN PUENTE (CAP. XII–XIII) • 🐈‍⬛ Quiebra el escudo del Capitán Vane [K]';
+        ? '📍 CONVOY EN EL GRAN PUENTE (CAP. X–XI) · 🐈‍⬛ Protege a Elowen y los refugiados'
+        : '📍 ARCO CENTRAL DEL PUENTE (CAP. XII–XIII) · 🐈‍⬛ Rompe el escudo del Capitán Vane [K]';
     } else if (this.currentScenario === 4) {
-      label = px < 360
-        ? '📍 SALÓN DE LOS ESPEJOS DE LONDINIUM (CAP. XIV–XV) • 🐈‍⬛ Libera a Elowen de las ilusiones'
-        : '📍 TRONO ASTRAL DE REX MALPHAS (CAP. XVI–XVII) • 🐈‍⬛ Derrota al Rey Demonio Alaric';
+      label = px < 380
+        ? '📍 SALÓN DE LOS ESPEJOS (CAP. XIV–XV) · 🐈‍⬛ Rompe los 3 braseros dorados y libera a Elowen'
+        : '📍 TRONO ASTRAL DE REX MALPHAS (CAP. XVI–XVII) · 🐈‍⬛ Derrota al Rey Demonio Alaric';
     } else {
       label = px < 340
-        ? '📍 ALTAR DE LA COMUNIÓN (CAP. XVIII–XIX) • 🐈‍⬛ Recibe la Gota de Luz para forjar Alba Gris [E]'
-        : '📍 EL SOL DEL ABISMO (CAP. XX) • 🐈‍⬛ Derrota a Astaroth para traer el Primer Amanecer';
+        ? '📍 ALTAR DE LA COMUNIÓN (CAP. XVIII–XIX) · 🐈‍⬛ Recibe la Gota de Luz [E] para forjar Alba Gris'
+        : '📍 EL SOL DEL ABISMO (CAP. XX) · 🐈‍⬛ Derrota a Astaroth para traer el Primer Amanecer';
     }
 
-    if (this.sectorBannerText.text !== label) {
-      this.sectorBannerText.setText(label);
-    }
+    this.currentSectorCompassLabel = label;
   }
 
   private swapActiveCharacter(): void {
@@ -798,10 +824,12 @@ export class GameScene extends Phaser.Scene {
       this.allySprite.stop();
     }
 
-    // Swap characters
+    // Swap characters & preserve facing direction cleanly
+    const activeFacing = this.player.facingDirection;
     const temp = this.player;
     this.player = this.allyChar;
     this.allyChar = temp;
+    this.player.facingDirection = activeFacing;
 
     // Swap positions
     const oldPlayerX = this.playerSprite.x;
@@ -823,6 +851,12 @@ export class GameScene extends Phaser.Scene {
 
     this.normalizeSprite(this.playerSprite, 64, 64, 0.5, 0.9);
     this.normalizeSprite(this.allySprite, 64, 64, 0.5, 0.9);
+    const pScale = computeDepthScale2D(this.playerSprite.y);
+    const aScale = computeDepthScale2D(this.allySprite.y);
+    this.playerSprite.setScale(pScale, pScale).setFlipX(this.player.facingDirection < 0).setDepth(this.playerSprite.y);
+    this.allySprite.setScale(aScale, aScale).setFlipX(this.player.facingDirection < 0).setDepth(this.allySprite.y);
+    this.playerShadow.setPosition(this.playerSprite.x, this.playerSprite.y).setDepth(this.playerSprite.y - 1).setScale(pScale);
+    this.allyShadow.setPosition(this.allySprite.x, this.allySprite.y).setDepth(this.allySprite.y - 1).setScale(aScale);
 
     this.triggerShalemBalloon(
       `Shalem: «¡Ahora juegas como ${this.player.name}! ${this.player.id === 'khaterine' ? '¡Purifica las sombras con tu arco abisal!' : '¡Avanza con tu espada y tus puños!' }»`,
@@ -1124,21 +1158,21 @@ export class GameScene extends Phaser.Scene {
       if (targetType === 'finisher') {
         this.floatingPromptBadge
           .setPosition(targetX, targetY)
-          .setText('⚡ [E] ¡REMATAR!')
+          .setText('⚡ ¡REMATAR!')
           .setColor('#ffd700')
-          .setBackgroundColor('rgba(65, 12, 38, 0.95)')
+          .setBackgroundColor('rgba(65, 12, 38, 0.94)')
           .setFontSize('9.5px')
           .setStroke('#000000', 3)
           .setVisible(true);
       } else {
-        const verb = (targetType === 'weapon' || targetType === 'censer') ? 'RECOGER' : 'HABLAR';
+        // Minimal clean chevron above NPC/item (detailed [E] prompt is rendered once in HUDScene)
         this.floatingPromptBadge
           .setPosition(targetX, targetY)
-          .setText(`[E] ${verb}`)
+          .setText('▼')
           .setColor('#ffd700')
-          .setBackgroundColor('rgba(15, 8, 26, 0.9)')
-          .setFontSize('8px')
-          .setStroke('#000000', 0)
+          .setBackgroundColor('')
+          .setFontSize('10px')
+          .setStroke('#000000', 3)
           .setVisible(true);
       }
     } else if (this.floatingPromptBadge) {
@@ -1171,11 +1205,11 @@ export class GameScene extends Phaser.Scene {
     const facing = this.player.facingDirection;
     const attackRange = this.player.disarmManager.getCurrentWeapon().range;
 
-    // Fluid forward micro-step during attack
+    // Fluid forward micro-step during attack (full 1180px panoramic width)
     const stepDist = isHeavy ? 10 : 6;
-    const nextPlayerX = Phaser.Math.Clamp(playerX + facing * stepDist, 35, 605);
+    const nextPlayerX = clampWorldX2D(playerX + facing * stepDist);
     this.tweens.add({
-      targets: this.playerSprite,
+      targets: [this.playerSprite, this.playerShadow],
       x: nextPlayerX,
       duration: 90,
       ease: 'Quad.easeOut'
@@ -1302,19 +1336,19 @@ export class GameScene extends Phaser.Scene {
 
             const remainingEnemies = this.enemies.filter(e => e.isAlive());
             if (remainingEnemies.length === 0) {
-              this.storyProgress.completeMilestone('act1_monks');
-              this.storyProgress.completeMilestone('act1_beast');
+              const clearInfo = resolveActEnemyClearInfo(this.currentScenario);
+              clearInfo.milestoneIds.forEach(id => this.storyProgress.completeMilestone(id));
               this.storyProgress.addProgress(25);
-              this.triggerShalemBalloon("Shalem: «¡Los acechadores han caído! ¡Ahora avanza hacia la derecha y destruye a la Madre Morwenna junto a la pira!»", 5000);
+              this.triggerShalemBalloon(clearInfo.shalemCallout, 5000);
             } else {
-              this.storyProgress.addProgress(25);
+              this.storyProgress.addProgress(15);
             }
           } else {
-            // Play stagger animation & fluid knockback
+            // Play stagger animation & fluid knockback across full 1180px world
             const staggerAnim = this.getEnemyAnimKey(enemy.id, 'stagger');
             this.playAnimSafe(sprite, staggerAnim, true);
             const knockDist = isHeavy ? 14 : 8;
-            const knockX = Phaser.Math.Clamp(enemy.position.x + facing * knockDist, 35, 605);
+            const knockX = clampWorldX2D(enemy.position.x + facing * knockDist);
             enemy.position = new Vector2(knockX, enemy.position.y);
             this.tweens.add({
               targets: sprite,
@@ -1412,7 +1446,7 @@ export class GameScene extends Phaser.Scene {
           this.handleBossDefeated();
         }
       } else if (bdx > effectiveReachX && this.enemies.filter(e => e.isAlive()).length === 0) {
-        this.triggerShalemBalloon("Shalem: «¡Estás demasiado lejos! ¡Acércate más a la Madre Morwenna para alcanzarla con tu arma!»", 2800);
+        this.triggerShalemBalloon(`Shalem: «¡Estás demasiado lejos! ¡Acércate más a ${this.currentBoss.name} para alcanzarle con tu arma!»`, 2800);
       }
     }
 
@@ -1436,11 +1470,11 @@ export class GameScene extends Phaser.Scene {
     const py = this.playerSprite.y;
     const facing = this.player.facingDirection;
 
-    // Fluid forward micro-step during cast
+    // Fluid forward micro-step during cast (full 1180px panoramic world)
     const stepDist = isHeavy ? 8 : 4;
-    const nextPlayerX = Phaser.Math.Clamp(px + facing * stepDist, 35, 605);
+    const nextPlayerX = clampWorldX2D(px + facing * stepDist);
     this.tweens.add({
-      targets: this.playerSprite,
+      targets: [this.playerSprite, this.playerShadow],
       x: nextPlayerX,
       duration: 90,
       ease: 'Quad.easeOut'
@@ -1455,7 +1489,7 @@ export class GameScene extends Phaser.Scene {
     this.playAnimSafe(projectile, 'fx_arrow_abyssal');
 
     const travelDist = isHeavy ? 320 : 250;
-    const targetX = Phaser.Math.Clamp(px + facing * travelDist, 25, 615);
+    const targetX = clampWorldX2D(px + facing * travelDist, 20);
     const speed = 440; // px/sec
     const duration = Math.abs(targetX - px) / speed * 1000;
 
@@ -1579,19 +1613,23 @@ export class GameScene extends Phaser.Scene {
           });
           const remainingEnemies = this.enemies.filter(e => e.isAlive());
           if (remainingEnemies.length === 0) {
-            this.storyProgress.completeMilestone('act1_monks');
-            this.storyProgress.completeMilestone('act1_beast');
+            const clearInfo = resolveActEnemyClearInfo(this.currentScenario);
+            clearInfo.milestoneIds.forEach(id => this.storyProgress.completeMilestone(id));
             this.storyProgress.addProgress(25);
-            this.triggerShalemBalloon("Shalem: «¡La flecha abisal de Khaterine los ha pulverizado! ¡Avanza hacia la derecha!»", 5000);
+            this.triggerShalemBalloon(clearInfo.shalemCallout, 5000);
           }
         } else {
           const staggerAnim = this.getEnemyAnimKey(targetEnemy.id, 'stagger');
           this.playAnimSafe(sprite, staggerAnim, true);
-          // Knockback
+          // Knockback across full 1180px world
           const facing = this.player.facingDirection;
-          const knockX = Phaser.Math.Clamp(targetEnemy.position.x + facing * (isHeavy ? 16 : 10), 35, 605);
+          const knockX = clampWorldX2D(targetEnemy.position.x + facing * (isHeavy ? 16 : 10));
           targetEnemy.position = new Vector2(knockX, targetEnemy.position.y);
           this.tweens.add({ targets: sprite, x: knockX, duration: 110, ease: 'Cubic.easeOut' });
+          const shadow = this.enemyShadows.get(targetEnemy.id);
+          if (shadow) {
+            this.tweens.add({ targets: shadow, x: knockX, duration: 110, ease: 'Cubic.easeOut' });
+          }
         }
       }
     }
@@ -1608,7 +1646,7 @@ export class GameScene extends Phaser.Scene {
       .setAlpha(0.95)
       .setDepth(py + 3);
 
-    const targetX = Phaser.Math.Clamp(px + facing * 260, 20, 620);
+    const targetX = clampWorldX2D(px + facing * 260, 20);
     this.tweens.add({
       targets: wave,
       x: targetX,
@@ -1672,7 +1710,7 @@ export class GameScene extends Phaser.Scene {
       strokeThickness: 2,
       align: 'center',
       fontStyle: 'bold'
-    }).setOrigin(0.5).setDepth(450);
+    }).setOrigin(0.5).setDepth(450).setScrollFactor(0);
 
     // Phase 3 Act V: Transform Shalem into the Colossal Crimson Ember Lion (2.2x scale + fiery tint)
     if (this.currentScenario === 5 && this.shalemSprite) {
@@ -1796,9 +1834,13 @@ export class GameScene extends Phaser.Scene {
         this.playAnimSafe(sprite, staggerAnim, true);
         sprite.setTint(0xffeedd);
         this.time.delayedCall(160, () => sprite.clearTint());
-        const knockX = Phaser.Math.Clamp(enemy.position.x + facing * 25, 35, 605);
+        const knockX = clampWorldX2D(enemy.position.x + facing * 25);
         enemy.position = new Vector2(knockX, enemy.position.y);
         this.tweens.add({ targets: sprite, x: knockX, duration: 120, ease: 'Cubic.easeOut' });
+        const shadow = this.enemyShadows.get(enemy.id);
+        if (shadow) {
+          this.tweens.add({ targets: shadow, x: knockX, duration: 120, ease: 'Cubic.easeOut' });
+        }
       }
     }
   }
@@ -1865,12 +1907,13 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // 1. Lock player state and face target + play Finisher animation
+    // 1. Lock player state and face target + play Finisher animation (positive scale + setFlipX)
     this.player.state = CharacterState.ATTACKING;
     this.player.move(0, 0);
     const facing = targetSprite.x >= this.playerSprite.x ? 1 : -1;
     this.player.facingDirection = facing;
-    this.playerSprite.setScale(facing * Math.abs(this.playerSprite.scaleX), this.playerSprite.scaleY);
+    const absScale = Math.abs(this.playerSprite.scaleY);
+    this.playerSprite.setScale(absScale, absScale).setFlipX(facing < 0);
     this.playAnimSafe(this.playerSprite, this.player.id === 'thomas' ? 'thomas_finisher' : 'khaterine_shoot_heavy', true);
 
     // 2. Play Finisher Audio
@@ -1889,11 +1932,11 @@ export class GameScene extends Phaser.Scene {
       )
     );
 
-    // 5. Dash step right in front of target
-    const strikeTargetX = Phaser.Math.Clamp(targetSprite.x - facing * 28, 35, 605);
+    // 5. Dash step right in front of target (across full 1180px panoramic world)
+    const strikeTargetX = clampWorldX2D(targetSprite.x - facing * 28);
     const strikeTargetY = targetSprite.y;
     this.tweens.add({
-      targets: this.playerSprite,
+      targets: [this.playerSprite, this.playerShadow],
       x: strikeTargetX,
       y: strikeTargetY,
       duration: 80,
@@ -1938,9 +1981,12 @@ export class GameScene extends Phaser.Scene {
         target.boss.recoverPosture();
         this.spawnDamageNumber(targetSprite.x, targetSprite.y - 55, bossDmg, true, '#ffd700');
 
-        const knockX = Phaser.Math.Clamp(targetSprite.x + facing * 40, 40, 600);
+        const knockX = clampWorldX2D(targetSprite.x + facing * 40, 40);
         target.boss.position = new Vector2(knockX, target.boss.position.y);
         this.tweens.add({ targets: targetSprite, x: knockX, duration: 200, ease: 'Quad.easeOut' });
+        if (this.bossShadow) {
+          this.tweens.add({ targets: this.bossShadow, x: knockX, duration: 200, ease: 'Quad.easeOut' });
+        }
 
         if (target.boss.health <= 0) {
           this.handleBossDefeated();
@@ -1959,16 +2005,18 @@ export class GameScene extends Phaser.Scene {
           ease: 'Cubic.easeOut',
           onComplete: () => {
             targetSprite.destroy();
+            this.enemyShadows.get(target.enemy!.id)?.destroy();
+            this.enemyShadows.delete(target.enemy!.id);
             this.clearEnemyWarning(target.enemy!.id);
           }
         });
 
         const remainingEnemies = this.enemies.filter(e => e.isAlive());
         if (remainingEnemies.length === 0) {
-          this.storyProgress.completeMilestone('act1_monks');
-          this.storyProgress.completeMilestone('act1_beast');
+          const clearInfo = resolveActEnemyClearInfo(this.currentScenario);
+          clearInfo.milestoneIds.forEach(id => this.storyProgress.completeMilestone(id));
           this.storyProgress.addProgress(25);
-          this.triggerShalemBalloon("Shalem: «¡Los acechadores han caído! ¡Ahora avanza hacia la derecha y destruye a la Madre Morwenna junto a la pira!»", 5000);
+          this.triggerShalemBalloon(clearInfo.shalemCallout, 5000);
         }
       }
 
@@ -1985,7 +2033,7 @@ export class GameScene extends Phaser.Scene {
         stroke: '#000000',
         strokeThickness: 4,
         fontStyle: 'bold'
-      }).setOrigin(0.5).setDepth(450);
+      }).setOrigin(0.5).setDepth(450).setScrollFactor(0);
 
       this.tweens.add({
         targets: banner,
@@ -2212,19 +2260,29 @@ export class GameScene extends Phaser.Scene {
       );
     }
 
+    const bossDeathX = this.bossSprite ? clampWorldX2D(this.bossSprite.x, 80) : 540;
+    const bossDeathY = this.bossSprite ? clampWorldY2D(this.bossSprite.y) : 260;
+    const portalX = Math.min(WORLD_2D.MAX_X - 45, Math.max(bossDeathX + 140, this.playerSprite.x + 160));
+
     if (this.currentScenario === 1) {
 
-      // Spawn dropped Lamento de Oakhaven item
-      this.droppedCenserShadow = this.add.ellipse(520, 260, 24, 6, 0x000000, 0.5).setDepth(259);
-      this.droppedCenserSprite = this.add.image(520, 260, 'lamento_oakhaven').setOrigin(0.5, 1).setDepth(260);
+      // Spawn dropped Lamento de Oakhaven item right where Morwenna fell (normalized to 34x34)
+      this.droppedCenserShadow = this.add.ellipse(bossDeathX, bossDeathY, 24, 6, 0x000000, 0.5).setDepth(bossDeathY - 1);
+      this.droppedCenserSprite = this.normalizeSprite(
+        this.add.image(bossDeathX, bossDeathY, 'lamento_oakhaven'),
+        34,
+        34,
+        0.5,
+        1
+      ).setDepth(bossDeathY);
 
-      this.droppedCenserMarker = this.add.text(520, 222, '▼ [E] RECOGER LAMENTO DE OAKHAVEN ▼', {
+      this.droppedCenserMarker = this.add.text(bossDeathX, bossDeathY - 38, '▼ [E] RECOGER LAMENTO DE OAKHAVEN ▼', {
         fontFamily: 'monospace',
         fontSize: '8.5px',
         color: '#88ffaa',
         backgroundColor: '#0a2012',
         padding: { x: 5, y: 2 }
-      }).setOrigin(0.5).setDepth(261);
+      }).setOrigin(0.5).setDepth(bossDeathY + 2);
 
       this.droppedCenserTween = this.tweens.add({
         targets: [this.droppedCenserSprite, this.droppedCenserMarker],
@@ -2240,9 +2298,9 @@ export class GameScene extends Phaser.Scene {
         7000
       );
 
-      // Interactive Exit Portal / Road to Belltower on right screen edge
-      this.exitPortalZone = this.add.ellipse(605, 250, 48, 16, 0xb8923b, 0.55).setDepth(220);
-      this.exitPortalMarker = this.add.text(585, 205, '▶ AL CAMPANARIO ▶\n[E] o Avanza para partir', {
+      // Interactive Exit Portal / Road to Belltower
+      this.exitPortalZone = this.add.ellipse(portalX, 250, 48, 16, 0xb8923b, 0.55).setDepth(220);
+      this.exitPortalMarker = this.add.text(portalX, 205, '▶ AL CAMPANARIO ▶\n[E] o Avanza para partir', {
         fontFamily: 'Cinzel, monospace',
         fontSize: '8px',
         color: '#ffd700',
@@ -2262,10 +2320,11 @@ export class GameScene extends Phaser.Scene {
         ease: 'Sine.easeInOut'
       });
 
-      // Grand Victory Banner in Center
+      // Grand Victory Banner in Center (pinned to viewport!)
       this.victoryBannerBg = this.add.rectangle(320, 160, 440, 78, 0x11081f, 0.95)
         .setStrokeStyle(2, 0xffd700)
-        .setDepth(360);
+        .setDepth(360)
+        .setScrollFactor(0);
 
       this.victoryBannerTitle = this.add.text(320, 142, '★ ¡ACTO I: OAKHAVEN COMPLETADO! ★', {
         fontFamily: 'Cinzel, Georgia, serif',
@@ -2274,16 +2333,16 @@ export class GameScene extends Phaser.Scene {
         stroke: '#000',
         strokeThickness: 3,
         fontStyle: 'bold'
-      }).setOrigin(0.5).setDepth(361);
+      }).setOrigin(0.5).setDepth(361).setScrollFactor(0);
 
-      this.victoryBannerPrompt = this.add.text(320, 172, 'PULSA [ENTER], [E] O CAMINA A LA DERECHA PARA EL CAMPANARIO ▶', {
+      this.victoryBannerPrompt = this.add.text(320, 172, 'PULSA [ENTER], [E] O CAMINA AL PORTAL DERECHO ▶', {
         fontFamily: 'monospace',
         fontSize: '8.5px',
         color: '#ffffff',
         backgroundColor: '#3d1f5e',
         padding: { x: 8, y: 4 },
         fontStyle: 'bold'
-      }).setOrigin(0.5).setDepth(361).setInteractive({ useHandCursor: true });
+      }).setOrigin(0.5).setDepth(361).setScrollFactor(0).setInteractive({ useHandCursor: true });
 
       this.victoryBannerPrompt.on('pointerdown', () => {
         this.clearActExit();
@@ -2298,8 +2357,8 @@ export class GameScene extends Phaser.Scene {
         7000
       );
 
-      this.exitPortalZone = this.add.ellipse(605, 250, 48, 16, 0x5a7ca8, 0.65).setDepth(220);
-      this.exitPortalMarker = this.add.text(585, 205, '▶ AL GRAN PUENTE ▶\n[E] o Avanza para partir', {
+      this.exitPortalZone = this.add.ellipse(portalX, 250, 48, 16, 0x5a7ca8, 0.65).setDepth(220);
+      this.exitPortalMarker = this.add.text(portalX, 205, '▶ AL GRAN PUENTE ▶\n[E] o Avanza para partir', {
         fontFamily: 'Cinzel, monospace',
         fontSize: '8px',
         color: '#b0d4ff',
@@ -2321,7 +2380,8 @@ export class GameScene extends Phaser.Scene {
 
       this.victoryBannerBg = this.add.rectangle(320, 160, 440, 78, 0x11081f, 0.95)
         .setStrokeStyle(2, 0xffd700)
-        .setDepth(360);
+        .setDepth(360)
+        .setScrollFactor(0);
 
       this.victoryBannerTitle = this.add.text(320, 142, '★ ¡ACTO II: EL CAMPANARIO COMPLETADO! ★', {
         fontFamily: 'Cinzel, Georgia, serif',
@@ -2330,16 +2390,16 @@ export class GameScene extends Phaser.Scene {
         stroke: '#000',
         strokeThickness: 3,
         fontStyle: 'bold'
-      }).setOrigin(0.5).setDepth(361);
+      }).setOrigin(0.5).setDepth(361).setScrollFactor(0);
 
-      this.victoryBannerPrompt = this.add.text(320, 172, 'PULSA [ENTER], [E] O CAMINA A LA DERECHA PARA EL GRAN PUENTE ▶', {
+      this.victoryBannerPrompt = this.add.text(320, 172, 'PULSA [ENTER], [E] O CAMINA AL PORTAL DERECHO ▶', {
         fontFamily: 'monospace',
         fontSize: '8.5px',
         color: '#ffffff',
         backgroundColor: '#203254',
         padding: { x: 8, y: 4 },
         fontStyle: 'bold'
-      }).setOrigin(0.5).setDepth(361).setInteractive({ useHandCursor: true });
+      }).setOrigin(0.5).setDepth(361).setScrollFactor(0).setInteractive({ useHandCursor: true });
 
       this.victoryBannerPrompt.on('pointerdown', () => {
         this.clearActExit();
@@ -2354,8 +2414,8 @@ export class GameScene extends Phaser.Scene {
         7000
       );
 
-      this.exitPortalZone = this.add.ellipse(605, 250, 48, 16, 0xd4af37, 0.65).setDepth(220);
-      this.exitPortalMarker = this.add.text(585, 205, '▶ A LONDINIUM ▶\n[E] o Avanza para entrar', {
+      this.exitPortalZone = this.add.ellipse(portalX, 250, 48, 16, 0xd4af37, 0.65).setDepth(220);
+      this.exitPortalMarker = this.add.text(portalX, 205, '▶ A LONDINIUM ▶\n[E] o Avanza para entrar', {
         fontFamily: 'Cinzel, monospace',
         fontSize: '8px',
         color: '#ffd700',
@@ -2377,7 +2437,8 @@ export class GameScene extends Phaser.Scene {
 
       this.victoryBannerBg = this.add.rectangle(320, 160, 440, 78, 0x11081f, 0.95)
         .setStrokeStyle(2, 0xffd700)
-        .setDepth(360);
+        .setDepth(360)
+        .setScrollFactor(0);
 
       this.victoryBannerTitle = this.add.text(320, 142, '★ ¡ACTO III: EL GRAN PUENTE COMPLETADO! ★', {
         fontFamily: 'Cinzel, Georgia, serif',
@@ -2386,16 +2447,16 @@ export class GameScene extends Phaser.Scene {
         stroke: '#000',
         strokeThickness: 3,
         fontStyle: 'bold'
-      }).setOrigin(0.5).setDepth(361);
+      }).setOrigin(0.5).setDepth(361).setScrollFactor(0);
 
-      this.victoryBannerPrompt = this.add.text(320, 172, 'PULSA [ENTER], [E] O CAMINA A LA DERECHA PARA LONDINIUM ▶', {
+      this.victoryBannerPrompt = this.add.text(320, 172, 'PULSA [ENTER], [E] O CAMINA AL PORTAL DERECHO ▶', {
         fontFamily: 'monospace',
         fontSize: '8.5px',
         color: '#ffffff',
         backgroundColor: '#4a3713',
         padding: { x: 8, y: 4 },
         fontStyle: 'bold'
-      }).setOrigin(0.5).setDepth(361).setInteractive({ useHandCursor: true });
+      }).setOrigin(0.5).setDepth(361).setScrollFactor(0).setInteractive({ useHandCursor: true });
 
       this.victoryBannerPrompt.on('pointerdown', () => {
         this.clearActExit();
@@ -2410,9 +2471,9 @@ export class GameScene extends Phaser.Scene {
         7000
       );
 
-      // Interactive Abyssal Descent Portal on right edge
-      this.exitPortalZone = this.add.ellipse(605, 250, 48, 16, 0x8a2be2, 0.65).setDepth(220);
-      this.exitPortalMarker = this.add.text(585, 205, '▼ CATEDRAL INVERTIDA ▼\n[E] o Avanza para descender', {
+      // Interactive Abyssal Descent Portal
+      this.exitPortalZone = this.add.ellipse(portalX, 250, 48, 16, 0x8a2be2, 0.65).setDepth(220);
+      this.exitPortalMarker = this.add.text(portalX, 205, '▼ CATEDRAL INVERTIDA ▼\n[E] o Avanza para descender', {
         fontFamily: 'Cinzel, monospace',
         fontSize: '8px',
         color: '#e699ff',
@@ -2435,7 +2496,8 @@ export class GameScene extends Phaser.Scene {
       // Victory Banner for Act IV
       this.victoryBannerBg = this.add.rectangle(320, 160, 440, 78, 0x11081f, 0.95)
         .setStrokeStyle(2, 0xffd700)
-        .setDepth(360);
+        .setDepth(360)
+        .setScrollFactor(0);
 
       this.victoryBannerTitle = this.add.text(320, 142, '★ ¡ACTO IV: LONDINIUM COMPLETADO! ★', {
         fontFamily: 'Cinzel, Georgia, serif',
@@ -2444,16 +2506,16 @@ export class GameScene extends Phaser.Scene {
         stroke: '#000',
         strokeThickness: 3,
         fontStyle: 'bold'
-      }).setOrigin(0.5).setDepth(361);
+      }).setOrigin(0.5).setDepth(361).setScrollFactor(0);
 
-      this.victoryBannerPrompt = this.add.text(320, 172, 'PULSA [ENTER], [E] O CAMINA A LA DERECHA PARA DESCENDER ▶', {
+      this.victoryBannerPrompt = this.add.text(320, 172, 'PULSA [ENTER], [E] O CAMINA AL PORTAL DERECHO ▶', {
         fontFamily: 'monospace',
         fontSize: '8.5px',
         color: '#ffffff',
         backgroundColor: '#3d1f5e',
         padding: { x: 8, y: 4 },
         fontStyle: 'bold'
-      }).setOrigin(0.5).setDepth(361).setInteractive({ useHandCursor: true });
+      }).setOrigin(0.5).setDepth(361).setScrollFactor(0).setInteractive({ useHandCursor: true });
 
       this.victoryBannerPrompt.on('pointerdown', () => {
         this.clearActExit();
@@ -2471,7 +2533,8 @@ export class GameScene extends Phaser.Scene {
       // Victory Banner for Finale
       this.victoryBannerBg = this.add.rectangle(320, 160, 460, 84, 0x11081f, 0.96)
         .setStrokeStyle(2, 0xffd700)
-        .setDepth(360);
+        .setDepth(360)
+        .setScrollFactor(0);
 
       this.victoryBannerTitle = this.add.text(320, 140, '★ ¡ALBION REDIMIDO: LA LUZ EN LAS TINIEBLAS! ★', {
         fontFamily: 'Cinzel, Georgia, serif',
@@ -2480,7 +2543,7 @@ export class GameScene extends Phaser.Scene {
         stroke: '#000',
         strokeThickness: 3,
         fontStyle: 'bold'
-      }).setOrigin(0.5).setDepth(361);
+      }).setOrigin(0.5).setDepth(361).setScrollFactor(0);
 
       this.victoryBannerPrompt = this.add.text(320, 172, 'PULSA [ENTER] PARA VER EL EPÍLOGO Y LOS CRÉDITOS ▶', {
         fontFamily: 'monospace',
@@ -2489,7 +2552,7 @@ export class GameScene extends Phaser.Scene {
         backgroundColor: '#3d1f5e',
         padding: { x: 10, y: 4 },
         fontStyle: 'bold'
-      }).setOrigin(0.5).setDepth(361).setInteractive({ useHandCursor: true });
+      }).setOrigin(0.5).setDepth(361).setScrollFactor(0).setInteractive({ useHandCursor: true });
 
       this.victoryBannerPrompt.on('pointerdown', () => {
         this.clearActExit();
@@ -2518,7 +2581,7 @@ export class GameScene extends Phaser.Scene {
       this.playerSprite.stop();
     }
 
-    this.gameOverContainer = this.add.container(320, 180).setDepth(450);
+    this.gameOverContainer = this.add.container(320, 180).setDepth(450).setScrollFactor(0);
 
     const dimBg = this.add.rectangle(0, 0, 640, 360, 0x05020a, 0.88).setInteractive();
     dimBg.on('pointerdown', (p: Phaser.Input.Pointer) => p.event.stopPropagation());
@@ -2845,12 +2908,21 @@ export class GameScene extends Phaser.Scene {
     const thrownX = this.playerSprite.x;
     const thrownY = this.playerSprite.y - 15;
     const dir = this.player.facingDirection;
+    const impactX = clampWorldX2D(thrownX + dir * 180, 45);
+
+    // Clamp dropped weapon landing position inside walkable 1180px arena so it is ALWAYS recoverable!
+    const droppedList = this.player.disarmManager.getDroppedWeapons();
+    const latestDrop = droppedList[droppedList.length - 1];
+    if (latestDrop) {
+      latestDrop.position = new Vector2(impactX, clampWorldY2D(this.playerSprite.y));
+    }
+
     const proj = this.add.image(thrownX, thrownY, 'icon_thrown_sword').setScale(1.3).setDepth(thrownY);
     proj.setFlipX(dir < 0);
 
     this.tweens.add({
       targets: proj,
-      x: thrownX + dir * 190,
+      x: impactX,
       rotation: dir * Math.PI * 3,
       duration: 280,
       ease: 'Cubic.easeOut',
@@ -2858,9 +2930,8 @@ export class GameScene extends Phaser.Scene {
         proj.destroy();
 
         // Stun enemies in impact area in 2.5D
-        const impactX = thrownX + dir * 190;
         for (const enemy of this.enemies) {
-          if (Math.abs(enemy.position.x - impactX) < 55 && Math.abs(enemy.position.y - thrownY) < 30) {
+          if (Math.abs(enemy.position.x - impactX) < 55 && Math.abs(enemy.position.y - this.playerSprite.y) < 35) {
             enemy.damagePosture(50);
             this.audio.playCombatHit(true);
             this.spawnDamageNumber(enemy.position.x, enemy.position.y - 35, 45, true);
@@ -2913,37 +2984,57 @@ export class GameScene extends Phaser.Scene {
     const py = this.playerSprite.y;
     const facing = this.player.facingDirection;
 
-    // Ally follows smoothly in 2.5D
-    const allyTargetX = px - 45 * facing;
-    const allyTargetY = py - 4;
-    const allyDist = Math.hypot(allyTargetX - this.allySprite.x, allyTargetY - this.allySprite.y);
+    // Ally follows smoothly in 2.5D, facing movement direction while catching up
+    const allyTargetX = clampWorldX2D(px - 45 * facing);
+    const allyTargetY = clampWorldY2D(py - 4, this.currentScenario === 1 || this.currentScenario === 2);
+    const allyDx = allyTargetX - this.allySprite.x;
+    const allyDist = Math.hypot(allyDx, allyTargetY - this.allySprite.y);
     this.allySprite.x = Phaser.Math.Linear(this.allySprite.x, allyTargetX, 0.08);
     this.allySprite.y = Phaser.Math.Linear(this.allySprite.y, allyTargetY, 0.08);
-    this.allySprite.setFlipX(facing < 0);
+    const allyScale = computeDepthScale2D(this.allySprite.y);
+    this.allySprite.setScale(allyScale, allyScale);
+    if (allyDist > 6) {
+      this.allySprite.setFlipX(computeFacingFlipX(allyDx, this.allySprite.flipX, 3));
+    } else {
+      this.allySprite.setFlipX(facing < 0);
+    }
     this.allySprite.setDepth(this.allySprite.y);
-    this.allyShadow.setPosition(this.allySprite.x, this.allySprite.y).setDepth(this.allySprite.y - 1);
+    this.allyShadow.setPosition(this.allySprite.x, this.allySprite.y).setDepth(this.allySprite.y - 1).setScale(allyScale);
 
     const allyWalkAnim = this.allyChar.id === 'thomas' ? 'thomas_walk' : 'khaterine_walk';
     const allyIdleAnim = this.allyChar.id === 'thomas' ? 'thomas_idle' : 'khaterine_idle';
-    if (allyDist > 3.0) {
+    if (allyDist > 3.5) {
       this.playAnimSafe(this.allySprite, allyWalkAnim);
     } else {
       this.playAnimSafe(this.allySprite, allyIdleAnim);
     }
 
-    // Shalem Cat follows smoothly in 2.5D
-    const catTargetX = px - 22 * facing;
-    const catTargetY = py + 6;
-    const catDist = Math.hypot(catTargetX - this.shalemSprite.x, catTargetY - this.shalemSprite.y);
+    // Shalem Cat follows smoothly in 2.5D, facing actual movement direction
+    const catTargetX = clampWorldX2D(px - 22 * facing);
+    const catTargetY = clampWorldY2D(py + 6, this.currentScenario === 1 || this.currentScenario === 2);
+    const catDx = catTargetX - this.shalemSprite.x;
+    const catDist = Math.hypot(catDx, catTargetY - this.shalemSprite.y);
     this.shalemSprite.x = Phaser.Math.Linear(this.shalemSprite.x, catTargetX, 0.1);
     this.shalemSprite.y = Phaser.Math.Linear(this.shalemSprite.y, catTargetY, 0.1);
-    this.shalemSprite.setFlipX(facing < 0);
+    if (catDist > 5) {
+      this.shalemSprite.setFlipX(computeFacingFlipX(catDx, this.shalemSprite.flipX, 2));
+    } else {
+      this.shalemSprite.setFlipX(facing < 0);
+    }
     this.shalemSprite.setDepth(this.shalemSprite.y);
     this.shalemShadow.setPosition(this.shalemSprite.x, this.shalemSprite.y).setDepth(this.shalemSprite.y - 1);
     if (catDist > 2.5) {
       this.playAnimSafe(this.shalemSprite, 'shalem_walk');
     } else {
       this.playAnimSafe(this.shalemSprite, 'shalem_sit_idle');
+    }
+
+    // Friendly NPCs gently turn to look at the player when nearby
+    if (this.elowenSprite && Math.hypot(px - this.elowenSprite.x, py - this.elowenSprite.y) < 160) {
+      this.elowenSprite.setFlipX(computeFacingFlipX(px - this.elowenSprite.x, this.elowenSprite.flipX, 8));
+    }
+    if (this.cedricSprite && Math.hypot(px - this.cedricSprite.x, py - this.cedricSprite.y) < 160) {
+      this.cedricSprite.setFlipX(computeFacingFlipX(px - this.cedricSprite.x, this.cedricSprite.flipX, 8));
     }
 
     // Balloon timer
@@ -3017,8 +3108,11 @@ export class GameScene extends Phaser.Scene {
       const dx = playerX - enemy.position.x;
       const dy = playerY - enemy.position.y;
       const dist = Math.hypot(dx, dy);
-      const dirX = dx > 0 ? 1 : -1;
-      sprite.setFlipX(dirX > 0);
+      // All visual-pack enemy sheets natively face RIGHT (+1):
+      // Moving/facing RIGHT (dx > 0) => flipX = false; LEFT (dx < 0) => flipX = true!
+      const nextFlipX = computeFacingFlipX(dx, sprite.flipX, 4);
+      sprite.setFlipX(nextFlipX);
+      enemy.facingDirection = nextFlipX ? -1 : 1;
 
       // Handle Telegraphed Strike completion
       if (shouldStrike) {
@@ -3083,18 +3177,19 @@ export class GameScene extends Phaser.Scene {
         continue;
       }
 
-      // Normal movement toward player in 2.5D
+      // Normal movement toward player in 2.5D (clamped within 1180px panoramic arena + perspective scaling)
       if (dist > 38) {
         const speedX = enemy.speed * (delta / 1000);
         const speedY = (enemy.speed * 0.65) * (delta / 1000);
 
-        const newX = enemy.position.x + (dx / dist) * speedX;
-        const newY = enemy.position.y + (dy / dist) * speedY;
+        const newX = clampWorldX2D(enemy.position.x + (dx / dist) * speedX);
+        const newY = clampWorldY2D(enemy.position.y + (dy / dist) * speedY);
 
         enemy.position = new Vector2(newX, newY);
-        sprite.setPosition(newX, newY).setDepth(newY);
+        const enemyScale = computeDepthScale2D(newY);
+        sprite.setPosition(newX, newY).setDepth(newY).setScale(enemyScale, enemyScale);
         this.playAnimSafe(sprite, this.getEnemyAnimKey(enemy.id, 'patrol'));
-        if (shadow) shadow.setPosition(newX, newY).setDepth(newY - 1);
+        if (shadow) shadow.setPosition(newX, newY).setDepth(newY - 1).setScale(enemyScale);
       } else if (dist <= 38 && enemy.attackCooldown <= 0 && (enemy.state === 'IDLE' || enemy.state === 'MOVING')) {
         // Start Telegraphed Attack Wind-up (Pilar 1: 450ms reaction window!)
         enemy.startWindup(450);
@@ -3131,7 +3226,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.bossMarker) {
-      this.bossMarker.x = this.bossSprite.x;
+      this.bossMarker.x = clampWorldX2D(this.bossSprite.x, 88);
     }
 
     // 2.5D Depth Alignment on Boss Shadow (Pilar 2)
@@ -3155,6 +3250,11 @@ export class GameScene extends Phaser.Scene {
     const dy = this.playerSprite.y - this.bossSprite.y;
     const dist = Math.hypot(dx, dy);
     const aliveEnemies = this.enemies.filter(e => e.isAlive()).length;
+
+    // Boss ALWAYS faces toward the player cleanly (even before vanguard minions fall)
+    if (this.currentBoss.state !== 'STUNNED') {
+      this.bossSprite.setFlipX(computeFacingFlipX(dx, this.bossSprite.flipX, 6));
+    }
 
     // Boss Flame Shield Aura Sync (Pilar 3)
     if (this.currentBoss.isFlameShieldActive && this.bossShieldAura) {
@@ -3185,10 +3285,14 @@ export class GameScene extends Phaser.Scene {
       const targetTobiasY = Phaser.Math.Clamp(this.bossSprite.y + 18, 208, 310);
       this.martinSprite.x = Phaser.Math.Linear(this.martinSprite.x, targetMartinX, 0.05);
       this.martinSprite.y = Phaser.Math.Linear(this.martinSprite.y, targetMartinY, 0.05);
+      this.martinSprite.setFlipX(computeFacingFlipX(this.bossSprite.x - this.martinSprite.x, this.martinSprite.flipX, 4));
       this.martinSprite.setDepth(this.martinSprite.y);
+      this.playAnimSafe(this.martinSprite, 'thomas_walk');
       this.tobiasSprite.x = Phaser.Math.Linear(this.tobiasSprite.x, targetTobiasX, 0.05);
       this.tobiasSprite.y = Phaser.Math.Linear(this.tobiasSprite.y, targetTobiasY, 0.05);
+      this.tobiasSprite.setFlipX(computeFacingFlipX(this.bossSprite.x - this.tobiasSprite.x, this.tobiasSprite.flipX, 4));
       this.tobiasSprite.setDepth(this.tobiasSprite.y);
+      this.playAnimSafe(this.tobiasSprite, 'thomas_walk');
 
       this.bridgeAlliesAttackTimer2D += delta / 1000;
       if (this.bridgeAlliesAttackTimer2D >= 2.5) {
@@ -3297,10 +3401,19 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Keep Morwenna idle animation active according to phase
+    // Keep ALL 5 Act bosses looping their proper idle/patrol animation cleanly
     if (this.currentBoss.id === 'madre_morwenna') {
       const idleAnim = this.currentBoss.phase === BossPhaseType.PHASE_2 ? 'morwenna_phase2_idle' : 'morwenna_levitate_idle';
       this.playAnimSafe(this.bossSprite, idleAnim);
+    } else if (this.currentBoss.id === 'guardian_crisol') {
+      this.playAnimSafe(this.bossSprite, 'zealot_patrol');
+    } else if (this.currentBoss.id === 'capitan_aureo') {
+      this.playAnimSafe(this.bossSprite, 'skeleton_patrol');
+    } else if (this.currentBoss.id === 'rex_malphas') {
+      const idleAnim = this.currentBoss.phase === BossPhaseType.PHASE_2 ? 'morwenna_phase2_idle' : 'morwenna_levitate_idle';
+      this.playAnimSafe(this.bossSprite, idleAnim);
+    } else if (this.currentBoss.id === 'astaroth') {
+      this.playAnimSafe(this.bossSprite, 'morwenna_phase2_idle');
     }
 
     // When minions are defeated or boss engages: advance in 2.5D!
@@ -3308,11 +3421,11 @@ export class GameScene extends Phaser.Scene {
       const speedX = (this.currentBoss.phase === BossPhaseType.PHASE_2 ? 55 : 40) * (delta / 1000);
       const speedY = (this.currentBoss.phase === BossPhaseType.PHASE_2 ? 35 : 26) * (delta / 1000);
 
-      this.bossSprite.x += (dx / dist) * speedX;
-      this.bossSprite.y += (dy / dist) * speedY;
+      this.bossSprite.x = clampWorldX2D(this.bossSprite.x + (dx / dist) * speedX, 45);
+      this.bossSprite.y = clampWorldY2D(this.bossSprite.y + (dy / dist) * speedY);
       this.currentBoss.position = new Vector2(this.bossSprite.x, this.bossSprite.y);
 
-      this.bossSprite.setFlipX(dx < 0);
+      this.bossSprite.setFlipX(computeFacingFlipX(dx, this.bossSprite.flipX, 6));
       this.bossSprite.setDepth(this.bossSprite.y);
       if (this.bossShadow) {
         this.bossShadow.setPosition(this.bossSprite.x, this.bossSprite.y).setDepth(this.bossSprite.y - 1);
@@ -3398,8 +3511,8 @@ export class GameScene extends Phaser.Scene {
   private executeBossFlameStep(): void {
     if (!this.currentBoss || !this.bossSprite) return;
     this.currentBoss.teleportCooldown = 4500;
-    const targetX = Phaser.Math.Clamp(this.playerSprite.x + (this.player.facingDirection > 0 ? 55 : -55), 60, 580);
-    const targetY = Phaser.Math.Clamp(this.playerSprite.y, 225, 295);
+    const targetX = clampWorldX2D(this.playerSprite.x + (this.player.facingDirection > 0 ? 60 : -60), 60);
+    const targetY = clampWorldY2D(this.playerSprite.y);
 
     this.cameras.main.shake(120, 0.008);
     this.audio.playSfx('dodge');
@@ -3441,8 +3554,8 @@ export class GameScene extends Phaser.Scene {
 
   private triggerPhase2FirePillars(): void {
     if (!this.currentBoss || this.currentBoss.phase !== BossPhaseType.PHASE_2 || this.currentBoss.health <= 0) return;
-    const px = Phaser.Math.Clamp(this.playerSprite.x + (Math.random() - 0.5) * 60, 60, 580);
-    const py = Phaser.Math.Clamp(this.playerSprite.y + (Math.random() - 0.5) * 30, 225, 295);
+    const px = clampWorldX2D(this.playerSprite.x + (Math.random() - 0.5) * 60, 60);
+    const py = clampWorldY2D(this.playerSprite.y + (Math.random() - 0.5) * 30);
 
     const warningCircle = this.add.circle(px, py, 24, 0xff0000, 0.4)
       .setStrokeStyle(1.5, 0xff5500)
@@ -3526,19 +3639,20 @@ export class GameScene extends Phaser.Scene {
 
     this.tutorialBannerBg = this.add.rectangle(320, 22, 530, 24, 0x12081f, 0.92)
       .setStrokeStyle(1.5, 0xffd700)
-      .setDepth(340);
+      .setDepth(340)
+      .setScrollFactor(0);
     this.tutorialBannerText = this.add.text(320, 22, 'ENTRENAMIENTO (PASO 1/4): Usa [WASD] para moverte en profundidad hacia el círculo dorado', {
       fontFamily: 'Cinzel, monospace',
       fontSize: '8px',
       color: '#ffd700',
       fontStyle: 'bold'
-    }).setOrigin(0.5).setDepth(341);
+    }).setOrigin(0.5).setDepth(341).setScrollFactor(0);
 
     this.tutorialSkipPrompt = this.add.text(320, 40, '[ESC] o [ENTER]: Saltar Entrenamiento y combatir de inmediato', {
       fontFamily: 'monospace',
       fontSize: '7.5px',
       color: '#bbaacc'
-    }).setOrigin(0.5).setDepth(341);
+    }).setOrigin(0.5).setDepth(341).setScrollFactor(0);
 
     this.triggerShalemBalloon("Shalem: «¡No tan rápido, muchacho! Antes de que Morwenna arrase Oakhaven, asegúrate de recordar cómo moverte en 2.5D.»", 5000);
   }
@@ -3626,30 +3740,39 @@ export class GameScene extends Phaser.Scene {
     const e3 = Enemy.createFanaticMonk('zealot_1', new Vector2(485, 240));
     this.enemies.push(e1, e2, e3);
 
-    const s1 = this.add.ellipse(360, 248, 26, 8, 0x000000, 0.45).setDepth(247);
-    const s2 = this.add.ellipse(440, 280, 24, 7, 0x000000, 0.45).setDepth(279);
-    const s3 = this.add.ellipse(485, 240, 24, 7, 0x000000, 0.45).setDepth(239);
+    const sc1 = computeDepthScale2D(248);
+    const sc2 = computeDepthScale2D(280);
+    const sc3 = computeDepthScale2D(240);
+    const s1 = this.add.ellipse(360, 248, 26, 8, 0x000000, 0.45).setDepth(247).setScale(sc1);
+    const s2 = this.add.ellipse(440, 280, 24, 7, 0x000000, 0.45).setDepth(279).setScale(sc2);
+    const s3 = this.add.ellipse(485, 240, 24, 7, 0x000000, 0.45).setDepth(239).setScale(sc3);
     this.enemyShadows.set(e1.id, s1);
     this.enemyShadows.set(e2.id, s2);
     this.enemyShadows.set(e3.id, s3);
 
-    const sp1 = this.normalizeSprite(this.add.sprite(e1.position.x, e1.position.y, 'hound_patrol', 0), 64, 48, 0.5, 0.9).setDepth(248);
+    // Enemies spawn to the right of the player, so initialize flipX = true (facing LEFT toward player!)
+    const sp1 = this.normalizeSprite(this.add.sprite(e1.position.x, e1.position.y, 'hound_patrol', 0), 64, 48, 0.5, 0.9)
+      .setDepth(248).setScale(sc1, sc1).setFlipX(true);
     this.playAnimSafe(sp1, 'hound_patrol');
     this.enemySprites.set(e1.id, sp1);
 
-    const sp2 = this.normalizeSprite(this.add.sprite(e2.position.x, e2.position.y, 'cultist_patrol', 0), 48, 48, 0.5, 0.9).setDepth(280);
+    const sp2 = this.normalizeSprite(this.add.sprite(e2.position.x, e2.position.y, 'cultist_patrol', 0), 48, 48, 0.5, 0.9)
+      .setDepth(280).setScale(sc2, sc2).setFlipX(true);
     this.playAnimSafe(sp2, 'cultist_patrol');
     this.enemySprites.set(e2.id, sp2);
 
-    const sp3 = this.normalizeSprite(this.add.sprite(e3.position.x, e3.position.y, 'zealot_patrol', 0), 64, 64, 0.5, 0.9).setDepth(240);
+    const sp3 = this.normalizeSprite(this.add.sprite(e3.position.x, e3.position.y, 'zealot_patrol', 0), 64, 64, 0.5, 0.9)
+      .setDepth(240).setScale(sc3, sc3).setFlipX(true);
     this.playAnimSafe(sp3, 'zealot_patrol');
     this.enemySprites.set(e3.id, sp3);
 
     this.currentBoss = Boss.createMadreMorwenna();
-    this.bossShadow = this.add.ellipse(540, 260, 34, 10, 0x000000, 0.55).setDepth(259);
-    this.bossSprite = this.normalizeSprite(this.add.sprite(540, 260, 'morwenna_levitate_idle', 0), 96, 96, 0.5, 0.9).setDepth(260);
+    this.currentBoss.position = new Vector2(545, 260);
+    this.bossShadow = this.add.ellipse(545, 260, 34, 10, 0x000000, 0.55).setDepth(259);
+    this.bossSprite = this.normalizeSprite(this.add.sprite(545, 260, 'morwenna_levitate_idle', 0), 96, 96, 0.5, 0.9)
+      .setDepth(260).setFlipX(true);
     this.playAnimSafe(this.bossSprite, 'morwenna_levitate_idle');
-    this.createBossMarker('Madre Morwenna', 540, 260);
+    this.createBossMarker('Madre Morwenna', 545, 260);
   }
 
   private spawnScenarioProps(scenarioIndex: number): void {
@@ -3658,117 +3781,112 @@ export class GameScene extends Phaser.Scene {
 
     const addProp = (key: string, x: number, y: number, maxW: number, maxH: number, animate: boolean = true) => {
       if (!this.textures.exists(key)) return;
+      // Subtle grounded contact shadow so no prop ever appears floating above cobblestones
+      const shadow = this.add.ellipse(x, y, Math.min(62, Math.max(20, maxW * 0.62)), 7, 0x000000, 0.42).setDepth(y - 3);
       const spr = this.normalizeSprite(this.add.sprite(x, y, key, 0), maxW, maxH, 0.5, 0.95).setDepth(y - 2);
       if (animate && this.anims.exists(key)) {
         spr.play(key);
       }
-      this.scenarioProps.push(spr);
+      this.scenarioProps.push(shadow, spr);
     };
 
     if (scenarioIndex === 1) {
-      // Act I: Oakhaven 4-Subsector Multi-Zone Props (Atrio -> Colina del Viejo Roble -> Gran Pira -> Cementerio y Criptas)
-      // Elevated Colina del Viejo Roble Mossy Terrace (x: 245..410, y: 175..210)
-      const hillBase = this.add.ellipse(320, 198, 175, 42, 0x263829, 0.92).setStrokeStyle(2, 0x4b5c47).setDepth(175);
-      const hillStep1 = this.add.rectangle(242, 206, 22, 10, 0x4a5248, 0.95).setStrokeStyle(1, 0x6c7868).setDepth(176);
-      const hillStep2 = this.add.rectangle(262, 198, 22, 10, 0x4a5248, 0.95).setStrokeStyle(1, 0x6c7868).setDepth(176);
-      const oakTrunk = this.add.rectangle(348, 162, 18, 56, 0x3b2416, 0.98).setDepth(182);
-      const oakCanopy = this.add.ellipse(348, 128, 105, 52, 0x6e4720, 0.92).setStrokeStyle(2, 0xd49a37).setDepth(183);
-      const hillLabel = this.add.text(320, 165, '🌳 COLINA DEL VIEJO ROBLE (CAP. II)', {
+      // Act I: Oakhaven 4-Subsector Multi-Zone Props firmly grounded on the y = 202..242 cobblestone belt
+      // Subtle Old Oak Hill poetic label placed cleanly above Elowen's head against the ancient oak
+      const hillLabel = this.add.text(335, 136, '🌳 COLINA DEL VIEJO ROBLE', {
         fontFamily: 'Cinzel, monospace',
-        fontSize: '7px',
-        color: '#b8ff99',
-        backgroundColor: 'rgba(14, 24, 16, 0.85)',
+        fontSize: '7.5px',
+        color: '#c8ffaa',
+        backgroundColor: 'rgba(12, 22, 16, 0.78)',
         padding: { x: 4, y: 1 }
       }).setOrigin(0.5).setDepth(185);
-      this.scenarioProps.push(hillBase, hillStep1, hillStep2, oakTrunk, oakCanopy, hillLabel);
+      this.scenarioProps.push(hillLabel);
 
-      addProp('prop_sanctuary_cross', 125, 222, 48, 80, true);
-      addProp('prop_sanctuary_altar', 188, 224, 64, 48, true);
-      addProp('prop_street_lamp', 85, 212, 32, 96, true);
-      addProp('prop_street_lamp', 435, 212, 32, 96, true);
-      addProp('prop_barrel', 235, 224, 32, 48, false);
-      addProp('prop_parish_crate', 258, 225, 32, 32, false);
-      addProp('prop_great_pyre', 555, 232, 96, 96, true);
-      addProp('prop_cemetery_gate', 680, 222, 64, 96, false);
-      addProp('prop_celtic_gravestone', 785, 226, 32, 48, false);
-      addProp('prop_celtic_gravestone', 880, 224, 32, 48, false);
-      addProp('prop_soul_brazier', 965, 226, 32, 48, true);
-      addProp('prop_mausoleum_facade', 1075, 218, 96, 128, true);
+      addProp('prop_street_lamp', 75, 212, 32, 92, true);
+      addProp('prop_sanctuary_cross', 128, 216, 46, 76, true);
+      addProp('prop_sanctuary_altar', 194, 218, 60, 44, true);
+      addProp('prop_barrel', 238, 224, 30, 44, false);
+      addProp('prop_parish_crate', 260, 226, 28, 28, false);
+      addProp('prop_street_lamp', 445, 212, 32, 92, true);
+      addProp('prop_great_pyre', 565, 226, 92, 92, true);
+      addProp('prop_cemetery_gate', 715, 216, 62, 90, false);
+      addProp('prop_celtic_gravestone', 805, 218, 30, 46, false);
+      addProp('prop_celtic_gravestone', 895, 216, 30, 46, false);
+      addProp('prop_soul_brazier', 975, 220, 32, 46, true);
+      addProp('prop_mausoleum_facade', 1080, 222, 94, 122, true);
     } else if (scenarioIndex === 2) {
       // Act II: Burned Barn Slab (Cap. VIII) + Elevated Salt Cell Terrace (Cap. VII) & Belltower Crucible Props
-      const barnSlab = this.add.rectangle(145, 272, 42, 22, 0x2c2238, 0.95).setStrokeStyle(2, 0xaa44ff).setDepth(270);
-      const barnLabel = this.add.text(145, 254, '🗡️ LOSA DEL GRANERO (CAP. VIII)', {
-        fontFamily: 'Cinzel, monospace',
-        fontSize: '6.5px',
-        color: '#d999ff',
-        backgroundColor: 'rgba(18, 10, 28, 0.85)',
-        padding: { x: 3, y: 1 }
-      }).setOrigin(0.5).setDepth(271);
-
-      const saltTerrace = this.add.ellipse(220, 192, 130, 34, 0x353140, 0.94).setStrokeStyle(2, 0xddddff).setDepth(174);
-      const saltStep1 = this.add.rectangle(175, 210, 22, 10, 0x4b4656, 0.95).setStrokeStyle(1, 0x8b8698).setDepth(175);
-      const saltStep2 = this.add.rectangle(195, 200, 22, 10, 0x4b4656, 0.95).setStrokeStyle(1, 0x8b8698).setDepth(175);
-      const saltLabel = this.add.text(220, 166, '🔔 CELDA DE SAL ELEVADA (+2.8m)', {
+      const barnSlab = this.add.rectangle(145, 272, 42, 20, 0x2c2238, 0.92).setStrokeStyle(1.5, 0xaa44ff).setDepth(204);
+      const barnLabel = this.add.text(145, 254, '🗡 LOSA DEL GRANERO (CAP. VIII)', {
         fontFamily: 'Cinzel, monospace',
         fontSize: '7px',
+        color: '#d999ff',
+        backgroundColor: 'rgba(18, 10, 28, 0.82)',
+        padding: { x: 3, y: 1 }
+      }).setOrigin(0.5).setDepth(205);
+
+      const saltTerrace = this.add.ellipse(220, 194, 126, 30, 0x322d3d, 0.92).setStrokeStyle(1.5, 0xc8c8ee).setDepth(174);
+      const saltStep1 = this.add.rectangle(175, 208, 22, 8, 0x4b4656, 0.95).setStrokeStyle(1, 0x8b8698).setDepth(175);
+      const saltStep2 = this.add.rectangle(195, 199, 22, 8, 0x4b4656, 0.95).setStrokeStyle(1, 0x8b8698).setDepth(175);
+      const saltLabel = this.add.text(220, 166, '🔔 CELDA DE SAL (CAP. VII)', {
+        fontFamily: 'Cinzel, monospace',
+        fontSize: '7.5px',
         color: '#ffd700',
-        backgroundColor: 'rgba(18, 12, 24, 0.85)',
+        backgroundColor: 'rgba(18, 12, 24, 0.82)',
         padding: { x: 4, y: 1 }
       }).setOrigin(0.5).setDepth(186);
       this.scenarioProps.push(barnSlab, barnLabel, saltTerrace, saltStep1, saltStep2, saltLabel);
 
-      addProp('prop_mausoleum_facade', 565, 215, 96, 128, true);
-      addProp('prop_celtic_gravestone', 140, 222, 32, 48, false);
-      addProp('prop_celtic_gravestone', 320, 220, 32, 48, false);
-      addProp('prop_monumental_sarcophagus', 280, 225, 64, 64, false);
-      addProp('prop_soul_brazier', 195, 224, 32, 48, true);
-      addProp('prop_soul_brazier', 485, 224, 32, 48, true);
-      addProp('prop_barrel', 90, 232, 32, 48, false);
-      addProp('prop_great_pyre', 820, 232, 96, 96, true);
-      addProp('prop_cemetery_gate', 1040, 222, 64, 96, false);
+      addProp('prop_barrel', 90, 224, 30, 44, false);
+      addProp('prop_soul_brazier', 310, 218, 32, 46, true);
+      addProp('prop_monumental_sarcophagus', 425, 220, 60, 60, false);
+      addProp('prop_soul_brazier', 550, 218, 32, 46, true);
+      addProp('prop_great_pyre', 825, 224, 92, 92, true);
+      addProp('prop_cemetery_gate', 1055, 216, 62, 90, false);
     } else if (scenarioIndex === 3) {
-      // Act III: Great Stone Bridge Props across 1180px
-      addProp('prop_street_lamp', 110, 212, 32, 96, true);
-      addProp('prop_street_lamp', 290, 212, 32, 96, true);
-      addProp('prop_street_lamp', 470, 212, 32, 96, true);
-      addProp('prop_cemetery_gate', 595, 222, 64, 96, false);
-      addProp('prop_parish_crate', 145, 245, 32, 32, false);
-      addProp('prop_barrel', 168, 246, 32, 48, false);
-      addProp('prop_street_lamp', 760, 212, 32, 96, true);
-      addProp('prop_mausoleum_facade', 1060, 218, 96, 128, true);
+      // Act III: Great Stone Bridge Props grounded on y = 212..242 roadway
+      addProp('prop_street_lamp', 110, 212, 32, 92, true);
+      addProp('prop_parish_crate', 148, 232, 28, 28, false);
+      addProp('prop_barrel', 172, 234, 30, 44, false);
+      addProp('prop_street_lamp', 310, 212, 32, 92, true);
+      addProp('prop_street_lamp', 520, 212, 32, 92, true);
+      addProp('prop_cemetery_gate', 660, 216, 62, 90, false);
+      addProp('prop_street_lamp', 875, 212, 32, 92, true);
+      addProp('prop_mausoleum_facade', 1075, 220, 92, 120, true);
     } else if (scenarioIndex === 4) {
       // Act IV: Londinium Citadel Props + 3 Destructible Golden Narcotic Braziers
       this.narcoticBraziers2D = [];
       this.destroyedBraziers2DCount = 0;
       const brazierCoords = [
-        { x: 240, y: 232 },
-        { x: 360, y: 268 },
-        { x: 450, y: 235 }
+        { x: 245, y: 230 },
+        { x: 375, y: 270 },
+        { x: 470, y: 232 }
       ];
       brazierCoords.forEach(bc => {
         if (this.textures.exists('prop_soul_brazier')) {
-          const bSpr = this.normalizeSprite(this.add.sprite(bc.x, bc.y, 'prop_soul_brazier', 0), 34, 52, 0.5, 0.95)
+          const bShadow = this.add.ellipse(bc.x, bc.y, 24, 6, 0x000000, 0.45).setDepth(bc.y - 2);
+          const bSpr = this.normalizeSprite(this.add.sprite(bc.x, bc.y, 'prop_soul_brazier', 0), 34, 50, 0.5, 0.95)
             .setTint(0xffdd55)
             .setDepth(bc.y - 1);
           if (this.anims.exists('prop_soul_brazier')) bSpr.play('prop_soul_brazier');
           this.narcoticBraziers2D.push({ sprite: bSpr, x: bc.x, y: bc.y, destroyed: false });
-          this.scenarioProps.push(bSpr);
+          this.scenarioProps.push(bShadow, bSpr);
         }
       });
 
-      addProp('prop_sanctuary_altar', 310, 222, 64, 48, true);
-      addProp('prop_mausoleum_facade', 575, 215, 96, 128, true);
-      addProp('prop_soul_brazier', 820, 224, 32, 48, true);
-      addProp('prop_sanctuary_cross', 1020, 222, 48, 80, true);
+      addProp('prop_sanctuary_altar', 310, 216, 60, 44, true);
+      addProp('prop_soul_brazier', 690, 218, 32, 46, true);
+      addProp('prop_sanctuary_cross', 895, 216, 46, 76, true);
+      addProp('prop_mausoleum_facade', 1075, 220, 92, 120, true);
     } else {
-      // Act V: Inverted Cathedral Props across 1180px
-      addProp('prop_sanctuary_cross', 150, 235, 48, 80, true);
-      addProp('prop_sanctuary_altar', 200, 238, 64, 48, true);
-      addProp('prop_soul_brazier', 270, 225, 32, 48, true);
-      addProp('prop_soul_brazier', 450, 225, 32, 48, true);
-      addProp('prop_great_pyre', 540, 235, 96, 96, true);
-      addProp('prop_soul_brazier', 840, 225, 32, 48, true);
-      addProp('prop_sanctuary_altar', 1020, 235, 64, 48, true);
+      // Act V: Inverted Cathedral Props grounded on fractured marble causeway
+      addProp('prop_sanctuary_cross', 145, 222, 46, 76, true);
+      addProp('prop_sanctuary_altar', 202, 224, 60, 44, true);
+      addProp('prop_soul_brazier', 320, 218, 32, 46, true);
+      addProp('prop_soul_brazier', 495, 218, 32, 46, true);
+      addProp('prop_great_pyre', 755, 224, 92, 92, true);
+      addProp('prop_soul_brazier', 915, 218, 32, 46, true);
+      addProp('prop_sanctuary_altar', 1055, 222, 60, 44, true);
     }
   }
 
@@ -3782,10 +3900,11 @@ export class GameScene extends Phaser.Scene {
       this.bossMarkerTween = undefined;
     }
 
-    this.bossMarker = this.add.text(x, y - 75, `▼ JEFE: ${bossName.toUpperCase()} ▼`, {
+    const clampedX = clampWorldX2D(x, 88);
+    this.bossMarker = this.add.text(clampedX, y - 75, `▼ JEFE: ${bossName.toUpperCase()} ▼`, {
       fontFamily: 'Cinzel, Georgia, serif',
       fontSize: '8.5px',
-      color: '#ff4444',
+      color: '#ff5555',
       stroke: '#000000',
       strokeThickness: 3,
       fontStyle: 'bold'
@@ -3812,16 +3931,19 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Add new dropped items
+    // Add new dropped items at exact domain coordinates
     for (const item of dropped) {
       if (!this.droppedWeaponSprites.has(item.id)) {
-        const c = this.add.container(item.position.x, 265).setDepth(265);
+        const dropX = clampWorldX2D(item.position.x, 45);
+        const dropY = clampWorldY2D(item.position.y);
+        item.position = new Vector2(dropX, dropY);
+        const c = this.add.container(dropX, dropY).setDepth(dropY);
         const icon = this.add.image(0, 0, 'icon_sword').setScale(1.2);
         const text = this.add.text(0, -18, '[E] RECOGER', {
           fontFamily: 'monospace',
           fontSize: '9px',
           color: '#ffd700',
-          backgroundColor: 'rgba(0,0,0,0.8)',
+          backgroundColor: 'rgba(0,0,0,0.85)',
           padding: { x: 3, y: 1 }
         }).setOrigin(0.5);
 
@@ -3921,20 +4043,21 @@ export class GameScene extends Phaser.Scene {
 
     if (scenarioIndex === 1) {
       // Oakhaven (4 Sub-Sectors: Atrio -> Colina del Viejo Roble -> Gran Pira -> Cementerio y Criptas)
-      this.bgImage.setTexture('bg_oakhaven');
-      if (this.bgImageEast) this.bgImageEast.setTexture('bg_oakhaven');
+      this.bgImage.setTexture('bg_oakhaven').setDisplaySize(WORLD_2D.WIDTH, WORLD_2D.HEIGHT);
       this.audio.playBgm('bgm_oakhaven_night');
-      this.emberParticles.setPosition(540, 240);
+      this.emberParticles.setPosition(565, 224);
       this.emberParticles.start();
 
       // Spawn Elowen NPC atop the elevated Colina del Viejo Roble (Chapter II: El Pájaro de Madera)
-      this.elowenShadow = this.add.ellipse(315, 196, 24, 7, 0x000000, 0.45).setDepth(195);
-      this.elowenSprite = this.normalizeSprite(this.add.sprite(315, 196, 'elowen_idle', 0), 54, 54, 0.5, 0.9).setDepth(196);
+      this.elowenShadow = this.add.ellipse(325, 196, 24, 7, 0x000000, 0.45).setDepth(195);
+      this.elowenSprite = this.normalizeSprite(this.add.sprite(325, 196, 'elowen_idle', 0), 54, 54, 0.5, 0.9)
+        .setDepth(196).setFlipX(true);
       this.playAnimSafe(this.elowenSprite, 'elowen_idle');
 
       // Spawn Padre Cedric NPC holding lantern in the Parish Atrium (Chapter I: El Peso de la Ceniza)
-      this.cedricShadow = this.add.ellipse(160, 225, 24, 7, 0x000000, 0.45).setDepth(224);
-      this.cedricSprite = this.normalizeSprite(this.add.sprite(160, 225, 'cedric_idle', 0), 54, 54, 0.5, 0.9).setDepth(225);
+      this.cedricShadow = this.add.ellipse(160, 224, 24, 7, 0x000000, 0.45).setDepth(223);
+      this.cedricSprite = this.normalizeSprite(this.add.sprite(160, 224, 'cedric_idle', 0), 54, 54, 0.5, 0.9)
+        .setDepth(224).setFlipX(true);
       this.playAnimSafe(this.cedricSprite, 'cedric_idle');
 
       if (this.shouldPlayOakhavenTraining) {
@@ -3946,53 +4069,59 @@ export class GameScene extends Phaser.Scene {
       }
     } else if (scenarioIndex === 2) {
       // El Campanario y Granero del Sur (Caps VII-IX)
-      this.bgImage.setTexture('bg_belltower');
-      if (this.bgImageEast) this.bgImageEast.setTexture('bg_belltower');
+      this.bgImage.setTexture('bg_belltower').setDisplaySize(WORLD_2D.WIDTH, WORLD_2D.HEIGHT);
       this.audio.playBgm('bgm_belltower_crucible');
       this.emberParticles.stop();
 
-      // Spawn Elowen NPC in Belltower cell
-      this.elowenShadow = this.add.ellipse(220, 225, 24, 7, 0x000000, 0.45).setDepth(224);
-      this.elowenSprite = this.normalizeSprite(this.add.sprite(220, 225, 'elowen_idle', 0), 54, 54, 0.5, 0.9).setDepth(225);
+      // Spawn Elowen NPC in Belltower Salt Cell terrace
+      this.elowenShadow = this.add.ellipse(220, 196, 24, 7, 0x000000, 0.45).setDepth(195);
+      this.elowenSprite = this.normalizeSprite(this.add.sprite(220, 196, 'elowen_idle', 0), 54, 54, 0.5, 0.9)
+        .setDepth(196).setFlipX(true);
       this.playAnimSafe(this.elowenSprite, 'elowen_pray');
 
-      // Spawn Inquisitor Torre (Cultist) & Sulphur Prowler (Hound)
+      // Spawn Inquisitor Torre (Cultist) & Sulphur Prowler (Hound) facing LEFT toward player
       const e1 = Enemy.createInquisitorTorre('corista_1', new Vector2(390, 255));
       const e2 = Enemy.createAshProwler('ash_2', new Vector2(460, 280));
       this.enemies.push(e1, e2);
 
-      const s1 = this.add.ellipse(390, 255, 24, 7, 0x000000, 0.45).setDepth(254);
-      const s2 = this.add.ellipse(460, 280, 26, 8, 0x000000, 0.45).setDepth(279);
+      const sc1 = computeDepthScale2D(255);
+      const sc2 = computeDepthScale2D(280);
+      const s1 = this.add.ellipse(390, 255, 24, 7, 0x000000, 0.45).setDepth(254).setScale(sc1);
+      const s2 = this.add.ellipse(460, 280, 26, 8, 0x000000, 0.45).setDepth(279).setScale(sc2);
       this.enemyShadows.set(e1.id, s1);
       this.enemyShadows.set(e2.id, s2);
 
-      const sp1 = this.normalizeSprite(this.add.sprite(e1.position.x, e1.position.y, 'cultist_patrol', 0), 52, 52, 0.5, 0.9).setDepth(255);
+      const sp1 = this.normalizeSprite(this.add.sprite(e1.position.x, e1.position.y, 'cultist_patrol', 0), 52, 52, 0.5, 0.9)
+        .setDepth(255).setScale(sc1, sc1).setFlipX(true);
       this.playAnimSafe(sp1, 'cultist_patrol');
       this.enemySprites.set(e1.id, sp1);
 
-      const sp2 = this.normalizeSprite(this.add.sprite(e2.position.x, e2.position.y, 'hound_patrol', 0), 64, 48, 0.5, 0.9).setDepth(280);
+      const sp2 = this.normalizeSprite(this.add.sprite(e2.position.x, e2.position.y, 'hound_patrol', 0), 64, 48, 0.5, 0.9)
+        .setDepth(280).setScale(sc2, sc2).setFlipX(true);
       this.playAnimSafe(sp2, 'hound_patrol');
       this.enemySprites.set(e2.id, sp2);
 
-      // Boss Guardián del Crisol (Animated Zealot Heavy Slam / Crucible Boss)
+      // Boss Guardián del Crisol (synced domain position + patrol idle + facing player)
       this.currentBoss = Boss.createGuardianCrisol();
-      this.bossShadow = this.add.ellipse(520, 260, 32, 9, 0x000000, 0.5).setDepth(259);
-      this.bossSprite = this.normalizeSprite(this.add.sprite(520, 260, 'zealot_heavy_slam', 0), 82, 82, 0.5, 0.9).setDepth(260);
-      this.playAnimSafe(this.bossSprite, 'zealot_heavy_slam');
-      this.createBossMarker('Guardián del Crisol', 520, 260);
+      this.currentBoss.position = new Vector2(535, 260);
+      this.bossShadow = this.add.ellipse(535, 260, 32, 9, 0x000000, 0.5).setDepth(259);
+      this.bossSprite = this.normalizeSprite(this.add.sprite(535, 260, 'zealot_patrol', 0), 82, 82, 0.5, 0.9)
+        .setDepth(260).setFlipX(true).setTint(0xffaa66);
+      this.playAnimSafe(this.bossSprite, 'zealot_patrol');
+      this.createBossMarker('Guardián del Crisol', 535, 260);
 
       const introText = introLines[0] ? `${introLines[0].speaker}: ${introLines[0].text}` : "Shalem: «Acto II: El Campanario y Granero»";
       this.triggerShalemBalloon(introText, 4500);
     } else if (scenarioIndex === 3) {
       // El Gran Puente de Piedra y Camino de los Herejes (Caps X-XIII)
-      this.bgImage.setTexture('bg_bridge');
-      if (this.bgImageEast) this.bgImageEast.setTexture('bg_bridge');
+      this.bgImage.setTexture('bg_bridge').setDisplaySize(WORLD_2D.WIDTH, WORLD_2D.HEIGHT);
       this.audio.playBgm('bgm_great_stone_bridge');
       this.emberParticles.stop();
 
       // Spawn Elowen NPC escorting refugees
       this.elowenShadow = this.add.ellipse(170, 255, 24, 7, 0x000000, 0.45).setDepth(254);
-      this.elowenSprite = this.normalizeSprite(this.add.sprite(170, 255, 'elowen_idle', 0), 54, 54, 0.5, 0.9).setDepth(255);
+      this.elowenSprite = this.normalizeSprite(this.add.sprite(170, 255, 'elowen_idle', 0), 54, 54, 0.5, 0.9)
+        .setDepth(255).setFlipX(true);
       this.playAnimSafe(this.elowenSprite, 'elowen_idle');
 
       // Spawn Golden Guard (Zealot) & Shield Knight (Penitent Skeleton)
@@ -4000,81 +4129,94 @@ export class GameScene extends Phaser.Scene {
       const k1 = Enemy.createShieldKnight('shield_knight_1', new Vector2(450, 280));
       this.enemies.push(g1, k1);
 
-      const s1 = this.add.ellipse(380, 255, 24, 7, 0x000000, 0.45).setDepth(254);
-      const s2 = this.add.ellipse(450, 280, 26, 8, 0x000000, 0.45).setDepth(279);
+      const sc1 = computeDepthScale2D(255);
+      const sc2 = computeDepthScale2D(280);
+      const s1 = this.add.ellipse(380, 255, 24, 7, 0x000000, 0.45).setDepth(254).setScale(sc1);
+      const s2 = this.add.ellipse(450, 280, 26, 8, 0x000000, 0.45).setDepth(279).setScale(sc2);
       this.enemyShadows.set(g1.id, s1);
       this.enemyShadows.set(k1.id, s2);
 
-      const sp1 = this.normalizeSprite(this.add.sprite(g1.position.x, g1.position.y, 'zealot_patrol', 0), 64, 64, 0.5, 0.9).setDepth(255);
+      const sp1 = this.normalizeSprite(this.add.sprite(g1.position.x, g1.position.y, 'zealot_patrol', 0), 64, 64, 0.5, 0.9)
+        .setDepth(255).setScale(sc1, sc1).setFlipX(true);
       this.playAnimSafe(sp1, 'zealot_patrol');
       this.enemySprites.set(g1.id, sp1);
 
-      const sp2 = this.normalizeSprite(this.add.sprite(k1.position.x, k1.position.y, 'skeleton_patrol', 0), 64, 64, 0.5, 0.9).setDepth(280);
+      const sp2 = this.normalizeSprite(this.add.sprite(k1.position.x, k1.position.y, 'skeleton_patrol', 0), 64, 64, 0.5, 0.9)
+        .setDepth(280).setScale(sc2, sc2).setFlipX(true);
       this.playAnimSafe(sp2, 'skeleton_patrol');
       this.enemySprites.set(k1.id, sp2);
 
       // Boss Capitán Áureo Vane
       this.currentBoss = Boss.createCapitanAureo();
-      this.bossShadow = this.add.ellipse(520, 260, 32, 9, 0x000000, 0.5).setDepth(259);
-      this.bossSprite = this.normalizeSprite(this.add.sprite(520, 260, 'skeleton_patrol', 0), 84, 84, 0.5, 0.9).setDepth(260).setTint(0xffe066);
+      this.currentBoss.position = new Vector2(535, 260);
+      this.bossShadow = this.add.ellipse(535, 260, 32, 9, 0x000000, 0.5).setDepth(259);
+      this.bossSprite = this.normalizeSprite(this.add.sprite(535, 260, 'skeleton_patrol', 0), 84, 84, 0.5, 0.9)
+        .setDepth(260).setFlipX(true).setTint(0xffe066);
       this.playAnimSafe(this.bossSprite, 'skeleton_patrol');
-      this.createBossMarker('Capitán Áureo Vane', 520, 260);
+      this.createBossMarker('Capitán Áureo Vane', 535, 260);
 
       const introText = introLines[0] ? `${introLines[0].speaker}: ${introLines[0].text}` : "Shalem: «Acto III: El Gran Puente de Piedra»";
       this.triggerShalemBalloon(introText, 4500);
     } else if (scenarioIndex === 4) {
       // Londinium — La Ciudadela Dorada (Caps XIV-XVII)
-      this.bgImage.setTexture('bg_londinium');
-      if (this.bgImageEast) this.bgImageEast.setTexture('bg_londinium');
+      this.bgImage.setTexture('bg_londinium').setDisplaySize(WORLD_2D.WIDTH, WORLD_2D.HEIGHT);
       this.audio.playBgm('bgm_londinium_city');
       this.emberParticles.stop();
 
       // Spawn Golden Guards in 2.5D
       const g1 = Enemy.createGoldenGuard('guard_1', new Vector2(400, 255));
       this.enemies.push(g1);
-      const s1 = this.add.ellipse(400, 255, 24, 7, 0x000000, 0.45).setDepth(254);
+      const sc1 = computeDepthScale2D(255);
+      const s1 = this.add.ellipse(400, 255, 24, 7, 0x000000, 0.45).setDepth(254).setScale(sc1);
       this.enemyShadows.set(g1.id, s1);
-      const sp1 = this.normalizeSprite(this.add.sprite(g1.position.x, g1.position.y, 'zealot_patrol', 0), 64, 64, 0.5, 0.9).setDepth(255);
+      const sp1 = this.normalizeSprite(this.add.sprite(g1.position.x, g1.position.y, 'zealot_patrol', 0), 64, 64, 0.5, 0.9)
+        .setDepth(255).setScale(sc1, sc1).setFlipX(true);
       this.playAnimSafe(sp1, 'zealot_patrol');
       this.enemySprites.set(g1.id, sp1);
 
       // Boss Rex Malphas
       this.currentBoss = Boss.createRexMalphas();
-      this.bossShadow = this.add.ellipse(520, 260, 32, 9, 0x000000, 0.5).setDepth(259);
-      this.bossSprite = this.normalizeSprite(this.add.sprite(520, 260, 'morwenna_levitate_idle', 0), 96, 96, 0.5, 0.9).setDepth(260).setTint(0xdd99ff);
+      this.currentBoss.position = new Vector2(545, 260);
+      this.bossShadow = this.add.ellipse(545, 260, 32, 9, 0x000000, 0.5).setDepth(259);
+      this.bossSprite = this.normalizeSprite(this.add.sprite(545, 260, 'morwenna_levitate_idle', 0), 96, 96, 0.5, 0.9)
+        .setDepth(260).setFlipX(true).setTint(0xdd99ff);
       this.playAnimSafe(this.bossSprite, 'morwenna_levitate_idle');
-      this.createBossMarker('Rex Malphas', 520, 260);
+      this.createBossMarker('Rex Malphas', 545, 260);
 
       const introText = introLines[0] ? `${introLines[0].speaker}: ${introLines[0].text}` : "Shalem: «Acto IV: Londinium»";
       this.triggerShalemBalloon(introText, 4500);
 
       // Spawn Elowen NPC — imprisoned near the dungeon gate in Londinium
       this.elowenShadow = this.add.ellipse(185, 268, 22, 6, 0x000000, 0.4).setDepth(267);
-      this.elowenSprite = this.normalizeSprite(this.add.sprite(185, 268, 'elowen_idle', 0), 54, 54, 0.5, 0.9).setDepth(268).setTint(0xc8b8e8);
+      this.elowenSprite = this.normalizeSprite(this.add.sprite(185, 268, 'elowen_idle', 0), 54, 54, 0.5, 0.9)
+        .setDepth(268).setFlipX(true).setTint(0xc8b8e8);
       this.playAnimSafe(this.elowenSprite, 'elowen_pray');
     } else {
       // Catedral Invertida — El Sol del Abismo (Caps XVIII-XX)
-      this.bgImage.setTexture('bg_cathedral');
-      if (this.bgImageEast) this.bgImageEast.setTexture('bg_cathedral');
+      this.bgImage.setTexture('bg_cathedral').setDisplaySize(WORLD_2D.WIDTH, WORLD_2D.HEIGHT);
       this.audio.playBgm('bgm_cathedral_abyss');
-      this.emberParticles.setPosition(320, 180);
+      this.emberParticles.setPosition(755, 224);
       this.emberParticles.start();
 
       // Spawn Abyssal Shadow / Penitent Guardian
       const sh1 = Enemy.createAbyssalShadow('shadow_1', new Vector2(390, 255));
       this.enemies.push(sh1);
-      const s1 = this.add.ellipse(390, 255, 24, 7, 0x000000, 0.45).setDepth(254);
+      const sc1 = computeDepthScale2D(255);
+      const s1 = this.add.ellipse(390, 255, 24, 7, 0x000000, 0.45).setDepth(254).setScale(sc1);
       this.enemyShadows.set(sh1.id, s1);
-      const sp1 = this.normalizeSprite(this.add.sprite(sh1.position.x, sh1.position.y, 'skeleton_patrol', 0), 64, 64, 0.5, 0.9).setDepth(255);
+      const sp1 = this.normalizeSprite(this.add.sprite(sh1.position.x, sh1.position.y, 'skeleton_patrol', 0), 64, 64, 0.5, 0.9)
+        .setDepth(255).setScale(sc1, sc1).setFlipX(true);
       this.playAnimSafe(sp1, 'skeleton_patrol');
       this.enemySprites.set(sh1.id, sp1);
 
       // Boss Astaroth (Entidad Primordial del Abismo)
       this.currentBoss = Boss.createAstaroth();
-      this.bossShadow = this.add.ellipse(520, 260, 48, 12, 0x000000, 0.6).setDepth(259);
-      this.bossSprite = this.normalizeSprite(this.add.sprite(520, 260, 'morwenna_phase2_idle', 0), 120, 120, 0.5, 0.9).setDepth(260).setTint(0xff66bb);
+      this.currentBoss.position = new Vector2(545, 260);
+      this.bossShadow = this.add.ellipse(545, 260, 48, 12, 0x000000, 0.6).setDepth(259);
+      this.bossSprite = this.normalizeSprite(this.add.sprite(545, 260, 'morwenna_phase2_idle', 0), 120, 120, 0.5, 0.9)
+        .setDepth(260).setFlipX(true).setTint(0xff66bb);
       this.playAnimSafe(this.bossSprite, 'morwenna_phase2_idle');
-      this.createBossMarker('Astaroth', 520, 260);
+      this.createBossMarker('Astaroth', 545, 260);
 
       this.tweens.add({
         targets: this.bossSprite,
@@ -4091,8 +4233,10 @@ export class GameScene extends Phaser.Scene {
 
       // Spawn Elowen NPC — offering her Gota de Luz Divina to forge Alba Gris
       this.elowenShadow = this.add.ellipse(150, 265, 22, 6, 0x000000, 0.35).setDepth(264);
-      this.elowenSprite = this.normalizeSprite(this.add.sprite(150, 265, 'elowen_idle', 0), 54, 54, 0.5, 0.9).setDepth(265).setAlpha(0.95);
+      this.elowenSprite = this.normalizeSprite(this.add.sprite(150, 265, 'elowen_idle', 0), 54, 54, 0.5, 0.9)
+        .setDepth(265).setFlipX(true).setAlpha(0.95);
       this.playAnimSafe(this.elowenSprite, 'elowen_speak');
     }
+    this.update2DSectorCompass();
   }
 }

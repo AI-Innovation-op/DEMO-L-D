@@ -40,7 +40,7 @@ export class StoryIntroScene extends Phaser.Scene {
 
   public init(data: { characterId?: CharacterId }): void {
     this.characterId = data.characterId || 'thomas';
-    this.audio = new WebAudioSoundAdapter();
+    this.audio = WebAudioSoundAdapter.getInstance();
     this.currentSlideIndex = 0;
   }
 

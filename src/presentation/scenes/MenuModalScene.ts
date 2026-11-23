@@ -22,7 +22,7 @@ export class MenuModalScene extends Phaser.Scene {
 
   public init(data: { player: Character; audio?: WebAudioSoundAdapter }): void {
     this.player = data.player;
-    this.audio = data.audio || new WebAudioSoundAdapter();
+    this.audio = data.audio || WebAudioSoundAdapter.getInstance();
     this.prophecy = new ProphecyRepository();
     this.prophecy.unlockFragment(1);
     this.prophecy.unlockFragment(2);
@@ -195,6 +195,11 @@ export class MenuModalScene extends Phaser.Scene {
       this.renderContent();
     });
     this.input.keyboard?.on('keydown-FOUR', () => {
+      this.activeTab = 'CHRONICLES';
+      this.updateTabStyles();
+      this.renderContent();
+    });
+    this.input.keyboard?.on('keydown-FIVE', () => {
       this.activeTab = 'CONTROLS';
       this.updateTabStyles();
       this.renderContent();
@@ -566,24 +571,24 @@ export class MenuModalScene extends Phaser.Scene {
       color: '#b094db'
     });
 
-    const divider = this.add.rectangle(rightX, -10, rightW - 20, 1, 0x6e4b8a);
+    const divider = this.add.rectangle(rightX, -14, rightW - 20, 1, 0x6e4b8a);
 
-    const body = this.add.text(rightX - rightW / 2 + 12, 0, cur.text, {
-      fontFamily: 'serif',
-      fontSize: '8.5px',
-      color: '#f0e6ff',
-      wordWrap: { width: rightW - 24 },
-      lineSpacing: 3
-    });
-
-    const quoteBox = this.add.rectangle(rightX, 82, rightW - 20, 26, 0x241538).setStrokeStyle(1, 0x7a5296);
-    const quoteText = this.add.text(rightX, 82, cur.quote, {
+    const body = this.add.text(rightX - rightW / 2 + 12, -8, cur.text, {
       fontFamily: 'serif',
       fontSize: '7.5px',
+      color: '#f0e6ff',
+      wordWrap: { width: rightW - 24 },
+      lineSpacing: 2
+    });
+
+    const quoteBox = this.add.rectangle(rightX, 82, rightW - 20, 24, 0x241538).setStrokeStyle(1, 0x7a5296);
+    const quoteText = this.add.text(rightX, 82, cur.quote, {
+      fontFamily: 'serif',
+      fontSize: '7px',
       color: '#ffd700',
       fontStyle: 'italic',
       align: 'center',
-      wordWrap: { width: rightW - 30 }
+      wordWrap: { width: rightW - 28 }
     }).setOrigin(0.5);
 
     const detailObjects: Phaser.GameObjects.GameObject[] = [detailBg, detailInner, border, bannerTitle, speakerBanner, divider, body, quoteBox, quoteText];

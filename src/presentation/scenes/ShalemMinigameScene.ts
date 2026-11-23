@@ -9,6 +9,7 @@ export class ShalemMinigameScene extends Phaser.Scene {
   private shalem!: ShalemCompanion;
   private audio!: WebAudioSoundAdapter;
   private minigame!: ShalemMinigameState;
+  private feedbackText?: Phaser.GameObjects.Text;
 
   constructor() {
     super('ShalemMinigameScene');
@@ -28,8 +29,12 @@ export class ShalemMinigameScene extends Phaser.Scene {
     // Modal Box
     this.add.rectangle(320, 180, 520, 290, 0x1b1528).setStrokeStyle(2, 0xd4af37);
 
-    // Shalem Cat Avatar
-    this.add.image(100, 100, 'shalem_cat').setScale(2.5);
+    // Shalem Cat Avatar (animated spritesheet when available)
+    const shalemKey = this.textures.exists('shalem_sit_idle') ? 'shalem_sit_idle' : 'shalem_cat';
+    const shalemAvatar = this.add.sprite(100, 102, shalemKey, 0).setScale(2.1);
+    if (this.anims.exists('shalem_sit_idle')) {
+      shalemAvatar.play('shalem_sit_idle');
+    }
 
     // Header Title
     this.add.text(320, 60, `★ ${this.minigame.title.toUpperCase()} ★`, {
@@ -149,7 +154,16 @@ export class ShalemMinigameScene extends Phaser.Scene {
     } else {
       this.audio.playCombatHit(true);
       this.cameras.main.shake(200, 0.015);
-      alert(result.message);
+      if (this.feedbackText) {
+        this.feedbackText.destroy();
+      }
+      this.feedbackText = this.add.text(320, 286, `✗ ${result.message}`, {
+        fontFamily: 'monospace',
+        fontSize: '9px',
+        color: '#ff9999',
+        backgroundColor: '#3a0e18',
+        padding: { x: 8, y: 3 }
+      }).setOrigin(0.5);
     }
   }
 
