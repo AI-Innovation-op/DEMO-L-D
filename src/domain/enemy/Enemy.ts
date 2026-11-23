@@ -33,27 +33,27 @@ export class Enemy {
   }
 
   public static createAshProwler(id: string, pos: Vector2): Enemy {
-    return new Enemy(id, 'Acechador de Ceniza', 'ash_prowler', 45, 45, 14, 120, pos, 30);
+    return new Enemy(id, 'Acechador de Ceniza', 'ash_prowler', 105, 105, 18, 115, pos, 55);
   }
 
   public static createFanaticMonk(id: string, pos: Vector2): Enemy {
-    return new Enemy(id, 'Monje Fanático', 'fanatic_monk', 60, 60, 18, 70, pos, 50);
+    return new Enemy(id, 'Monje Fanático', 'fanatic_monk', 130, 130, 21, 72, pos, 70);
   }
 
   public static createGoldenGuard(id: string, pos: Vector2): Enemy {
-    return new Enemy(id, 'Guardia Áureo de Londinium', 'golden_guard', 85, 85, 22, 85, pos, 80);
+    return new Enemy(id, 'Guardia Áureo de Londinium', 'golden_guard', 195, 195, 26, 86, pos, 95);
   }
 
   public static createInquisitorTorre(id: string, pos: Vector2): Enemy {
-    return new Enemy(id, 'Corista Inquisitorial', 'inquisitor_torre', 65, 65, 17, 75, pos, 55);
+    return new Enemy(id, 'Corista Inquisitorial', 'inquisitor_torre', 155, 155, 23, 78, pos, 75);
   }
 
   public static createShieldKnight(id: string, pos: Vector2): Enemy {
-    return new Enemy(id, 'Caballero de Escudo Pesado', 'shield_knight', 95, 95, 20, 70, pos, 90);
+    return new Enemy(id, 'Caballero de Escudo Pesado', 'shield_knight', 225, 225, 25, 70, pos, 110);
   }
 
   public static createAbyssalShadow(id: string, pos: Vector2): Enemy {
-    return new Enemy(id, 'Sombra Primordial del Vacío', 'abyssal_shadow', 75, 75, 24, 110, pos, 60);
+    return new Enemy(id, 'Sombra Primordial del Vacío', 'abyssal_shadow', 240, 240, 29, 108, pos, 85);
   }
 
   public takeDamage(amount: number): number {
@@ -101,7 +101,7 @@ export class Enemy {
     if (!this.isAlive() || this.state === 'STUNNED') return;
     this.state = 'RECOVERY';
     this.recoveryTimer = durationMs;
-    this.attackCooldown = 1200; // Time before next attack attempt
+    this.attackCooldown = 1350; // Fair combat rhythm when fighting multiple enemies
   }
 
   /**

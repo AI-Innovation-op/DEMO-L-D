@@ -11,35 +11,37 @@ export class CharacterStats {
   ) {}
 
   public static createThomas(): CharacterStats {
-    // Thomas: High agility, demonic burst, but fragile if directly hit
+    // Thomas: High agility, demonic burst, agile parry specialist (takes real hits if careless)
     return new CharacterStats(
-      100, // Health
-      100, // Max Health
+      125, // Health
+      125, // Max Health
       220, // Speed (Very fast & agile)
-      8,   // Defense (Low defense - weakens quickly)
-      35,  // Attack Power (High damage)
-      60,  // Posture
-      60,  // Max Posture
+      8,   // Defense (~16.7% armor mitigation)
+      14,  // Attack Power (Light ~24 dmg, Heavy ~35 dmg with Short Sword -> 4-6 hits per enemy)
+      55,  // Posture
+      55,  // Max Posture
       true // Vulnerable to heavy hits
     );
   }
 
   public static createKhaterine(): CharacterStats {
-    // Khaterine: Slower, durable, high ranged magic resistance
+    // Khaterine: Slower, durable, ranged archer/sorceress (~31% armor mitigation)
     return new CharacterStats(
-      140, // Health (More durable)
-      140, // Max Health
+      155, // Health (More durable)
+      155, // Max Health
       160, // Speed (Slower than Thomas)
-      18,  // Defense (Higher defense, endures direct hits)
-      30,  // Attack Power
-      100, // Posture (Solid guard)
-      100, // Max Posture
+      18,  // Defense (~31% proportional armor mitigation — tough without reducing enemy hits to 1!)
+      12,  // Attack Power (Light ~23 dmg, Heavy ~33 dmg with Abyssal Bow)
+      75,  // Posture (Solid guard)
+      75,  // Max Posture
       false
     );
   }
 
   public takeDamage(amount: number): number {
-    const effectiveDamage = Math.max(1, amount - this.defense);
+    // Diminishing-returns RPG armor mitigation so high defense feels sturdy without making heroes immortal
+    const mitigation = this.defense / (this.defense + 40);
+    const effectiveDamage = Math.max(4, Math.round(amount * (1 - mitigation)));
     this.health = Math.max(0, this.health - effectiveDamage);
     return effectiveDamage;
   }

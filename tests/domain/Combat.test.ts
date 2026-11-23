@@ -70,17 +70,45 @@ describe('Domain: Disarm Mechanics (Option A & Option B)', () => {
   });
 });
 
-describe('Domain: Combat, Combos & Finishers', () => {
-  it('increments combo count and scales damage multiplier', () => {
+describe('Domain: Combat, Combos, Pacing & Finishers', () => {
+  it('increments combo count and does NOT one-shot Act I enemies (requires sustained multi-hit combat)', () => {
     const thomas = Character.createThomas();
     const enemy = Enemy.createAshProwler('ash_1', new Vector2(100, 260));
 
-    const res1 = CombatUseCases.executeAttackOnEnemy(thomas, enemy);
+    const res1 = CombatUseCases.executeAttackOnEnemy(thomas, enemy, false);
     expect(res1.comboCount).toBe(1);
+    expect(res1.targetKilled).toBe(false);
+    expect(enemy.isAlive()).toBe(true);
 
-    const res2 = CombatUseCases.executeAttackOnEnemy(thomas, enemy);
+    const res2 = CombatUseCases.executeAttackOnEnemy(thomas, enemy, false);
     expect(res2.comboCount).toBe(2);
     expect(res2.damageDealt).toBeGreaterThan(0);
+    expect(enemy.isAlive()).toBe(true);
+
+    // Even a heavy strike from Khaterine does not one-shot a fresh Fanatic Monk
+    const khaterine = Character.createKhaterine();
+    const monk = Enemy.createFanaticMonk('monk_1', new Vector2(120, 260));
+    const heavyArrow = CombatUseCases.executeAttackOnEnemy(khaterine, monk, true);
+    expect(heavyArrow.targetKilled).toBe(false);
+    expect(monk.health).toBeGreaterThan(monk.maxHealth * 0.5);
+  });
+
+  it('deals meaningful HP damage on unblocked hits while rewarding active blocking [L] and Khaterine armor', () => {
+    const thomas = Character.createThomas();
+    const khaterine = Character.createKhaterine();
+
+    // Unblocked direct hit damages HP directly (no invisible 100% overshield)
+    const tHit = thomas.takeHit(24, false);
+    const kHit = khaterine.takeHit(24, false);
+    expect(tHit.damageToHealth).toBeGreaterThanOrEqual(15);
+    expect(kHit.damageToHealth).toBeGreaterThanOrEqual(12);
+    expect(kHit.damageToHealth).toBeLessThan(tHit.damageToHealth); // Khaterine's higher defense mitigates more!
+
+    // Active guard [L] absorbs incoming attack with Guardia instead of HP
+    khaterine.startBlock();
+    const blocked = khaterine.takeHit(24, false);
+    expect(blocked.absorbedByGuard).toBeGreaterThan(0);
+    expect(blocked.damageToHealth).toBe(0);
   });
 
   it('triggers cinematic combo finisher when posture is broken and health is low', () => {
@@ -100,23 +128,25 @@ describe('Domain: Boss Mechanics & Rex Malphas Combat', () => {
   it('Rex Malphas transitions to Phase 2 at 50% HP and is defeated at 0% HP', () => {
     const malphas = Boss.createRexMalphas();
     expect(malphas.phase).toBe(BossPhaseType.PHASE_1);
+    expect(malphas.maxHealth).toBe(920);
 
-    // Hit to 50%
-    malphas.takeDamage(260);
+    // Hit to 50% (920 -> 460)
+    malphas.takeDamage(460);
     expect(malphas.phase).toBe(BossPhaseType.PHASE_2);
 
     // Hit remaining HP to 0% -> Defeated
-    const res = malphas.takeDamage(300);
+    const res = malphas.takeDamage(460);
     expect(malphas.health).toBe(0);
-    expect(res.actualDamage).toBe(300);
+    expect(res.actualDamage).toBe(460);
   });
 
-  it('Madre Morwenna transitions to Phase 2 at 50% HP', () => {
+  it('Madre Morwenna transitions to Phase 2 at 50% HP and endures sustained duels', () => {
     const morwenna = Boss.createMadreMorwenna();
     expect(morwenna.phase).toBe(BossPhaseType.PHASE_1);
+    expect(morwenna.maxHealth).toBe(560);
 
-    // 350 max HP -> 50% is 175
-    morwenna.takeDamage(180);
+    // 560 max HP -> 50% is 280
+    morwenna.takeDamage(280);
     expect(morwenna.phase).toBe(BossPhaseType.PHASE_2);
   });
 

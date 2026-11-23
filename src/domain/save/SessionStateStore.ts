@@ -36,7 +36,7 @@ export interface GameSaveData {
 }
 
 export const SAVE_KEY_V1 = 'the_light_in_darkness_save_v1';
-export const CURRENT_SAVE_VERSION = '1.0.0';
+export const CURRENT_SAVE_VERSION = '1.1.0';
 
 export class SessionStateStore {
   private static instance: SessionStateStore | null = null;
@@ -92,13 +92,13 @@ export class SessionStateStore {
         currentExp: 0,
         maxExp: 100,
         isMinigameReady: false,
-        health: 100,
-        maxHealth: 100,
-        posture: 60,
-        maxPosture: 60,
+        health: 125,
+        maxHealth: 125,
+        posture: 55,
+        maxPosture: 55,
         speed: 220,
         defense: 8,
-        attackPower: 35,
+        attackPower: 14,
         equippedWeaponId: 'short_sword'
       };
     } else {
@@ -108,13 +108,13 @@ export class SessionStateStore {
         currentExp: 0,
         maxExp: 100,
         isMinigameReady: false,
-        health: 140,
-        maxHealth: 140,
-        posture: 100,
-        maxPosture: 100,
+        health: 155,
+        maxHealth: 155,
+        posture: 75,
+        maxPosture: 75,
         speed: 160,
         defense: 18,
-        attackPower: 30,
+        attackPower: 12,
         equippedWeaponId: 'khaterine_bow'
       };
     }
@@ -249,8 +249,31 @@ export class SessionStateStore {
       this.currentAct = data.currentAct || 1;
       this.leaderId = data.leaderId || 'thomas';
       if (data.characters) {
-        if (data.characters.thomas) this.characters.thomas = data.characters.thomas;
-        if (data.characters.khaterine) this.characters.khaterine = data.characters.khaterine;
+        const isLegacyBalance = data.version === '1.0.0';
+        if (data.characters.thomas) {
+          this.characters.thomas = isLegacyBalance
+            ? {
+                ...data.characters.thomas,
+                maxHealth: 125,
+                health: Math.min(125, data.characters.thomas.health),
+                maxPosture: 55,
+                posture: Math.min(55, data.characters.thomas.posture),
+                attackPower: 14
+              }
+            : data.characters.thomas;
+        }
+        if (data.characters.khaterine) {
+          this.characters.khaterine = isLegacyBalance
+            ? {
+                ...data.characters.khaterine,
+                maxHealth: 155,
+                health: Math.min(155, data.characters.khaterine.health),
+                maxPosture: 75,
+                posture: Math.min(75, data.characters.khaterine.posture),
+                attackPower: 12
+              }
+            : data.characters.khaterine;
+        }
       }
       if (Array.isArray(data.unlockedWeaponIds)) {
         this.unlockedWeaponIds = data.unlockedWeaponIds;

@@ -55,10 +55,11 @@ export class Boss {
     public health: number,
     public readonly maxHealth: number,
     public attackPower: number,
-    public position: Vector2 = new Vector2(500, 260)
+    public position: Vector2 = new Vector2(500, 260),
+    maxPosture: number = 140
   ) {
-    this.posture = 120;
-    this.maxPosture = 120;
+    this.posture = maxPosture;
+    this.maxPosture = maxPosture;
   }
 
   public static createMadreMorwenna(): Boss {
@@ -66,10 +67,11 @@ export class Boss {
       'madre_morwenna',
       'Madre Morwenna',
       'VIGÍA DE LA PIRA SAGRADA',
-      350,
-      350,
-      22,
-      new Vector2(500, 260)
+      560,
+      560,
+      26,
+      new Vector2(545, 260),
+      140
     );
   }
 
@@ -78,10 +80,11 @@ export class Boss {
       'guardian_crisol',
       'Inquisidor Mayor (Crisol)',
       'CUSTODIO DEL CAMPANARIO',
-      380,
-      380,
-      24,
-      new Vector2(510, 260)
+      680,
+      680,
+      29,
+      new Vector2(535, 260),
+      160
     );
   }
 
@@ -90,10 +93,11 @@ export class Boss {
       'capitan_aureo',
       'Capitán Áureo Vane',
       'COMANDANTE DEL GRAN PUENTE',
-      440,
-      440,
-      26,
-      new Vector2(510, 260)
+      780,
+      780,
+      32,
+      new Vector2(535, 260),
+      180
     );
   }
 
@@ -102,10 +106,11 @@ export class Boss {
       'rex_malphas',
       'Rex Malphas (Alaric)',
       'SOBERANO DEL ESPEJISMO',
-      500,
-      500,
-      30,
-      new Vector2(500, 260)
+      920,
+      920,
+      36,
+      new Vector2(545, 260),
+      200
     );
   }
 
@@ -114,10 +119,11 @@ export class Boss {
       'astaroth',
       'Astaroth',
       'PADRE DE LAS CENIZAS Y SOL DEL ABISMO',
-      800,
-      800,
-      45,
-      new Vector2(500, 260)
+      1350,
+      1350,
+      42,
+      new Vector2(545, 260),
+      240
     );
   }
 

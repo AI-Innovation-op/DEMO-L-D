@@ -43,7 +43,7 @@ export class Weapon {
     return new Weapon(
       'short_sword',
       'Espada Corta del Monaguillo',
-      25,
+      10,
       45,
       1.2,
       WeaponCategory.MELEE_FAST,
@@ -56,7 +56,7 @@ export class Weapon {
     return new Weapon(
       'lamento_oakhaven',
       'Lamento de Oakhaven (Incensario)',
-      38,
+      15,
       80,
       0.9,
       WeaponCategory.MELEE_FAST,
@@ -69,7 +69,7 @@ export class Weapon {
     return new Weapon(
       'colmillo_sauce',
       'Colmillo del Sauce Negro',
-      30,
+      13,
       35,
       1.6,
       WeaponCategory.MELEE_FAST,
@@ -82,7 +82,7 @@ export class Weapon {
     return new Weapon(
       'falso_veredicto',
       'Falso Veredicto (Mandoble)',
-      55,
+      21,
       65,
       0.7,
       WeaponCategory.MELEE_HEAVY,
@@ -95,7 +95,7 @@ export class Weapon {
     return new Weapon(
       'espejismo_oro',
       'Espejismo de Oro y Humo',
-      42,
+      17,
       50,
       1.3,
       WeaponCategory.MELEE_FAST,
@@ -108,7 +108,7 @@ export class Weapon {
     return new Weapon(
       'alba_gris',
       'Alba Gris (Espada de la Elección)',
-      70,
+      26,
       75,
       1.1,
       WeaponCategory.MELEE_HEAVY,
@@ -121,7 +121,7 @@ export class Weapon {
     return new Weapon(
       'khaterine_bow',
       'Arco del Exilio Abismal',
-      35,
+      11,
       250,
       1.0,
       WeaponCategory.RANGED,
@@ -134,7 +134,7 @@ export class Weapon {
     return new Weapon(
       'improvised_fists',
       'Puños y Empujones',
-      12,
+      5,
       25,
       1.5,
       WeaponCategory.IMPROVISED,
@@ -147,7 +147,7 @@ export class Weapon {
     return new Weapon(
       'improvised_enemy_blade',
       'Espada Enemiga Recogida',
-      28,
+      12,
       45,
       1.0,
       WeaponCategory.IMPROVISED,

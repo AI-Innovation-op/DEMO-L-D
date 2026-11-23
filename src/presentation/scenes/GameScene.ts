@@ -54,8 +54,14 @@ export class GameScene extends Phaser.Scene {
   private enemies: Enemy[] = [];
   private enemySprites: Map<string, Phaser.GameObjects.Sprite> = new Map();
   private enemyShadows: Map<string, Phaser.GameObjects.Ellipse> = new Map();
+  private enemyHpBars: Map<string, { bg: Phaser.GameObjects.Rectangle; hpFill: Phaser.GameObjects.Rectangle; postureFill: Phaser.GameObjects.Rectangle }> = new Map();
   private droppedWeaponSprites: Map<string, Phaser.GameObjects.Container> = new Map();
   private scenarioProps: Phaser.GameObjects.GameObject[] = [];
+
+  // Tactical Healing Flasks (Bálsamos de la Doncella [H] / LT) & Post-Hit I-Frames
+  private maidenBalmsCount: number = 3;
+  private readonly maxMaidenBalms: number = 3;
+  private postHitInvulnTimer: number = 0;
 
   // Boss
   private currentBoss?: Boss;
@@ -142,6 +148,7 @@ export class GameScene extends Phaser.Scene {
   private keyT!: Phaser.Input.Keyboard.Key; // Throw Weapon
   private keyQ!: Phaser.Input.Keyboard.Key; // Throw Weapon alias
   private keyE!: Phaser.Input.Keyboard.Key; // Interact / Talk / Pick up
+  private keyH!: Phaser.Input.Keyboard.Key; // Quick Heal (Bálsamo de la Doncella)
   private keyM!: Phaser.Input.Keyboard.Key; // Shalem Minigame
   private keyP!: Phaser.Input.Keyboard.Key; // Menu Modal
   private keyI!: Phaser.Input.Keyboard.Key; // Inventory & Prophecy
@@ -227,6 +234,9 @@ export class GameScene extends Phaser.Scene {
     this.enemies = [];
     this.enemySprites.clear();
     this.enemyShadows.clear();
+    this.enemyHpBars.clear();
+    this.maidenBalmsCount = this.maxMaidenBalms;
+    this.postHitInvulnTimer = 0;
     this.droppedWeaponSprites.clear();
     this.currentBoss = undefined;
     this.bossSprite = undefined;
@@ -401,6 +411,7 @@ export class GameScene extends Phaser.Scene {
       this.keyT = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.T);
       this.keyQ = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q);
       this.keyE = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
+      this.keyH = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.H);
       this.keyM = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M);
       this.keyP = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.P);
       this.keyI = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.I);
@@ -465,9 +476,12 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.timeSinceLastHit += delta;
+    if (this.postHitInvulnTimer > 0) {
+      this.postHitInvulnTimer = Math.max(0, this.postHitInvulnTimer - delta);
+    }
     // Posture (Guardia / Escudo) regenerates smoothly if not hit for 2.2 seconds!
     if (this.timeSinceLastHit >= 2200 && this.player.stats.posture < this.player.stats.maxPosture) {
-      this.player.stats.restorePosture(25 * (delta / 1000));
+      this.player.stats.restorePosture(22 * (delta / 1000));
     }
 
     this.handleInput(delta);
@@ -489,7 +503,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Sync HUD with active character, dynamic interaction target & bottom sector compass
+    // Sync HUD with active character, dynamic interaction target, bottom sector compass & balms
     const hud = this.scene.get('HUDScene') as HUDScene;
     if (hud && this.scene.isActive('HUDScene')) {
       hud.updateHUD(
@@ -498,7 +512,8 @@ export class GameScene extends Phaser.Scene {
         this.storyProgress,
         this.activeInteractionTarget,
         this.allyChar.name,
-        this.currentSectorCompassLabel
+        this.currentSectorCompassLabel,
+        this.maidenBalmsCount
       );
     }
   }
@@ -708,6 +723,11 @@ export class GameScene extends Phaser.Scene {
       this.executeContextInteraction();
     }
 
+    // Quick Heal Flask: Bálsamo de la Doncella [H] / Gamepad LT (+45 HP)
+    if ((this.keyH && Phaser.Input.Keyboard.JustDown(this.keyH)) || gp.quickBalmPressed) {
+      this.useMaidenBalm2D();
+    }
+
     // 2.5D Movement (WASD / Arrows / Gamepad Left Stick) across 1180x360 Panoramic World
     let moveX = 0;
     let moveY = 0;
@@ -915,10 +935,11 @@ export class GameScene extends Phaser.Scene {
 
     if (!this.hasTalkedToElowen) {
       this.hasTalkedToElowen = true;
-      this.player.heal(35);
+      this.player.heal(45);
+      this.maidenBalmsCount = Math.min(this.maxMaidenBalms, this.maidenBalmsCount + 1);
       this.player.stats.restorePosture(this.player.stats.maxPosture);
       this.storyProgress.addProgress(15);
-      this.spawnDamageNumber(this.playerSprite.x, this.playerSprite.y - 45, 35, false, '#88ff88');
+      this.spawnDamageNumber(this.playerSprite.x, this.playerSprite.y - 45, 45, false, '#88ff88');
 
       if (this.currentScenario === 1) {
         this.storyProgress.completeMilestone('act1_dialogue');
@@ -991,6 +1012,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.hasTalkedToCedric) {
       this.hasTalkedToCedric = true;
       this.hasRosarioCedric = true;
+      this.maidenBalmsCount = Math.min(this.maxMaidenBalms, this.maidenBalmsCount + 1);
       this.prophecy.unlockFragment(1);
       this.player.gainExperience(35);
       this.player.stats.restorePosture(this.player.stats.maxPosture);
@@ -1657,8 +1679,8 @@ export class GameScene extends Phaser.Scene {
       onComplete: () => wave.destroy()
     });
 
-    // Pierces all enemies in path
-    const bonusHolyDmg = isHeavy ? 45 : 28;
+    // Pierces all enemies in path (balanced late-game bonus wave)
+    const bonusHolyDmg = isHeavy ? 26 : 16;
     for (const enemy of this.enemies) {
       if (!enemy.isAlive()) continue;
       const dx = (enemy.position.x - px) * facing;
@@ -1678,7 +1700,7 @@ export class GameScene extends Phaser.Scene {
       const bdx = (this.currentBoss.position.x - px) * facing;
       const bdy = Math.abs(this.currentBoss.position.y - py);
       if (bdx > 0 && bdx <= 270 && bdy <= 55) {
-        const extraBossDmg = isHeavy ? 60 : 38;
+        const extraBossDmg = isHeavy ? 34 : 22;
         this.currentBoss.health = Math.max(0, this.currentBoss.health - extraBossDmg);
         this.spawnDamageNumber(this.currentBoss.position.x, this.currentBoss.position.y - 50, extraBossDmg, true, '#fff59d');
         this.bossSprite.setTint(0xfff0aa);
@@ -1802,14 +1824,14 @@ export class GameScene extends Phaser.Scene {
       onComplete: () => ripple.destroy()
     });
 
-    // Deal massive posture break and counter-damage
-    const counterDamage = isBoss ? 55 : 45;
+    // Deal heavy posture break (opening [E] Finishers!) and balanced counter-damage
+    const counterDamage = isBoss ? 42 : 32;
     const facing = this.player.facingDirection;
 
     if (isBoss && this.currentBoss && this.bossSprite) {
-      this.currentBoss.posture = Math.max(0, this.currentBoss.posture - 45);
+      this.currentBoss.posture = Math.max(0, this.currentBoss.posture - 65);
       if (this.currentBoss.posture === 0) {
-        this.currentBoss.interruptAttack(2000);
+        this.currentBoss.interruptAttack(2200);
         if (this.currentBoss.id === 'madre_morwenna') {
           this.playAnimSafe(this.bossSprite, 'morwenna_stunned', true);
         }
@@ -1822,9 +1844,9 @@ export class GameScene extends Phaser.Scene {
         this.handleBossDefeated();
       }
     } else if (enemy) {
-      enemy.posture = Math.max(0, enemy.posture - 50);
+      enemy.posture = Math.max(0, enemy.posture - 55);
       if (enemy.posture === 0) {
-        enemy.interruptAttack(2000);
+        enemy.interruptAttack(2200);
       }
       enemy.health = Math.max(0, enemy.health - counterDamage);
       this.spawnDamageNumber(sourceX, sourceY - 45, counterDamage, true, '#ffd700');
@@ -1976,7 +1998,7 @@ export class GameScene extends Phaser.Scene {
       this.spawnAshExplosion(targetSprite.x, targetSprite.y - 25);
 
       if (isBoss && target.boss) {
-        const bossDmg = 95;
+        const bossDmg = 115;
         target.boss.health = Math.max(0, target.boss.health - bossDmg);
         target.boss.recoverPosture();
         this.spawnDamageNumber(targetSprite.x, targetSprite.y - 55, bossDmg, true, '#ffd700');
@@ -2238,10 +2260,12 @@ export class GameScene extends Phaser.Scene {
         });
       }
       this.enemyShadows.get(enemy.id)?.destroy();
+      this.destroyEnemyHealthBar(enemy.id);
     }
     this.enemies = [];
     this.enemySprites.clear();
     this.enemyShadows.clear();
+    this.enemyHpBars.clear();
 
     // Phase 3 Act V: Golden-Rose First Dawn Atmosphere upon defeating Astaroth
     if (this.currentScenario === 5) {
@@ -2932,9 +2956,10 @@ export class GameScene extends Phaser.Scene {
         // Stun enemies in impact area in 2.5D
         for (const enemy of this.enemies) {
           if (Math.abs(enemy.position.x - impactX) < 55 && Math.abs(enemy.position.y - this.playerSprite.y) < 35) {
-            enemy.damagePosture(50);
+            enemy.takeDamage(30);
+            enemy.damagePosture(45);
             this.audio.playCombatHit(true);
-            this.spawnDamageNumber(enemy.position.x, enemy.position.y - 35, 45, true);
+            this.spawnDamageNumber(enemy.position.x, enemy.position.y - 35, 30, true);
 
             const sprite = this.enemySprites.get(enemy.id);
             if (sprite) {
@@ -2948,14 +2973,14 @@ export class GameScene extends Phaser.Scene {
         // Phase 2 Act II: Jamming the Great Bronze Crucible gears with a thrown sword!
         if (this.currentScenario === 2 && this.currentBoss && this.currentBoss.health > 0) {
           if (Math.abs(this.currentBoss.position.x - impactX) < 110) {
-            this.currentBoss.takeDamage(120);
+            this.currentBoss.takeDamage(110);
             this.currentBoss.posture = 0;
             this.currentBoss.state = 'STUNNED';
             this.currentBoss.interruptAttack(2200);
             this.audio.playCombatHit(true);
             this.cameras.main.shake(260, 0.02);
             this.spawnAnimatedVfx(this.currentBoss.position.x, this.currentBoss.position.y - 30, 'fx_pyre_explosion', 1.25, false);
-            this.spawnDamageNumber(this.currentBoss.position.x, this.currentBoss.position.y - 58, '🔥 ¡CRISOL TRABADO! -120 HP', true, '#ff7722');
+            this.spawnDamageNumber(this.currentBoss.position.x, this.currentBoss.position.y - 58, '🔥 ¡CRISOL TRABADO! -110 HP', true, '#ff7722');
             if (this.currentBoss.health <= 0) {
               this.handleBossDefeated();
             }
@@ -3054,6 +3079,69 @@ export class GameScene extends Phaser.Scene {
     this.shalemBalloonTimer = durationMs;
   }
 
+  private useMaidenBalm2D(): void {
+    if (this.player.state === CharacterState.DEAD || this.isTransitioningAct) return;
+    if (this.maidenBalmsCount <= 0) {
+      this.audio.playSfx('warning');
+      this.triggerShalemBalloon('Shalem: «Sin Bálsamos de la Doncella. Habla con Elowen o ejecuta un Remate [E] para sanar.»', 2800);
+      return;
+    }
+    if (this.player.stats.health >= this.player.stats.maxHealth) {
+      this.triggerShalemBalloon('Shalem: «Tu salud ya está intacta. Guarda ese bálsamo para la pira.»', 2400);
+      return;
+    }
+    this.maidenBalmsCount -= 1;
+    const healAmt = 45;
+    this.player.heal(healAmt);
+    this.player.stats.restorePosture(25);
+    this.audio.playHealingEmber();
+    this.playerSprite.setTint(0x88ffaa);
+    this.time.delayedCall(200, () => this.playerSprite?.clearTint());
+    this.spawnDamageNumber(this.playerSprite.x, this.playerSprite.y - 48, healAmt, false, '#7ef5a6');
+  }
+
+  private syncEnemyHealthBar(enemy: Enemy, sprite: Phaser.GameObjects.Sprite): void {
+    let bar = this.enemyHpBars.get(enemy.id);
+    const barW = 36;
+    const headOffset = enemy.type === 'ash_prowler' ? 40 : 54;
+    const bx = sprite.x;
+    const by = sprite.y - headOffset;
+
+    if (!bar) {
+      const bg = this.add.rectangle(bx, by, barW + 2, 8, 0x0b0612, 0.88)
+        .setStrokeStyle(1, 0x4b2b5e)
+        .setDepth(334);
+      const hpFill = this.add.rectangle(bx - barW / 2, by - 1, barW, 4, 0xd9303e)
+        .setOrigin(0, 0.5)
+        .setDepth(335);
+      const postureFill = this.add.rectangle(bx - barW / 2, by + 2.5, barW, 2, 0xe8ba46)
+        .setOrigin(0, 0.5)
+        .setDepth(335);
+      bar = { bg, hpFill, postureFill };
+      this.enemyHpBars.set(enemy.id, bar);
+    }
+
+    const hpPct = Math.max(0, Math.min(1, enemy.health / Math.max(1, enemy.maxHealth)));
+    const posPct = Math.max(0, Math.min(1, enemy.posture / Math.max(1, enemy.maxPosture)));
+    const isStaggered = enemy.posture <= 0 || enemy.state === 'STUNNED';
+
+    bar.bg.setPosition(bx, by).setStrokeStyle(1, isStaggered ? 0xffd700 : 0x4b2b5e);
+    bar.hpFill.setPosition(bx - barW / 2, by - 1).setSize(Math.max(1, barW * hpPct), 4);
+    bar.postureFill
+      .setPosition(bx - barW / 2, by + 2.5)
+      .setSize(Math.max(0, barW * posPct), 2)
+      .setFillStyle(isStaggered ? 0xffffff : 0xe8ba46);
+  }
+
+  private destroyEnemyHealthBar(enemyId: string): void {
+    const bar = this.enemyHpBars.get(enemyId);
+    if (!bar) return;
+    bar.bg.destroy();
+    bar.hpFill.destroy();
+    bar.postureFill.destroy();
+    this.enemyHpBars.delete(enemyId);
+  }
+
   private updateEnemies(delta: number): void {
     if (this.isActCleared || this.isInvulnerable || this.isTransitioningAct) return;
 
@@ -3067,12 +3155,14 @@ export class GameScene extends Phaser.Scene {
     for (const enemy of this.enemies) {
       if (!enemy.isAlive()) {
         this.clearEnemyWarning(enemy.id);
+        this.destroyEnemyHealthBar(enemy.id);
         continue;
       }
 
       const sprite = this.enemySprites.get(enemy.id);
       const shadow = this.enemyShadows.get(enemy.id);
       if (!sprite) continue;
+      this.syncEnemyHealthBar(enemy, sprite);
 
       // 2.5D Depth Alignment check (Pilar 2)
       const isDepthAligned = Math.abs(enemy.position.y - playerY) <= reachY;
@@ -3129,9 +3219,11 @@ export class GameScene extends Phaser.Scene {
             continue;
           }
 
-          // Check for Player Invulnerable Dodge
-          if (this.isInvulnerable || this.player.state === CharacterState.DODGING) {
-            this.spawnDamageNumber(this.playerSprite.x, this.playerSprite.y - 45, '¡ESQUIVADO!', false, '#88ffaa');
+          // Check for Player Invulnerable Dodge or Post-Hit I-Frames
+          if (this.isInvulnerable || this.postHitInvulnTimer > 0 || this.player.state === CharacterState.DODGING) {
+            if (this.player.state === CharacterState.DODGING) {
+              this.spawnDamageNumber(this.playerSprite.x, this.playerSprite.y - 45, '¡ESQUIVADO!', false, '#88ffaa');
+            }
             enemy.startRecovery(380);
             sprite.setTint(0x666666);
             continue;
@@ -3141,10 +3233,11 @@ export class GameScene extends Phaser.Scene {
           this.timeSinceLastHit = 0;
 
           if (hitRes.damageToHealth > 0) {
+            this.postHitInvulnTimer = 450;
             this.audio.playCombatHit(false);
             this.playAnimSafe(this.playerSprite, this.player.id === 'thomas' ? 'thomas_hurt' : 'khaterine_hurt', true);
             this.playerSprite.setTint(0xff5555);
-            this.time.delayedCall(120, () => this.playerSprite.clearTint());
+            this.time.delayedCall(150, () => this.playerSprite.clearTint());
             this.spawnDamageNumber(this.playerSprite.x, this.playerSprite.y - 45, hitRes.damageToHealth, false, '#ff4444');
           } else if (hitRes.absorbedByGuard > 0) {
             this.audio.playSfx('block');
@@ -3295,11 +3388,11 @@ export class GameScene extends Phaser.Scene {
       this.playAnimSafe(this.tobiasSprite, 'thomas_walk');
 
       this.bridgeAlliesAttackTimer2D += delta / 1000;
-      if (this.bridgeAlliesAttackTimer2D >= 2.5) {
+      if (this.bridgeAlliesAttackTimer2D >= 2.8) {
         this.bridgeAlliesAttackTimer2D = 0;
-        this.currentBoss.takeDamage(15);
+        this.currentBoss.takeDamage(18);
         this.audio.playCombatHit(false);
-        this.spawnDamageNumber(this.bossSprite.x, this.bossSprite.y - 62, '⚔ ¡MARTÍN Y TOBÍAS! -15', true, '#a3ffc7');
+        this.spawnDamageNumber(this.bossSprite.x, this.bossSprite.y - 62, '⚔ ¡MARTÍN Y TOBÍAS! -18', true, '#a3ffc7');
         if (this.currentBoss.health <= 0) {
           this.handleBossDefeated();
           return;
@@ -3307,15 +3400,15 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Phase 3 Act V: Colossal Crimson Ember Lion Shalem strikes Astaroth every 3.0s (-40 HP)
+    // Phase 3 Act V: Colossal Crimson Ember Lion Shalem strikes Astaroth every 3.0s (-45 HP)
     if (this.currentScenario === 5 && this.isShalemLion2DActive && this.currentBoss.health > 0) {
       this.shalemLion2DTimer += delta / 1000;
       if (this.shalemLion2DTimer >= 3.0) {
         this.shalemLion2DTimer = 0;
-        this.currentBoss.takeDamage(40);
+        this.currentBoss.takeDamage(45);
         this.audio.playCombatHit(true);
         this.spawnAnimatedVfx(this.bossSprite.x, this.bossSprite.y - 32, 'fx_slash_gold', 1.3, false);
-        this.spawnDamageNumber(this.bossSprite.x, this.bossSprite.y - 72, '🦁 ¡LEÓN DE BRASAS! -40', true, '#ff7733');
+        this.spawnDamageNumber(this.bossSprite.x, this.bossSprite.y - 72, '🦁 ¡LEÓN DE BRASAS! -45', true, '#ff7733');
         if (this.currentBoss.health <= 0) {
           this.handleBossDefeated();
           return;
@@ -3349,9 +3442,11 @@ export class GameScene extends Phaser.Scene {
           return;
         }
 
-        // Check for Player Invulnerable Dodge
-        if (this.isInvulnerable || this.player.state === CharacterState.DODGING) {
-          this.spawnDamageNumber(this.playerSprite.x, this.playerSprite.y - 50, '¡ESQUIVADO!', true, '#88ffaa');
+        // Check for Player Invulnerable Dodge or Post-Hit I-Frames
+        if (this.isInvulnerable || this.postHitInvulnTimer > 0 || this.player.state === CharacterState.DODGING) {
+          if (this.player.state === CharacterState.DODGING) {
+            this.spawnDamageNumber(this.playerSprite.x, this.playerSprite.y - 50, '¡ESQUIVADO!', true, '#88ffaa');
+          }
           this.currentBoss.startRecovery(500);
           this.bossSprite.setTint(0x666666);
           return;
@@ -3365,10 +3460,11 @@ export class GameScene extends Phaser.Scene {
         this.timeSinceLastHit = 0;
 
         if (hitRes.damageToHealth > 0) {
+          this.postHitInvulnTimer = 450;
           this.audio.playCombatHit(true);
           this.playAnimSafe(this.playerSprite, this.player.id === 'thomas' ? 'thomas_hurt' : 'khaterine_hurt', true);
           this.playerSprite.setTint(0xff4444);
-          this.time.delayedCall(140, () => this.playerSprite.clearTint());
+          this.time.delayedCall(150, () => this.playerSprite.clearTint());
           this.cameras.main.shake(250, 0.015);
           this.spawnDamageNumber(this.playerSprite.x, this.playerSprite.y - 50, hitRes.damageToHealth, true, '#ff3333');
         } else if (hitRes.absorbedByGuard > 0) {
@@ -3960,14 +4056,18 @@ export class GameScene extends Phaser.Scene {
     this.hasTalkedToElowen = false; // Reset per-scenario Elowen interaction
     this.saveCheckpoint();
 
-    // Clear existing enemies, shadows & boss
+    // Clear existing enemies, shadows, health bars & boss; refill healing balms per Act
+    this.maidenBalmsCount = this.maxMaidenBalms;
+    this.postHitInvulnTimer = 0;
     this.enemies.forEach(e => {
       this.enemySprites.get(e.id)?.destroy();
       this.enemyShadows.get(e.id)?.destroy();
+      this.destroyEnemyHealthBar(e.id);
     });
     this.enemies = [];
     this.enemySprites.clear();
     this.enemyShadows.clear();
+    this.enemyHpBars.clear();
 
     this.bossSprite?.destroy();
     this.bossSprite = undefined;

@@ -27,13 +27,13 @@ export class CombatUseCases {
 
     const { damage, multiplier } = attackInfo;
     const baseDamage = Math.max(1, damage);
-    const effectiveDamage = isHeavy ? Math.round(baseDamage * 1.6) : baseDamage;
+    const effectiveDamage = isHeavy ? Math.round(baseDamage * 1.45) : baseDamage;
 
     // Apply exact damage to enemy health
     enemy.takeDamage(effectiveDamage);
 
-    // Apply posture damage (heavy attacks deal heightened posture damage)
-    const postureDamage = Math.round((isHeavy ? 35 : 20) * multiplier);
+    // Apply posture damage (heavy attacks crack posture quickly to open [E] Finishers!)
+    const postureDamage = Math.round((isHeavy ? 38 : 18) * multiplier);
     const postureBroken = enemy.damagePosture(postureDamage);
 
     let finisherStyle = FinisherStyle.NONE;
@@ -87,7 +87,7 @@ export class CombatUseCases {
     }
 
     const { damage } = attackInfo;
-    let effectiveDamage = isHeavy ? Math.round(damage * 1.6) : damage;
+    let effectiveDamage = isHeavy ? Math.round(damage * 1.45) : damage;
 
     // Boss Flame Shield mechanic (mitigates ranged spam, broken by heavy melee)
     if (boss.isFlameShieldActive) {
@@ -103,7 +103,7 @@ export class CombatUseCases {
     }
 
     const { actualDamage } = boss.takeDamage(effectiveDamage);
-    boss.damagePosture(isHeavy ? 28 : 15);
+    boss.damagePosture(isHeavy ? 30 : 14);
 
     const targetKilled = boss.health <= 0 && boss.phase !== 'PHASE_3_UNBEATABLE';
     if (targetKilled) {

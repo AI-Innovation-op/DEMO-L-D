@@ -19,6 +19,7 @@ export class HUDScene extends Phaser.Scene {
   private storyObjectiveText!: Phaser.GameObjects.Text;
 
   private weaponBadgeText!: Phaser.GameObjects.Text;
+  private balmBadgeText!: Phaser.GameObjects.Text;
   private disarmWarningText!: Phaser.GameObjects.Text;
   private comboText!: Phaser.GameObjects.Text;
 
@@ -118,12 +119,19 @@ export class HUDScene extends Phaser.Scene {
       fontStyle: 'bold'
     }).setDepth(46).setVisible(false);
 
-    // Equipped Weapon
-    this.weaponBadgeText = this.add.text(14, 58, '⚔ Espada Corta del Monaguillo', {
+    // Equipped Weapon & Quick Heal Balm Indicator ([H] / LT)
+    this.weaponBadgeText = this.add.text(14, 58, '⚔ Espada Corta', {
       fontFamily: 'monospace',
       fontSize: '8.5px',
       color: '#dfd2f0'
     }).setDepth(45);
+
+    this.balmBadgeText = this.add.text(210, 58, '🌿[H]3', {
+      fontFamily: 'monospace',
+      fontSize: '8.5px',
+      color: '#7ef5a6',
+      fontStyle: 'bold'
+    }).setOrigin(1, 0).setDepth(46);
 
     // Thin divider
     this.add.rectangle(14, 71, 196, 1, 0x483163, 0.85).setOrigin(0, 0.5).setDepth(44);
@@ -339,7 +347,8 @@ export class HUDScene extends Phaser.Scene {
     storyProgress?: StoryProgress,
     interactionPrompt?: string,
     allyName?: string,
-    sectorCompassLabel?: string
+    sectorCompassLabel?: string,
+    balmsCount?: number
   ): void {
     if (!this.scene.isActive() || !this.playerHealthFill || !this.playerHealthFill.geom) return;
 
@@ -395,13 +404,17 @@ export class HUDScene extends Phaser.Scene {
       this.storyObjectiveText.setText(`▸ ${objStr}`);
     }
 
-    // Equipped Weapon & Disarm
+    // Equipped Weapon, Balms & Disarm
     const currentWeapon = player.disarmManager.getCurrentWeapon();
     let weaponStr = `⚔ ${currentWeapon.name}`;
     if (currentWeapon.durability !== Infinity) {
       weaponStr += ` [${currentWeapon.durability}]`;
     }
-    this.weaponBadgeText.setText(weaponStr.length > 33 ? `${weaponStr.slice(0, 32)}…` : weaponStr);
+    this.weaponBadgeText.setText(weaponStr.length > 24 ? `${weaponStr.slice(0, 23)}…` : weaponStr);
+    if (this.balmBadgeText && typeof balmsCount === 'number') {
+      this.balmBadgeText.setText(`🌿[H]${balmsCount}`);
+      this.balmBadgeText.setColor(balmsCount > 0 ? '#7ef5a6' : '#806b8f');
+    }
     this.disarmWarningText.setVisible(player.disarmManager.isPlayerDisarmed());
 
     // Combo
