@@ -14,6 +14,7 @@ import {
 } from '../../domain/progression/ChronicleAchievements';
 import { HeroType } from '../../domain/progression/Skill';
 import { GameSaveManager } from '../../infrastructure/storage/GameSaveManager';
+import { GamepadInputAdapter3D, GamepadFrameState3D } from '../../infrastructure/input/GamepadInputAdapter3D';
 import { Party } from '../../domain/party/Party';
 import { HeroId, HERO_DEFINITIONS } from '../../domain/party/HeroCombatState';
 import { MorwennaEncounter } from '../../domain/encounters/MorwennaEncounter';
@@ -591,6 +592,9 @@ export class Oakhaven3DExperience {
   private cameraSensitivity: number = 1.0;
   private minimapWrapEl?: HTMLDivElement;
   private minimapCanvasEl?: HTMLCanvasElement;
+  private gamepadAdapter: GamepadInputAdapter3D = new GamepadInputAdapter3D();
+  private latestGamepadState: GamepadFrameState3D | null = null;
+  private gamepadStatusEl?: HTMLDivElement;
 
   // Arsenal & Munitions Manager
   private arsenalManager: ArsenalManager = new ArsenalManager();
@@ -5738,7 +5742,15 @@ export class Oakhaven3DExperience {
     }
     this.epilogueFlowersGroup.visible = true;
 
-    // 6. Place hero on Old Oak Hill facing Elowen and the glowing Oak
+    // 6. Restore full peace vitals & place hero on Old Oak Hill facing Elowen and the glowing Oak
+    this.playerStats.health = this.playerStats.maxHealth;
+    this.playerStats.posture = this.playerStats.maxPosture;
+    const thomasHero = this.party.getHero('thomas');
+    thomasHero.health = this.playerStats.maxHealth;
+    thomasHero.posture = this.playerStats.maxPosture;
+    const khaterineHero = this.party.getHero('khaterine');
+    khaterineHero.health = this.playerStats.maxHealth;
+    khaterineHero.posture = this.playerStats.maxPosture;
     this.setPlayerPosition(8.6, 2.2, 5.0);
     this.playerGroup.rotation.y = -Math.PI / 2;
     this.cameraYaw = -Math.PI / 2;
@@ -5756,6 +5768,7 @@ export class Oakhaven3DExperience {
       '«Por primera vez en dieciocho años, la niebla de ceniza se abre sobre el valle de Oakhaven y un sol cálido tiñe de oro las hojas del Viejo Roble. Shalem ronronea hecho un ovillo sobre la piedra musgosa, libre al fin de las cadenas del Abismo. Elowen apoya su frente sobre el hombro de Thomas mientras Khaterine contempla el horizonte en paz: "Ya no somos hijos de la noche ni del temor, Thomas. Somos la oscuridad que eligió amar."»',
       `👑 OBRA COMPLETA (20/20 CAPÍTULOS) · RANGO FINAL ${finalRank.grade}: ${finalRank.title.toUpperCase()} (${finalRank.unlockedCount}/${finalRank.totalCount} HAZAÑAS · PULSA [ESC] PARA VER TU CRÓNICA) 👑`
     );
+    this.syncDynamicSoundscape();
     this.updateHUD();
   }
 
@@ -6714,7 +6727,119 @@ export class Oakhaven3DExperience {
     this.hasTriggeredTriHeroSynergy = false;
     this.hasForgedAlbaGris = false;
     this.isShalemLionActive = false;
+    this.cemeteryGateOpen = false;
+    this.combatFlow.reset();
+    this.currentComboStep3D = 0;
     this.endCinematicCameraBeat();
+
+    // Reset all 7 Boss Encounters & Surface/Act Enemies cleanly for a spotless New Campaign
+    this.morwennaEncounter = new MorwennaEncounter();
+    this.morwennaHealth = this.morwennaEncounter.maxHealth;
+    this.morwennaMaxHealth = this.morwennaEncounter.maxHealth;
+    this.morwennaPhase = 1;
+    this.morwennaState = 'DORMANT';
+    if (this.morwennaGroup) {
+      this.morwennaGroup.visible = true;
+      this.morwennaGroup.position.set(0, 0, -18.5);
+      this.morwennaGroup.rotation.set(0, 0, 0);
+    }
+    if (this.morwennaFlameWingsGroup) this.morwennaFlameWingsGroup.visible = false;
+    if (this.morwennaFlameSwordMesh) this.morwennaFlameSwordMesh.visible = false;
+    if (this.morwennaThornHaloMesh) this.morwennaThornHaloMesh.visible = false;
+
+    this.enemyHealth = this.enemyMaxHealth;
+    this.enemyState = 'PATROL';
+    if (this.enemyGroup) {
+      this.enemyGroup.visible = true;
+      this.enemyGroup.position.set(-1.5, 0, -4.5);
+    }
+    this.cultistHealth = this.cultistMaxHealth;
+    this.cultistState = 'PATROL';
+    if (this.cultistGroup) {
+      this.cultistGroup.visible = true;
+      this.cultistGroup.position.set(2.2, 0, -9.5);
+    }
+    this.zealotHealth = this.zealotMaxHealth;
+    this.zealotState = 'PATROL';
+    if (this.zealotGroup) {
+      this.zealotGroup.visible = true;
+      this.zealotGroup.position.set(-2.2, 0, -13.5);
+    }
+
+    this.inquisitorEncounter = new CatacombInquisitor();
+    if (this.inquisitorGroup) this.inquisitorGroup.position.set(0, 0, -104);
+    this.rootProwlerEncounter = new RootProwler();
+    if (this.rootProwlerGroup) this.rootProwlerGroup.position.set(0, 0, -146);
+    this.crucibleGuardianEncounter = new CrucibleGuardian();
+    if (this.crucibleGuardianGroup) this.crucibleGuardianGroup.position.set(0, 0, -204);
+    this.captainVaneEncounter = new CaptainVane();
+    if (this.captainVaneGroup) this.captainVaneGroup.position.set(0, 0, -260);
+    if (this.vaneShieldMesh) this.vaneShieldMesh.rotation.x = 0;
+    this.rexMalphasEncounter = new RexMalphas();
+    if (this.rexMalphasGroup) this.rexMalphasGroup.position.set(0, 0, -325);
+    if (this.malphasWarpRingMesh) this.malphasWarpRingMesh.visible = false;
+    this.astarothEncounter = new AstarothTitan();
+    if (this.astarothGroup) this.astarothGroup.position.set(0, 0, -395);
+    if (this.willowBirdMesh) this.willowBirdMesh.visible = true;
+    if (this.dawnGreyTearMesh) this.dawnGreyTearMesh.visible = true;
+    if (this.albaGrisBladeMesh) {
+      this.albaGrisBladeMesh.visible = false;
+      this.albaGrisBladeMesh = undefined;
+    }
+
+    for (const prop of this.destructibles) {
+      prop.isDestroyed = false;
+      prop.mesh.visible = true;
+    }
+    for (const cit of this.hypnotizedCitizens) {
+      cit.awakened = false;
+      cit.hazeLight.color.setHex(0xffcc44);
+    }
+    for (const guard of this.bridgeGuards) {
+      guard.hp = guard.maxHp;
+      guard.isDead = false;
+      guard.fallingToAbyss = false;
+      guard.fallVelocity = 0;
+      guard.group.visible = true;
+      guard.group.position.y = 0;
+    }
+
+    // Hide all Boss & Enemy HUDs cleanly
+    [
+      this.morwennaHpBarContainer,
+      this.inquisitorHpBarContainer,
+      this.rootProwlerHpBarContainer,
+      this.crucibleHpBarContainer,
+      this.vaneHpBarContainer,
+      this.malphasHpBarContainer,
+      this.astarothHpBarContainer,
+      this.actEnemyHpBarContainer
+    ].forEach(hud => {
+      if (hud) hud.style.display = 'none';
+    });
+
+    // Restore Hero Full Vitals & Oakhaven Dawn NPC anchors
+    this.playerStats.health = this.playerStats.maxHealth;
+    this.playerStats.posture = this.playerStats.maxPosture;
+    const resetThomas = this.party.getHero('thomas');
+    resetThomas.health = this.playerStats.maxHealth;
+    resetThomas.posture = this.playerStats.maxPosture;
+    const resetKhaterine = this.party.getHero('khaterine');
+    resetKhaterine.health = this.playerStats.maxHealth;
+    resetKhaterine.posture = this.playerStats.maxPosture;
+    if (this.elowenGroup) {
+      this.elowenGroup.visible = true;
+      this.elowenGroup.position.set(9.8, 2.2, 5.0);
+    }
+    if (this.cedricGroup) {
+      this.cedricGroup.visible = true;
+      this.cedricGroup.position.set(-2.5, 0, 2.7);
+    }
+    if (this.shalemGroup) {
+      this.shalemGroup.visible = true;
+      this.shalemGroup.position.set(1.2, 0, 4.4);
+    }
+
     for (const actEnemy of this.actEnemies) {
       actEnemy.hp = actEnemy.maxHp;
       actEnemy.state = 'PATROL';
@@ -6745,7 +6870,10 @@ export class Oakhaven3DExperience {
     this.playerGroup.rotation.y = 0;
     this.cameraYaw = 0;
     this.targetCameraYaw = 0;
+    this.activeSoundscapeTrack = null;
+    this.syncDynamicSoundscape();
     this.syncCampaignSequence(0.016);
+    this.syncCombatFlowUI();
     this.updateHUD();
     this.openPrologueModal(0);
   }
@@ -7450,6 +7578,11 @@ export class Oakhaven3DExperience {
             </div>
           </div>
 
+          <div style="background: rgba(16, 26, 34, 0.85); border: 1px solid #2e6d8c; border-radius: 4px; padding: 5px 8px; margin-bottom: 8px; font-family: monospace; font-size: 6.7px; color: #b8eeff; line-height: 1.4;">
+            <div id="p3d-gamepad-status" style="color: #88ffaa; font-weight: bold; margin-bottom: 2px;">🎮 MANDO USB / BLUETOOTH: Compatible (Conecta y pulsa cualquier botón)</div>
+            Stick Izq: Mover 360° · Stick Der: Cámara · <b>X/□</b>: Combo · <b>Y/△</b>: Pesado · <b>B/○</b>: Esquivar · <b>A/✕</b>: Interactuar · <b>LB</b>: Parry · <b>RB</b>: Lanzar/Eco · <b>LT</b>: Bálsamo · <b>RT</b>: Héroe · <b>R3</b>: Fijar · <b>Start</b>: Pausa
+          </div>
+
           <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;">
             <button id="p3d-pause-save" style="background: #1c2538; color: #99ddff; border: 1px solid #3b6b99; border-radius: 4px; padding: 5px 6px; font-family: monospace; font-size: 7px; font-weight: bold; cursor: pointer;">💾 GUARDAR SANTUARIO</button>
             <button id="p3d-pause-new-campaign" style="background: #2f200e; color: #ffd7aa; border: 1px solid #d49a37; border-radius: 4px; padding: 5px 6px; font-family: monospace; font-size: 7px; font-weight: bold; cursor: pointer;">🔄 NUEVA CAMPAÑA</button>
@@ -7598,6 +7731,7 @@ export class Oakhaven3DExperience {
     this.achievementToastEl = this.uiOverlay.querySelector('#p3d-achievement-toast') as HTMLDivElement;
     this.minimapWrapEl = this.uiOverlay.querySelector('#p3d-minimap-wrap') as HTMLDivElement;
     this.minimapCanvasEl = this.uiOverlay.querySelector('#p3d-minimap-canvas') as HTMLCanvasElement;
+    this.gamepadStatusEl = this.uiOverlay.querySelector('#p3d-gamepad-status') as HTMLDivElement;
 
     const btnOpenChronicle = this.uiOverlay.querySelector('#btn-open-chronicle') as HTMLButtonElement | null;
     if (btnOpenChronicle) {
@@ -8033,6 +8167,8 @@ export class Oakhaven3DExperience {
     window.addEventListener('keyup', this.handleKeyUp);
     window.addEventListener('resize', this.handleResize);
     window.addEventListener('blur', this.handleBlur);
+    window.addEventListener('gamepadconnected', this.handleGamepadConnected);
+    window.addEventListener('gamepaddisconnected', this.handleGamepadDisconnected);
     document.addEventListener('visibilitychange', this.handleVisibilityChange);
 
     if (this.renderer && this.renderer.domElement) {
@@ -8046,6 +8182,150 @@ export class Oakhaven3DExperience {
   private handleBlur = (): void => {
     this.releaseAllInputs();
   };
+
+  private handleGamepadConnected = (e: GamepadEvent): void => {
+    const label = (e.gamepad?.id || 'Mando USB').slice(0, 38);
+    if (this.gamepadStatusEl) {
+      this.gamepadStatusEl.innerText = `🎮 MANDO CONECTADO: ${label}`;
+      this.gamepadStatusEl.style.color = '#88ffaa';
+    }
+    this.spawnFloatingText(this.playerGroup.position, `🎮 ¡MANDO CONECTADO! (${label})`, '#88eeff');
+    this.audio.playSfx('menu_select');
+  };
+
+  private handleGamepadDisconnected = (): void => {
+    this.gamepadAdapter.resetEdges();
+    this.latestGamepadState = null;
+    if (this.gamepadStatusEl) {
+      this.gamepadStatusEl.innerText = '🎮 MANDO USB / BLUETOOTH: Desconectado (Teclado y Ratón activos)';
+      this.gamepadStatusEl.style.color = '#ffd7aa';
+    }
+    this.spawnFloatingText(this.playerGroup.position, '🎮 Mando desconectado — Teclado activo', '#ffd7aa');
+  };
+
+  private pollAndDispatchGamepad(rawDelta: number): void {
+    const gp = this.gamepadAdapter.poll();
+    this.latestGamepadState = gp.connected ? gp : null;
+
+    if (!gp.connected) return;
+
+    if (this.gamepadStatusEl && !this.gamepadStatusEl.innerText.includes('CONECTADO')) {
+      this.gamepadStatusEl.innerText = `🎮 MANDO CONECTADO: ${gp.padId.slice(0, 38)}`;
+      this.gamepadStatusEl.style.color = '#88ffaa';
+    }
+
+    const anyAction =
+      gp.lightAttackPressed ||
+      gp.heavyAttackPressed ||
+      gp.dodgeOrBackPressed ||
+      gp.interactOrConfirmPressed ||
+      gp.pausePressed ||
+      gp.guardJustPressed;
+    if (anyAction) {
+      this.audio.unlockAndResumeIfNeeded();
+    }
+
+    const ctx = this.getInputContext();
+
+    if (ctx === 'paused') {
+      if (gp.pausePressed || gp.dodgeOrBackPressed) {
+        this.togglePauseModal();
+      }
+      return;
+    }
+    if (ctx === 'prologue') {
+      if (gp.interactOrConfirmPressed) this.advancePrologueSlide();
+      else if (gp.dodgeOrBackPressed || gp.pausePressed) this.closePrologueModal();
+      return;
+    }
+    if (ctx === 'dialogue') {
+      if (gp.interactOrConfirmPressed || gp.dodgeOrBackPressed) this.closeDialogueModal();
+      return;
+    }
+    if (ctx === 'moralDilemma') {
+      if (gp.interactOrConfirmPressed) this.resolveChapter20MoralDilemma('canon');
+      else if (gp.dodgeOrBackPressed) this.resolveChapter20MoralDilemma('eclipse');
+      return;
+    }
+    if (ctx === 'inventory') {
+      if (gp.dodgeOrBackPressed || gp.pausePressed) this.toggleInventoryModal();
+      return;
+    }
+    if (ctx === 'skillTree') {
+      if (gp.dodgeOrBackPressed || gp.pausePressed) this.toggleSkillTreeModal();
+      return;
+    }
+    if (ctx === 'alchemy') {
+      if (gp.dodgeOrBackPressed || gp.pausePressed) this.toggleAlchemyModal();
+      return;
+    }
+    if (ctx === 'compendium') {
+      if (gp.dodgeOrBackPressed || gp.pausePressed) this.toggleCompendiumModal();
+      return;
+    }
+    if (ctx === 'designs') {
+      if (gp.dodgeOrBackPressed || gp.pausePressed) this.toggleDesignsModal();
+      return;
+    }
+    if (ctx !== 'gameplay') return;
+
+    // Gameplay Controls via Standard Gamepad
+    if (gp.pausePressed) {
+      if (this.cinematicCam.active) {
+        this.endCinematicCameraBeat();
+      } else if (this.hudCompactController.state.activeDrawer !== 'none') {
+        this.hudCompactController.closeDrawers();
+        this.syncCompactHudUI();
+      } else {
+        this.togglePauseModal('controls');
+      }
+      return;
+    }
+    if (gp.toggleCompactMenuPressed) {
+      this.hudCompactController.toggleDrawer('menu');
+      this.syncCompactHudUI();
+      this.audio.playSfx('menu_select');
+    }
+    if (Math.abs(gp.lookX) > 0 && this.cameraMode === 'third_person') {
+      this.cameraYaw -= gp.lookX * 2.4 * this.cameraSensitivity * rawDelta;
+      this.targetCameraYaw = this.cameraYaw;
+      this.lastManualOrbitTime = performance.now();
+    }
+    if (gp.swapHeroPressed) this.toggleHero();
+    if (gp.quickBalmPressed) this.useQuickConsumable();
+    if (gp.lockOnPressed) this.toggleLockOn();
+    if (gp.cameraModePressed) {
+      this.toggleCameraMode();
+      const btnCam = this.uiOverlay?.querySelector('#btn-toggle-cam') as HTMLButtonElement | null;
+      if (btnCam) {
+        btnCam.innerText = `🎥 [C] ${this.cameraMode === 'isometric' ? 'OBLICUA' : '3ª PERS.'}`;
+      }
+    }
+    if (gp.cycleArrowLeftPressed || gp.cycleArrowRightPressed) {
+      if (this.activeHero === 'khaterine') this.cycleKhaterineArrow();
+    }
+    if (gp.interactOrConfirmPressed) this.handleContextInteraction();
+    if (gp.dodgeOrBackPressed) this.executeDodge();
+    if (gp.lightAttackPressed) this.executeAttack(false);
+    if (gp.heavyAttackPressed) this.executeAttack(true);
+    if (gp.specialThrowOrEchoPressed) {
+      if (this.activeHero === 'thomas') {
+        this.executeThrowWeapon();
+      } else {
+        this.executeKhaterineEchoVortex();
+      }
+    }
+    if (gp.guardJustPressed) {
+      if (!this.playerStats.isGuarding) {
+        this.lastGuardTime = performance.now();
+      }
+      this.playerStats.isGuarding = true;
+      if (this.wardBarrierMesh) this.wardBarrierMesh.visible = true;
+    } else if (gp.guardJustReleased) {
+      this.playerStats.isGuarding = false;
+      if (this.wardBarrierMesh) this.wardBarrierMesh.visible = false;
+    }
+  }
 
   private handleVisibilityChange = (): void => {
     if (document.hidden) {
@@ -10609,8 +10889,7 @@ export class Oakhaven3DExperience {
       if (!this.hasForgedAlbaGris) {
         this.forgeAlbaGrisSword();
       }
-      // Transform the sky & lighting into the First Golden Dawn of Albion (Chapter XX Canonical Climax)
-      this.oakhavenNarrativePhase = 'FIRST_DAWN_EPILOGUE';
+      // Transform the cathedral sky & lighting into the Golden Dawn of Alba Gris (Epilogue triggers once Astaroth falls)
       this.scene.background = new THREE.Color(0x3a2a4d);
       this.scene.fog = new THREE.FogExp2(0x463258, 0.009);
       if (this.ambientLightRef) {
@@ -11353,16 +11632,26 @@ export class Oakhaven3DExperience {
       const dist = pPos.distanceTo(this.elowenGroup.position);
       if (dist <= 3.8) {
         targetFound = 'elowen';
-        badgeText = !this.hasDeliveredBirdOnOakHill
-          ? '🕊️ [E] ENTREGAR PÁJARO DE MADERA DE SAUCE A ELOWEN (CAP. II)'
-          : (this.hasTalkedToElowen3D ? '✦ [E] CONSULTAR A ELOWEN' : '✦ [E] HABLAR CON ELOWEN (DONCELLA)');
-        badgeColor = !this.hasDeliveredBirdOnOakHill ? '#ffd700' : '#b5d4ff';
+        if (this.oakhavenNarrativePhase === 'FIRST_DAWN_EPILOGUE') {
+          badgeText = '🌅 [E] CONVERSAR EN PAZ CON ELOWEN EN EL PRIMER AMANECER';
+          badgeColor = '#ffd700';
+        } else {
+          badgeText = !this.hasDeliveredBirdOnOakHill
+            ? '🕊️ [E] ENTREGAR PÁJARO DE MADERA DE SAUCE A ELOWEN (CAP. II)'
+            : (this.hasTalkedToElowen3D ? '✦ [E] CONSULTAR A ELOWEN' : '✦ [E] HABLAR CON ELOWEN (DONCELLA)');
+          badgeColor = !this.hasDeliveredBirdOnOakHill ? '#ffd700' : '#b5d4ff';
+        }
       } else if (this.dungeonAreaManager.currentArea === 'surface' && pPos.distanceTo(new THREE.Vector3(9.8, 2.2, 5.0)) <= 3.2) {
         targetFound = 'oak_hill_bench';
-        badgeText = !this.hasDeliveredBirdOnOakHill
-          ? '🕊️ [E] ENTREGAR PÁJARO DE SAUCE EN EL VIEJO ROBLE (CAP. II)'
-          : '🌳 [E] CONTEMPLAR EL VIEJO ROBLE DE OAKHAVEN';
-        badgeColor = '#b8ff99';
+        if (this.oakhavenNarrativePhase === 'FIRST_DAWN_EPILOGUE') {
+          badgeText = '🌅 [E] CONTEMPLAR EL PRIMER AMANECER EN EL VIEJO ROBLE';
+          badgeColor = '#ffe488';
+        } else {
+          badgeText = !this.hasDeliveredBirdOnOakHill
+            ? '🕊️ [E] ENTREGAR PÁJARO DE SAUCE EN EL VIEJO ROBLE (CAP. II)'
+            : '🌳 [E] CONTEMPLAR EL VIEJO ROBLE DE OAKHAVEN';
+          badgeColor = '#b8ff99';
+        }
       }
     }
 
@@ -12691,6 +12980,7 @@ export class Oakhaven3DExperience {
     if (!this.isRunning) return;
 
     const rawDelta = Math.min(this.clock.getDelta(), 0.1);
+    this.pollAndDispatchGamepad(rawDelta);
 
     // Achievement unlock toast fade countdown (ticks even in calm moments)
     if (this.achievementToastTimer > 0) {
@@ -13030,7 +13320,7 @@ export class Oakhaven3DExperience {
       return;
     }
 
-    // 1. Movement Inputs (WASD / Arrows)
+    // 1. Movement Inputs (WASD / Arrows + Analog USB/Bluetooth Gamepad Left Stick)
     let moveX = 0;
     let moveZ = 0;
 
@@ -13039,23 +13329,27 @@ export class Oakhaven3DExperience {
     if (this.keys['a'] || this.keys['arrowleft']) moveX -= 1;
     if (this.keys['d'] || this.keys['arrowright']) moveX += 1;
 
+    if (this.latestGamepadState && this.latestGamepadState.connected) {
+      moveX = THREE.MathUtils.clamp(moveX + this.latestGamepadState.moveX, -1, 1);
+      moveZ = THREE.MathUtils.clamp(moveZ + this.latestGamepadState.moveZ, -1, 1);
+    }
+
     const inputDir = new THREE.Vector3(0, 0, 0);
 
     if (this.cameraMode === 'isometric') {
       inputDir.set(moveX, 0, moveZ);
     } else {
-      // Third-person: movement is relative to horizontal camera orientation
+      // Third-person: movement is relative to horizontal camera orientation (preserves analog magnitude!)
       const camFwd = new THREE.Vector3(-Math.sin(this.cameraYaw), 0, -Math.cos(this.cameraYaw));
       const camRight = new THREE.Vector3(Math.cos(this.cameraYaw), 0, -Math.sin(this.cameraYaw));
-      if (moveZ < 0) inputDir.add(camFwd);
-      if (moveZ > 0) inputDir.sub(camFwd);
-      if (moveX > 0) inputDir.add(camRight);
-      if (moveX < 0) inputDir.sub(camRight);
+      if (Math.abs(moveZ) > 0.001) inputDir.addScaledVector(camFwd, -moveZ);
+      if (Math.abs(moveX) > 0.001) inputDir.addScaledVector(camRight, moveX);
     }
 
-    if (inputDir.lengthSq() > 0 && !this.playerStats.isDodging) {
+    const inputMag = Math.min(1, inputDir.length());
+    if (inputMag > 0.01 && !this.playerStats.isDodging) {
       inputDir.normalize();
-      const speed = this.playerStats.isArmed ? 4.8 : 5.6; // Slightly faster when disarmed
+      const speed = (this.playerStats.isArmed ? 4.8 : 5.6) * inputMag; // Smooth analog walk/run scaling
       this.playerVelocity.x = inputDir.x * speed;
       this.playerVelocity.z = inputDir.z * speed;
 
@@ -15740,6 +16034,8 @@ export class Oakhaven3DExperience {
     window.removeEventListener('keyup', this.handleKeyUp);
     window.removeEventListener('resize', this.handleResize);
     window.removeEventListener('blur', this.handleBlur);
+    window.removeEventListener('gamepadconnected', this.handleGamepadConnected);
+    window.removeEventListener('gamepaddisconnected', this.handleGamepadDisconnected);
     document.removeEventListener('visibilitychange', this.handleVisibilityChange);
 
     if (this.renderer && this.renderer.domElement) {
