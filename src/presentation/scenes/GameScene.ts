@@ -39,6 +39,12 @@ import {
   cycleArrowType2D,
   resolveDestructibleDrop2D
 } from '../../domain/combat/Combat2DFluidity';
+import {
+  HD_ZOOM_2D,
+  configureHDSceneCamera,
+  vpX2D,
+  vpY2D
+} from '../ui/CrispTextPipeline';
 
 export class GameScene extends Phaser.Scene {
   // Dual Characters (Thomas & Khaterine)
@@ -61,8 +67,10 @@ export class GameScene extends Phaser.Scene {
   private shalemSprite!: Phaser.GameObjects.Sprite;
   private shalemShadow!: Phaser.GameObjects.Ellipse;
 
-  // Particle Systems
+  // Particle Systems & 2.5D Parallax / Dynamic Weather
   private emberParticles!: Phaser.GameObjects.Particles.ParticleEmitter;
+  private weatherEmitter2D?: Phaser.GameObjects.Particles.ParticleEmitter;
+  private parallaxElements2D: Phaser.GameObjects.GameObject[] = [];
 
   // Active Entities
   private enemies: Enemy[] = [];
@@ -316,6 +324,10 @@ export class GameScene extends Phaser.Scene {
     this.comboChain2D.reset();
     this.perfectDodge2D.reset();
     this.destructibleProps2D = [];
+    this.weatherEmitter2D?.destroy();
+    this.weatherEmitter2D = undefined;
+    this.parallaxElements2D.forEach(el => el.destroy());
+    this.parallaxElements2D = [];
     if (this.initialScenario === 1) {
       this.canonEvents2D.resetAll();
     }
@@ -341,7 +353,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   public create(): void {
-    // 0. Reset camera and ensure act transition state is cleanly reset
+    // 0. Configure 1280x720 HD 2x world camera & reset FX
+    configureHDSceneCamera(this, 'world2d');
     this.cameras.main.resetFX();
     this.cameras.main.fadeIn(300, 0, 0, 0);
     this.isTransitioningAct = false;
@@ -377,7 +390,7 @@ export class GameScene extends Phaser.Scene {
     this.audio.playBgm('bgm_oakhaven_night');
 
     // 4.1 Atmospheric Vignette (Fixed to camera viewport)
-    this.add.image(320, 180, 'fx_vignette').setDisplaySize(640, 360).setDepth(350).setAlpha(0.55).setScrollFactor(0);
+    this.add.image(vpX2D(320), vpY2D(180), 'fx_vignette').setDisplaySize(640, 360).setDepth(350).setAlpha(0.55).setScrollFactor(0);
 
     // 4.2 Register All Multi-Frame Animations from the Visual Pack
     registerVisualPackAnimations(this);
@@ -448,19 +461,20 @@ export class GameScene extends Phaser.Scene {
       strokeThickness: 2
     }).setOrigin(0.5).setDepth(340).setVisible(false);
 
-    // 9. Shalem Dialogue Balloon (Fixed to camera viewport, auto-wrapped so long lines never overflow!)
-    this.shalemBalloonBg = this.add.rectangle(320, 294, 550, 30, 0x140f21, 0.94)
-      .setStrokeStyle(1, 0xd4af37)
+    // 9. Shalem Dialogue Balloon (Fixed to camera viewport, auto-wrapped in Cormorant Garamond HD!)
+    this.shalemBalloonBg = this.add.rectangle(vpX2D(320), vpY2D(292), 556, 32, 0x0d0818, 0.95)
+      .setStrokeStyle(1.4, 0xd4af37)
       .setDepth(345)
       .setScrollFactor(0)
       .setVisible(false);
 
-    this.shalemBalloonText = this.add.text(320, 294, '', {
-      fontFamily: 'sans-serif',
-      fontSize: '9px',
-      color: '#ffd700',
+    this.shalemBalloonText = this.add.text(vpX2D(320), vpY2D(292), '', {
+      fontFamily: 'Cormorant Garamond, Georgia, serif',
+      fontSize: '10.5px',
+      color: '#ffe89e',
+      fontStyle: 'bold',
       align: 'center',
-      wordWrap: { width: 526 }
+      wordWrap: { width: 530 }
     }).setOrigin(0.5).setDepth(346).setScrollFactor(0).setVisible(false);
 
     // 10. Setup Inputs
@@ -1187,7 +1201,7 @@ export class GameScene extends Phaser.Scene {
 
   private renderChapterXXDilemmaView(): void {
     this.dilemmaModalContainer?.destroy();
-    const container = this.add.container(320, 180).setDepth(460).setScrollFactor(0);
+    const container = this.add.container(vpX2D(320), vpY2D(180)).setDepth(460).setScrollFactor(0);
     this.dilemmaModalContainer = container;
 
     const backdrop = this.add.rectangle(0, 0, 640, 360, this.isEclipseEndingView2D ? 0x0a0308 : 0x06030d, 0.90)
@@ -2554,7 +2568,7 @@ export class GameScene extends Phaser.Scene {
     this.player.disarmManager.setEquippedPrimary(albaGris);
     this.audio.playHealingEmber();
 
-    const banner = this.add.text(320, 95, '✦ ¡ESPADA SAGRADA ALBA GRIS FORJADA! ✦\n«Fuego Negro y Gota de Luz Divina Unidos»', {
+    const banner = this.add.text(vpX2D(320), vpY2D(95), '✦ ¡ESPADA SAGRADA ALBA GRIS FORJADA! ✦\n«Fuego Negro y Gota de Luz Divina Unidos»', {
       fontFamily: 'Cinzel, Georgia, serif',
       fontSize: '11px',
       color: '#ffd700',
@@ -2579,13 +2593,13 @@ export class GameScene extends Phaser.Scene {
       });
       this.shalemSprite.setTint(0xff7733);
       this.spawnAnimatedVfx(this.shalemSprite.x, this.shalemSprite.y - 24, 'fx_pyre_explosion', 1.15, false);
-      this.spawnDamageNumber(this.shalemSprite.x, this.shalemSprite.y - 60, '🦁 ¡SHALEM: LEÓN DE BRASAS!', true, '#ff7733');
-      this.triggerShalemBalloon("🦁 ¡SHALEM ROMPE SU PACTO: LEÓN DE BRASAS! ¡Atacará a Astaroth cada 3s (-40 HP)!", 4800);
+      this.spawnDamageNumber(this.shalemSprite.x, this.shalemSprite.y - 60, '✦ ¡SHALEM: LEÓN DE BRASAS!', true, '#ff7733');
+      this.triggerShalemBalloon("✦ ¡SHALEM ROMPE SU PACTO: LEÓN DE BRASAS! ¡Atacará a Astaroth cada 3s (-45 HP)!", 4800);
     }
 
     this.tweens.add({
       targets: banner,
-      y: 75,
+      y: vpY2D(75),
       alpha: 0,
       duration: 3500,
       ease: 'Sine.easeOut',
@@ -2774,7 +2788,7 @@ export class GameScene extends Phaser.Scene {
     this.audio.playFinisherSound(true);
 
     // 3. Cinematic Camera Zoom & Dramatic Flash
-    this.cameras.main.zoomTo(1.22, 140, 'Quad.easeOut');
+    this.cameras.main.zoomTo(HD_ZOOM_2D * 1.22, 140, 'Quad.easeOut');
     this.cameras.main.flash(180, 255, 230, 100);
 
     // 4. Notify HUD via Domain Event
@@ -2880,7 +2894,7 @@ export class GameScene extends Phaser.Scene {
       this.player.gainExperience(30);
       this.spawnDamageNumber(this.playerSprite.x, this.playerSprite.y - 45, '+20 HP', false, '#77ff77');
 
-      const banner = this.add.text(320, 110, '⚡ ¡EJECUCIÓN PERFECTA! ⚡', {
+      const banner = this.add.text(vpX2D(320), vpY2D(110), '★ ¡EJECUCIÓN PERFECTA! ★', {
         fontFamily: 'Cinzel, Georgia, serif',
         fontSize: '13px',
         color: '#ffd700',
@@ -2891,7 +2905,7 @@ export class GameScene extends Phaser.Scene {
 
       this.tweens.add({
         targets: banner,
-        y: 85,
+        y: vpY2D(85),
         alpha: 0,
         duration: 1800,
         ease: 'Cubic.easeOut',
@@ -2901,7 +2915,7 @@ export class GameScene extends Phaser.Scene {
       this.triggerShalemBalloon("Shalem: «¡Brutal, monaguillo! ¡Ese es el verdadero filo de las sombras!»", 3200);
 
       // Return camera and player state
-      this.cameras.main.zoomTo(1.0, 300, 'Quad.easeInOut');
+      this.cameras.main.zoomTo(HD_ZOOM_2D, 300, 'Quad.easeInOut');
       this.time.delayedCall(300, () => {
         this.player.state = CharacterState.IDLE;
         this.isInvulnerable = false;
@@ -3015,13 +3029,19 @@ export class GameScene extends Phaser.Scene {
 
   private spawnDamageNumber(x: number, y: number, amount: number | string, isCritical: boolean, customColor?: string): void {
     const color = customColor || (isCritical ? '#ffd700' : '#e699ff');
-    const displayText = typeof amount === 'number' ? `${customColor ? '+' : '-'}${amount}` : String(amount);
+    const rawStr = typeof amount === 'number' ? `${customColor ? '+' : '-'}${amount}` : String(amount);
+    const displayText = rawStr
+      .replace(/📍|🌅|🌸/g, '❖')
+      .replace(/🪞|🌿|🗡|🔔|⚔|🏹|🌑|🔥|🥈|⚡|🦁|💀|🌊|✨|🌙/g, '✦')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
     const text = this.add.text(x, y, displayText, {
       fontFamily: 'Cinzel, Georgia, serif',
-      fontSize: isCritical ? '16px' : '12px',
+      fontSize: isCritical ? '14px' : '11px',
       color: color,
-      stroke: '#000',
-      strokeThickness: 3
+      stroke: '#000000',
+      strokeThickness: 3,
+      fontStyle: 'bold'
     }).setOrigin(0.5).setDepth(330);
 
     this.tweens.add({
@@ -3177,12 +3197,12 @@ export class GameScene extends Phaser.Scene {
       });
 
       // Grand Victory Banner in Center (pinned to viewport!)
-      this.victoryBannerBg = this.add.rectangle(320, 160, 440, 78, 0x11081f, 0.95)
+      this.victoryBannerBg = this.add.rectangle(vpX2D(320), vpY2D(160), 440, 78, 0x11081f, 0.95)
         .setStrokeStyle(2, 0xffd700)
         .setDepth(360)
         .setScrollFactor(0);
 
-      this.victoryBannerTitle = this.add.text(320, 142, '★ ¡ACTO I: OAKHAVEN COMPLETADO! ★', {
+      this.victoryBannerTitle = this.add.text(vpX2D(320), vpY2D(142), '★ ¡ACTO I: OAKHAVEN COMPLETADO! ★', {
         fontFamily: 'Cinzel, Georgia, serif',
         fontSize: '13px',
         color: '#ffd700',
@@ -3191,7 +3211,7 @@ export class GameScene extends Phaser.Scene {
         fontStyle: 'bold'
       }).setOrigin(0.5).setDepth(361).setScrollFactor(0);
 
-      this.victoryBannerPrompt = this.add.text(320, 172, 'PULSA [ENTER], [E] O CAMINA AL PORTAL DERECHO ▶', {
+      this.victoryBannerPrompt = this.add.text(vpX2D(320), vpY2D(172), 'PULSA [ENTER], [E] O CAMINA AL PORTAL DERECHO ▶', {
         fontFamily: 'monospace',
         fontSize: '8.5px',
         color: '#ffffff',
@@ -3234,12 +3254,12 @@ export class GameScene extends Phaser.Scene {
         ease: 'Sine.easeInOut'
       });
 
-      this.victoryBannerBg = this.add.rectangle(320, 160, 440, 78, 0x11081f, 0.95)
+      this.victoryBannerBg = this.add.rectangle(vpX2D(320), vpY2D(160), 440, 78, 0x11081f, 0.95)
         .setStrokeStyle(2, 0xffd700)
         .setDepth(360)
         .setScrollFactor(0);
 
-      this.victoryBannerTitle = this.add.text(320, 142, '★ ¡ACTO II: EL CAMPANARIO COMPLETADO! ★', {
+      this.victoryBannerTitle = this.add.text(vpX2D(320), vpY2D(142), '★ ¡ACTO II: EL CAMPANARIO COMPLETADO! ★', {
         fontFamily: 'Cinzel, Georgia, serif',
         fontSize: '13px',
         color: '#ffd700',
@@ -3248,7 +3268,7 @@ export class GameScene extends Phaser.Scene {
         fontStyle: 'bold'
       }).setOrigin(0.5).setDepth(361).setScrollFactor(0);
 
-      this.victoryBannerPrompt = this.add.text(320, 172, 'PULSA [ENTER], [E] O CAMINA AL PORTAL DERECHO ▶', {
+      this.victoryBannerPrompt = this.add.text(vpX2D(320), vpY2D(172), 'PULSA [ENTER], [E] O CAMINA AL PORTAL DERECHO ▶', {
         fontFamily: 'monospace',
         fontSize: '8.5px',
         color: '#ffffff',
@@ -3291,12 +3311,12 @@ export class GameScene extends Phaser.Scene {
         ease: 'Sine.easeInOut'
       });
 
-      this.victoryBannerBg = this.add.rectangle(320, 160, 440, 78, 0x11081f, 0.95)
+      this.victoryBannerBg = this.add.rectangle(vpX2D(320), vpY2D(160), 440, 78, 0x11081f, 0.95)
         .setStrokeStyle(2, 0xffd700)
         .setDepth(360)
         .setScrollFactor(0);
 
-      this.victoryBannerTitle = this.add.text(320, 142, '★ ¡ACTO III: EL GRAN PUENTE COMPLETADO! ★', {
+      this.victoryBannerTitle = this.add.text(vpX2D(320), vpY2D(142), '★ ¡ACTO III: EL GRAN PUENTE COMPLETADO! ★', {
         fontFamily: 'Cinzel, Georgia, serif',
         fontSize: '13px',
         color: '#ffd700',
@@ -3305,7 +3325,7 @@ export class GameScene extends Phaser.Scene {
         fontStyle: 'bold'
       }).setOrigin(0.5).setDepth(361).setScrollFactor(0);
 
-      this.victoryBannerPrompt = this.add.text(320, 172, 'PULSA [ENTER], [E] O CAMINA AL PORTAL DERECHO ▶', {
+      this.victoryBannerPrompt = this.add.text(vpX2D(320), vpY2D(172), 'PULSA [ENTER], [E] O CAMINA AL PORTAL DERECHO ▶', {
         fontFamily: 'monospace',
         fontSize: '8.5px',
         color: '#ffffff',
@@ -3350,12 +3370,12 @@ export class GameScene extends Phaser.Scene {
       });
 
       // Victory Banner for Act IV
-      this.victoryBannerBg = this.add.rectangle(320, 160, 440, 78, 0x11081f, 0.95)
+      this.victoryBannerBg = this.add.rectangle(vpX2D(320), vpY2D(160), 440, 78, 0x11081f, 0.95)
         .setStrokeStyle(2, 0xffd700)
         .setDepth(360)
         .setScrollFactor(0);
 
-      this.victoryBannerTitle = this.add.text(320, 142, '★ ¡ACTO IV: LONDINIUM COMPLETADO! ★', {
+      this.victoryBannerTitle = this.add.text(vpX2D(320), vpY2D(142), '★ ¡ACTO IV: LONDINIUM COMPLETADO! ★', {
         fontFamily: 'Cinzel, Georgia, serif',
         fontSize: '13px',
         color: '#ffd700',
@@ -3364,7 +3384,7 @@ export class GameScene extends Phaser.Scene {
         fontStyle: 'bold'
       }).setOrigin(0.5).setDepth(361).setScrollFactor(0);
 
-      this.victoryBannerPrompt = this.add.text(320, 172, 'PULSA [ENTER], [E] O CAMINA AL PORTAL DERECHO ▶', {
+      this.victoryBannerPrompt = this.add.text(vpX2D(320), vpY2D(172), 'PULSA [ENTER], [E] O CAMINA AL PORTAL DERECHO ▶', {
         fontFamily: 'monospace',
         fontSize: '8.5px',
         color: '#ffffff',
@@ -3387,7 +3407,7 @@ export class GameScene extends Phaser.Scene {
       );
 
       this.exitPortalZone = this.add.ellipse(portalX, 250, 52, 18, 0xffd770, 0.72).setDepth(220);
-      this.exitPortalMarker = this.add.text(portalX, 204, '🌅 AL PRIMER AMANECER ▶\n[E] o Avanza a Oakhaven', {
+      this.exitPortalMarker = this.add.text(portalX, 204, '✦ AL PRIMER AMANECER ▶\n[E] o Avanza a Oakhaven', {
         fontFamily: 'Cinzel, monospace',
         fontSize: '8px',
         color: '#fff4bd',
@@ -3408,12 +3428,12 @@ export class GameScene extends Phaser.Scene {
       });
 
       // Victory Banner for Finale -> Playable First Dawn Epilogue (Scenario 6)
-      this.victoryBannerBg = this.add.rectangle(320, 160, 480, 84, 0x11081f, 0.96)
+      this.victoryBannerBg = this.add.rectangle(vpX2D(320), vpY2D(160), 480, 84, 0x11081f, 0.96)
         .setStrokeStyle(2, 0xffd700)
         .setDepth(360)
         .setScrollFactor(0);
 
-      this.victoryBannerTitle = this.add.text(320, 140, '★ ¡ALBION REDIMIDO: EL SOL NEGRO HA CAÍDO! ★', {
+      this.victoryBannerTitle = this.add.text(vpX2D(320), vpY2D(140), '★ ¡ALBION REDIMIDO: EL SOL NEGRO HA CAÍDO! ★', {
         fontFamily: 'Cinzel, Georgia, serif',
         fontSize: '12.5px',
         color: '#ffd700',
@@ -3422,7 +3442,7 @@ export class GameScene extends Phaser.Scene {
         fontStyle: 'bold'
       }).setOrigin(0.5).setDepth(361).setScrollFactor(0);
 
-      this.victoryBannerPrompt = this.add.text(320, 172, 'PULSA [ENTER], [E] O AVANZA AL EPÍLOGO JUGABLE: EL PRIMER AMANECER ▶', {
+      this.victoryBannerPrompt = this.add.text(vpX2D(320), vpY2D(172), 'PULSA [ENTER], [E] O AVANZA AL EPÍLOGO JUGABLE: EL PRIMER AMANECER ▶', {
         fontFamily: 'monospace',
         fontSize: '8.5px',
         color: '#ffffff',
@@ -3451,7 +3471,7 @@ export class GameScene extends Phaser.Scene {
       this.playerSprite.stop();
     }
 
-    this.gameOverContainer = this.add.container(320, 180).setDepth(450).setScrollFactor(0);
+    this.gameOverContainer = this.add.container(vpX2D(320), vpY2D(180)).setDepth(450).setScrollFactor(0);
 
     const dimBg = this.add.rectangle(0, 0, 640, 360, 0x05020a, 0.88).setInteractive();
     dimBg.on('pointerdown', (p: Phaser.Input.Pointer) => p.event.stopPropagation());
@@ -3926,7 +3946,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   private triggerShalemBalloon(text: string, durationMs: number = 3200): void {
-    this.shalemBalloonText.setText(text);
+    const cleanText = text
+      .replace(/📍|🌅|🌸/g, '❖')
+      .replace(/🐈‍⬛|🪞|🌿|🗡|🔔|⚔|🏹|🌑|🔥|🥈|⚡|🦁/g, '✦')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+    this.shalemBalloonText.setText(cleanText);
     this.shalemBalloonBg.setVisible(true);
     this.shalemBalloonText.setVisible(true);
     this.shalemBalloonTimer = durationMs;
@@ -4586,18 +4611,18 @@ export class GameScene extends Phaser.Scene {
       repeat: -1
     });
 
-    this.tutorialBannerBg = this.add.rectangle(320, 22, 530, 24, 0x12081f, 0.92)
+    this.tutorialBannerBg = this.add.rectangle(vpX2D(320), vpY2D(22), 530, 24, 0x12081f, 0.92)
       .setStrokeStyle(1.5, 0xffd700)
       .setDepth(340)
       .setScrollFactor(0);
-    this.tutorialBannerText = this.add.text(320, 22, 'ENTRENAMIENTO (PASO 1/4): Usa [WASD] para moverte en profundidad hacia el círculo dorado', {
+    this.tutorialBannerText = this.add.text(vpX2D(320), vpY2D(22), 'ENTRENAMIENTO (PASO 1/4): Usa [WASD] para moverte en profundidad hacia el círculo dorado', {
       fontFamily: 'Cinzel, monospace',
       fontSize: '8px',
       color: '#ffd700',
       fontStyle: 'bold'
     }).setOrigin(0.5).setDepth(341).setScrollFactor(0);
 
-    this.tutorialSkipPrompt = this.add.text(320, 40, '[ESC] o [ENTER]: Saltar Entrenamiento y combatir de inmediato', {
+    this.tutorialSkipPrompt = this.add.text(vpX2D(320), vpY2D(40), '[ESC] o [ENTER]: Saltar Entrenamiento y combatir de inmediato', {
       fontFamily: 'monospace',
       fontSize: '7.5px',
       color: '#bbaacc'
@@ -4729,6 +4754,37 @@ export class GameScene extends Phaser.Scene {
     this.scenarioProps = [];
     this.destructibleProps2D = [];
 
+    const spawnAdditiveHalo = (
+      hx: number,
+      hy: number,
+      w: number,
+      h: number,
+      tint: number,
+      alphaMin: number,
+      alphaMax: number,
+      depth: number,
+      flickerMs: number = 900
+    ) => {
+      if (!this.textures.exists('fx_light_glow_soft')) return;
+      const halo = this.add.image(hx, hy, 'fx_light_glow_soft')
+        .setDisplaySize(w, h)
+        .setTint(tint)
+        .setAlpha(alphaMin)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(depth);
+      this.tweens.add({
+        targets: halo,
+        alpha: alphaMax,
+        scaleX: halo.scaleX * 1.07,
+        scaleY: halo.scaleY * 1.07,
+        duration: flickerMs,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+      });
+      this.scenarioProps.push(halo);
+    };
+
     const addProp = (key: string, x: number, y: number, maxW: number, maxH: number, animate: boolean = true) => {
       if (!this.textures.exists(key)) return;
       // Subtle grounded contact shadow so no prop ever appears floating above cobblestones
@@ -4752,12 +4808,27 @@ export class GameScene extends Phaser.Scene {
         });
       }
       this.scenarioProps.push(shadow, spr);
+
+      // Dynamic 2D Additive Point-Light Halos & Ground Light Pools
+      if (key === 'prop_street_lamp') {
+        spawnAdditiveHalo(x, y - 66, 98, 98, 0xffb347, 0.28, 0.44, y + 6, 820);
+        spawnAdditiveHalo(x, y, 78, 24, 0xffaa44, 0.12, 0.20, y - 2.5, 820);
+      } else if (key === 'prop_great_pyre') {
+        spawnAdditiveHalo(x, y - 42, 175, 155, 0xff6e28, 0.36, 0.56, y + 8, 460);
+        spawnAdditiveHalo(x, y + 2, 130, 36, 0xff8833, 0.16, 0.28, y - 2.5, 460);
+      } else if (key === 'prop_soul_brazier') {
+        spawnAdditiveHalo(x, y - 30, 88, 88, 0x33e8ff, 0.24, 0.40, y + 5, 680);
+      } else if (key === 'prop_sanctuary_altar' || key === 'prop_sanctuary_cross') {
+        spawnAdditiveHalo(x, y - 26, 82, 68, 0xffd87c, 0.20, 0.34, y + 4, 980);
+      } else if (key === 'prop_mausoleum_facade') {
+        spawnAdditiveHalo(x, y - 46, 108, 108, 0x38d9e8, 0.20, 0.34, y + 4, 1100);
+      }
     };
 
     if (scenarioIndex === 1) {
       // Act I: Oakhaven 4-Subsector Multi-Zone Props firmly grounded on the y = 202..242 cobblestone belt
       // Subtle Old Oak Hill poetic label placed cleanly above Elowen's head against the ancient oak
-      const hillLabel = this.add.text(335, 136, '🌳 COLINA DEL VIEJO ROBLE', {
+      const hillLabel = this.add.text(335, 136, '❖ COLINA DEL VIEJO ROBLE ❖', {
         fontFamily: 'Cinzel, monospace',
         fontSize: '7.5px',
         color: '#c8ffaa',
@@ -4789,7 +4860,7 @@ export class GameScene extends Phaser.Scene {
       const barnLabel = this.add.text(
         145,
         254,
-        slabOpened ? '✓ RELIQUIA DE LYRA RECUPERADA' : '🗡 [E] LOSA DEL GRANERO (CAP. VIII)',
+        slabOpened ? '✦ RELIQUIA DE LYRA RECUPERADA' : '✦ [E] LOSA DEL GRANERO (CAP. VIII)',
         {
           fontFamily: 'Cinzel, monospace',
           fontSize: '7px',
@@ -4804,7 +4875,7 @@ export class GameScene extends Phaser.Scene {
       const saltTerrace = this.add.ellipse(220, 194, 126, 30, 0x322d3d, 0.92).setStrokeStyle(1.5, 0xc8c8ee).setDepth(174);
       const saltStep1 = this.add.rectangle(175, 208, 22, 8, 0x4b4656, 0.95).setStrokeStyle(1, 0x8b8698).setDepth(175);
       const saltStep2 = this.add.rectangle(195, 199, 22, 8, 0x4b4656, 0.95).setStrokeStyle(1, 0x8b8698).setDepth(175);
-      const saltLabel = this.add.text(220, 166, '🔔 CELDA DE SAL (CAP. VII)', {
+      const saltLabel = this.add.text(220, 166, '❖ CELDA DE SAL (CAP. VII) ❖', {
         fontFamily: 'Cinzel, monospace',
         fontSize: '7.5px',
         color: '#ffd700',
@@ -4845,7 +4916,7 @@ export class GameScene extends Phaser.Scene {
         const glass = this.add.rectangle(spec.x, spec.y - 32, 26, 52, 0x5c3485, 0.78)
           .setStrokeStyle(1, 0xe8c7ff)
           .setDepth(spec.y - 1);
-        const label = this.add.text(spec.x, spec.y - 70, `🪞 ESPEJO ${spec.index}/3`, {
+        const label = this.add.text(spec.x, spec.y - 70, `✦ ESPEJO ${spec.index}/3`, {
           fontFamily: 'Cinzel, monospace',
           fontSize: '7px',
           color: '#f3d9ff',
@@ -4883,7 +4954,7 @@ export class GameScene extends Phaser.Scene {
       addProp('prop_mausoleum_facade', 1075, 220, 92, 120, true);
     } else if (scenarioIndex === 6) {
       // Epílogo Jugable (Cap. XX): Oakhaven en el Primer Amanecer + 16 Flores Blancas en la Colina del Viejo Roble
-      const dawnHillLabel = this.add.text(335, 134, '🌸 COLINA DEL VIEJO ROBLE · EL PRIMER AMANECER', {
+      const dawnHillLabel = this.add.text(335, 134, '❖ COLINA DEL VIEJO ROBLE · EL PRIMER AMANECER ❖', {
         fontFamily: 'Cinzel, monospace',
         fontSize: '7.5px',
         color: '#fff4bd',
@@ -5065,6 +5136,10 @@ export class GameScene extends Phaser.Scene {
     this.comboChain2D.reset();
     this.perfectDodge2D.reset();
     this.destructibleProps2D = [];
+    this.weatherEmitter2D?.destroy();
+    this.weatherEmitter2D = undefined;
+    this.parallaxElements2D.forEach(el => el.destroy());
+    this.parallaxElements2D = [];
     if (this.initialScenario === 1) {
       this.canonEvents2D.resetAll();
     }
@@ -5088,8 +5163,9 @@ export class GameScene extends Phaser.Scene {
     }
     this.hasAlbaGrisAwakened = false;
 
-    // Populate official visual pack props for this scenario
+    // Populate official visual pack props + dynamic additive lighting halos for this scenario
     this.spawnScenarioProps(scenarioIndex);
+    this.configureParallaxAndWeather2D(scenarioIndex);
 
     const introLines = this.dialogues.getScenarioIntro(this.currentScenario);
 
@@ -5280,7 +5356,7 @@ export class GameScene extends Phaser.Scene {
 
       // Radiant Golden Credits Arch in the eastern meadow
       this.exitPortalZone = this.add.ellipse(1015, 248, 56, 18, 0xffdf7a, 0.72).setDepth(220);
-      this.exitPortalMarker = this.add.text(1015, 202, '🌅 CRÉDITOS FINALES ▶\n[E] o [ENTER] para culminar', {
+      this.exitPortalMarker = this.add.text(1015, 202, '✦ CRÉDITOS FINALES ▶\n[E] o [ENTER] para culminar', {
         fontFamily: 'Cinzel, monospace',
         fontSize: '8px',
         color: '#fff8cc',
@@ -5351,5 +5427,117 @@ export class GameScene extends Phaser.Scene {
       this.playAnimSafe(this.elowenSprite, 'elowen_speak');
     }
     this.update2DSectorCompass();
+  }
+
+  /**
+   * Spawns multi-plane 2.5D parallax mist/sky layers & Act-specific weather particles
+   * (night rain, furnace embers, river storm, golden Londinium incense, abyssal void flames, dawn blossom petals).
+   */
+  private configureParallaxAndWeather2D(scenarioIndex: number): void {
+    this.weatherEmitter2D?.destroy();
+    this.weatherEmitter2D = undefined;
+    this.parallaxElements2D.forEach(el => el.destroy());
+    this.parallaxElements2D = [];
+
+    const isDawn = scenarioIndex === 6;
+
+    // 1. Mid-Sky Drifting Parallax Mist Ribbon (scrollFactor 0.58 -> slower than world architecture)
+    for (let i = 0; i < 6; i++) {
+      const mx = 110 + i * 195;
+      const my = 48 + (i % 3) * 24;
+      const cloud = this.add.image(mx, my, 'particle_fog')
+        .setDisplaySize(190, 44)
+        .setTint(isDawn ? 0xffe6b3 : (scenarioIndex === 4 ? 0xd4a8ff : 0x8ea4cc))
+        .setAlpha(isDawn ? 0.16 : 0.22)
+        .setScrollFactor(0.58, 1)
+        .setDepth(2);
+      this.parallaxElements2D.push(cloud);
+    }
+
+    // 2. Foreground Parallax Ground Mist & Silhouette Framing Piers (scrollFactor 1.24 -> faster than player!)
+    for (let i = 0; i < 5; i++) {
+      const fx = 140 + i * 260;
+      const fgMist = this.add.image(fx, 322, 'particle_fog')
+        .setDisplaySize(240, 48)
+        .setTint(isDawn ? 0xffdfa0 : (scenarioIndex === 5 ? 0x6b2899 : 0x4b5878))
+        .setAlpha(isDawn ? 0.12 : 0.20)
+        .setScrollFactor(1.24, 1)
+        .setDepth(318);
+      this.parallaxElements2D.push(fgMist);
+    }
+
+    // Subtle Elowen sacred halo in Act V & Playable Dawn Epilogue
+    if ((scenarioIndex === 5 || scenarioIndex === 6) && this.textures.exists('fx_light_glow_soft')) {
+      const ex = scenarioIndex === 6 ? 325 : 150;
+      const ey = scenarioIndex === 6 ? 176 : 242;
+      const eHalo = this.add.image(ex, ey, 'fx_light_glow_soft')
+        .setDisplaySize(110, 110)
+        .setTint(scenarioIndex === 6 ? 0xfff0b0 : 0xbbe8ff)
+        .setAlpha(0.32)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(ey + 25);
+      this.parallaxElements2D.push(eHalo);
+    }
+
+    // 3. Act-Specific Weather Particle Emitter spanning full 1180px panoramic width
+    if ((scenarioIndex === 1 || scenarioIndex === 3) && this.textures.exists('particle_rain_streak')) {
+      const isStorm = scenarioIndex === 3;
+      this.weatherEmitter2D = this.add.particles(0, 0, 'particle_rain_streak', {
+        x: { min: 0, max: WORLD_2D.WIDTH + 120 },
+        y: -12,
+        speedX: isStorm ? { min: -95, max: -65 } : { min: -48, max: -28 },
+        speedY: isStorm ? { min: 250, max: 320 } : { min: 200, max: 260 },
+        alpha: { start: isStorm ? 0.42 : 0.30, end: 0.05 },
+        scale: { start: 1.0, end: 0.85 },
+        lifespan: 1350,
+        frequency: isStorm ? 28 : 45
+      }).setDepth(316);
+    } else if (scenarioIndex === 2) {
+      this.weatherEmitter2D = this.add.particles(0, 0, 'particle_ember', {
+        x: { min: 40, max: WORLD_2D.WIDTH - 40 },
+        y: { min: 210, max: 320 },
+        speedX: { min: -18, max: 22 },
+        speedY: { min: -28, max: -62 },
+        alpha: { start: 0.72, end: 0 },
+        scale: { start: 0.9, end: 0.2 },
+        lifespan: 2200,
+        frequency: 95
+      }).setDepth(316);
+    } else if (scenarioIndex === 4 && this.textures.exists('particle_dawn_petal')) {
+      this.weatherEmitter2D = this.add.particles(0, 0, 'particle_dawn_petal', {
+        x: { min: 30, max: WORLD_2D.WIDTH - 30 },
+        y: { min: 50, max: 300 },
+        speedX: { min: -12, max: 16 },
+        speedY: { min: -18, max: -6 },
+        tint: 0xffd45e,
+        alpha: { start: 0.65, end: 0 },
+        scale: { start: 0.85, end: 0.25 },
+        lifespan: 3000,
+        frequency: 110
+      }).setDepth(316);
+    } else if (scenarioIndex === 5 && this.textures.exists('particle_dark_flame')) {
+      this.weatherEmitter2D = this.add.particles(0, 0, 'particle_dark_flame', {
+        x: { min: 30, max: WORLD_2D.WIDTH - 30 },
+        y: { min: 220, max: 335 },
+        speedX: { min: -14, max: 14 },
+        speedY: { min: -35, max: -75 },
+        alpha: { start: 0.68, end: 0 },
+        scale: { start: 0.95, end: 0.2 },
+        lifespan: 2400,
+        frequency: 85
+      }).setDepth(316);
+    } else if (scenarioIndex === 6 && this.textures.exists('particle_dawn_petal')) {
+      this.weatherEmitter2D = this.add.particles(0, 0, 'particle_dawn_petal', {
+        x: { min: 0, max: WORLD_2D.WIDTH },
+        y: { min: 15, max: 185 },
+        speedX: { min: 18, max: 42 },
+        speedY: { min: 16, max: 36 },
+        alpha: { start: 0.9, end: 0.1 },
+        scale: { start: 1.0, end: 0.45 },
+        rotate: { min: 0, max: 180 },
+        lifespan: 3600,
+        frequency: 95
+      }).setDepth(316);
+    }
   }
 }

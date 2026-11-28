@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { CharacterId } from '../../domain/character/CharacterEnums';
 import { WebAudioSoundAdapter } from '../../infrastructure/audio/WebAudioSoundAdapter';
+import { configureHDSceneCamera } from '../ui/CrispTextPipeline';
 
 export class StoryIntroScene extends Phaser.Scene {
   private characterId: CharacterId = 'thomas';
@@ -45,6 +46,7 @@ export class StoryIntroScene extends Phaser.Scene {
   }
 
   public create(): void {
+    configureHDSceneCamera(this);
     // 1. Atmospheric Gothic Background
     this.add.image(320, 180, 'bg_oakhaven').setDisplaySize(640, 360).setAlpha(0.45);
 
@@ -148,7 +150,7 @@ export class StoryIntroScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-ESC', () => this.startGameplay());
     this.input.keyboard?.on('keydown-S', () => this.startGameplay());
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (pointer.y > 200) {
+      if (pointer.worldY > 200) {
         this.handleAdvance();
       }
     });

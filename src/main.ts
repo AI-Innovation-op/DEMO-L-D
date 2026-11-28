@@ -11,6 +11,13 @@ import { InventoryScene } from './presentation/scenes/InventoryScene';
 import { CharacterDialogueScene } from './presentation/scenes/CharacterDialogueScene';
 import { CinematicScene } from './presentation/scenes/CinematicScene';
 import { Oakhaven3DExperience } from './presentation/three/Oakhaven3DExperience';
+import {
+  HD_CANVAS_HEIGHT,
+  HD_CANVAS_WIDTH,
+  installCrispHDTextPipeline
+} from './presentation/ui/CrispTextPipeline';
+
+installCrispHDTextPipeline(Phaser);
 
 let phaserGame: Phaser.Game | null = null;
 let three3dExperience: Oakhaven3DExperience | null = null;
@@ -152,11 +159,12 @@ export function exit3DPrototype(startDirect2D: boolean = false, scenarioIndex?: 
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
-  width: 640,
-  height: 360,
+  width: HD_CANVAS_WIDTH,
+  height: HD_CANVAS_HEIGHT,
   parent: 'game-container',
-  pixelArt: true,
-  roundPixels: true,
+  pixelArt: false,
+  antialias: true,
+  roundPixels: false,
   backgroundColor: '#0b0c10',
   scale: {
     mode: Phaser.Scale.FIT,

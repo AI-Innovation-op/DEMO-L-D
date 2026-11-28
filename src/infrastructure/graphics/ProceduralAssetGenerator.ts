@@ -66,6 +66,47 @@ export class ProceduralAssetGenerator {
       }
     }
 
+    if (!textures.exists('fx_light_glow_soft')) {
+      const c = textures.createCanvas('fx_light_glow_soft', 128, 128);
+      if (c) {
+        const ctx = c.getContext();
+        const grad = ctx.createRadialGradient(64, 64, 3, 64, 64, 62);
+        grad.addColorStop(0, 'rgba(255, 250, 230, 0.92)');
+        grad.addColorStop(0.28, 'rgba(255, 225, 175, 0.48)');
+        grad.addColorStop(0.65, 'rgba(255, 195, 130, 0.14)');
+        grad.addColorStop(1, 'rgba(255, 180, 110, 0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 128, 128);
+        c.refresh();
+      }
+    }
+
+    if (!textures.exists('particle_rain_streak')) {
+      const c = textures.createCanvas('particle_rain_streak', 5, 16);
+      if (c) {
+        const ctx = c.getContext();
+        ctx.strokeStyle = 'rgba(185, 212, 255, 0.72)';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(4, 0);
+        ctx.lineTo(1, 15);
+        ctx.stroke();
+        c.refresh();
+      }
+    }
+
+    if (!textures.exists('particle_dawn_petal')) {
+      const c = textures.createCanvas('particle_dawn_petal', 6, 6);
+      if (c) {
+        const ctx = c.getContext();
+        ctx.fillStyle = '#fff9e6';
+        ctx.fillRect(1, 1, 4, 3);
+        ctx.fillStyle = '#ffd97d';
+        ctx.fillRect(2, 2, 2, 2);
+        c.refresh();
+      }
+    }
+
     // ==========================================
     // 1. UI PORTRAITS (Shalem, Thomas, Khaterine)
     // ==========================================
@@ -766,13 +807,233 @@ export class ProceduralAssetGenerator {
       ctx.closePath();
       ctx.fill();
 
-      // Iron mullions & leaded crossbars
+      // Iron mullions, diamond leadwork & gothic stone archivolts
+      ctx.strokeStyle = 'rgba(20, 15, 28, 0.65)';
+      ctx.lineWidth = 1;
+      for (let dy = topY + 6; dy < topY + h - 4; dy += 8) {
+        ctx.beginPath();
+        ctx.moveTo(cx - halfW + 1, dy);
+        ctx.lineTo(cx + halfW - 1, dy + 6);
+        ctx.moveTo(cx + halfW - 1, dy);
+        ctx.lineTo(cx - halfW + 1, dy + 6);
+        ctx.stroke();
+      }
       ctx.fillStyle = '#14111c';
       ctx.fillRect(cx - 1, topY + 2, 2, h - 2);
       ctx.fillRect(cx - halfW, topY + Math.floor(h * 0.45), w, 2);
       ctx.fillRect(cx - halfW, topY + Math.floor(h * 0.72), w, 2);
-      ctx.fillStyle = '#312a40';
+      ctx.strokeStyle = '#524969';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(cx - halfW - 2, topY + h);
+      ctx.lineTo(cx - halfW - 2, topY + archH);
+      ctx.quadraticCurveTo(cx - halfW - 2, topY - 2, cx, topY - 3);
+      ctx.quadraticCurveTo(cx + halfW + 2, topY - 2, cx + halfW + 2, topY + archH);
+      ctx.lineTo(cx + halfW + 2, topY + h);
+      ctx.stroke();
+      ctx.fillStyle = '#3d3552';
       ctx.fillRect(cx - halfW - 3, topY + h, w + 6, 3);
+    };
+
+    const drawAshlarStoneWall = (
+      ctx: CanvasRenderingContext2D,
+      x: number,
+      y: number,
+      w: number,
+      h: number,
+      stoneA: string,
+      stoneB: string,
+      mortar: string,
+      bevelHi: string
+    ) => {
+      ctx.fillStyle = mortar;
+      ctx.fillRect(x, y, w, h);
+      const bh = 7;
+      const bw = 15;
+      let row = 0;
+      for (let py = y; py < y + h; py += bh) {
+        const curH = Math.min(bh - 1, y + h - py);
+        if (curH <= 0) break;
+        const off = (row % 2) * 7;
+        for (let px = x - off; px < x + w; px += bw) {
+          const sx = Math.max(x, px);
+          const ex = Math.min(x + w, px + bw - 1);
+          const curW = ex - sx;
+          if (curW <= 1) continue;
+          const n = seeded(row * 53 + px * 0.71);
+          ctx.fillStyle = n > 0.48 ? stoneA : stoneB;
+          ctx.fillRect(sx, py, curW, curH);
+          if (n > 0.35) {
+            ctx.fillStyle = bevelHi;
+            ctx.globalAlpha = 0.35;
+            ctx.fillRect(sx, py, curW - 1, 1);
+            ctx.globalAlpha = 1;
+          }
+        }
+        row++;
+      }
+      // Corner quoins (heavy dressed stones on left & right edges)
+      for (let qy = y; qy < y + h - 4; qy += 14) {
+        const qh = Math.min(10, y + h - qy);
+        drawShadedRect(ctx, x, qy, 6, qh, stoneA, bevelHi, mortar);
+        drawShadedRect(ctx, x + w - 6, qy, 6, qh, stoneA, bevelHi, mortar);
+      }
+    };
+
+    const drawShingledGableRoof = (
+      ctx: CanvasRenderingContext2D,
+      leftX: number,
+      baseY: number,
+      peakX: number,
+      peakY: number,
+      rightX: number,
+      roofBase: string,
+      tileLight: string,
+      ridgeHighlight: string
+    ) => {
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(leftX, baseY);
+      ctx.lineTo(peakX, peakY);
+      ctx.lineTo(rightX, baseY);
+      ctx.closePath();
+      ctx.fillStyle = roofBase;
+      ctx.fill();
+      ctx.clip();
+
+      // Layered pixel-art slate shingle rows
+      for (let ry = peakY + 3; ry < baseY; ry += 4) {
+        ctx.fillStyle = 'rgba(6, 7, 14, 0.55)';
+        ctx.fillRect(leftX, ry, rightX - leftX, 1);
+        const shift = ((ry / 4) % 2) * 4;
+        for (let rx = leftX + shift; rx < rightX; rx += 8) {
+          if (seeded(ry * 19 + rx * 0.9) > 0.35) {
+            ctx.fillStyle = tileLight;
+            ctx.globalAlpha = 0.36;
+            ctx.fillRect(rx, ry - 2, 6, 2);
+            ctx.globalAlpha = 1;
+          }
+        }
+      }
+      ctx.restore();
+
+      // Heavy timber/slate gable eaves
+      ctx.strokeStyle = ridgeHighlight;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(leftX, baseY);
+      ctx.lineTo(peakX, peakY);
+      ctx.lineTo(rightX, baseY);
+      ctx.stroke();
+    };
+
+    const drawAncientOakPixelArt = (
+      ctx: CanvasRenderingContext2D,
+      cx: number,
+      groundY: number,
+      isDawn: boolean
+    ) => {
+      const barkDark = isDawn ? '#2a1a13' : '#18100c';
+      const barkMid = isDawn ? '#462c20' : '#291c15';
+      const barkLight = isDawn ? '#6e4934' : '#3f2d23';
+
+      // Flared gnarly root buttresses gripping the hill
+      const roots = [-34, -18, -6, 8, 22, 36];
+      roots.forEach((rx, idx) => {
+        ctx.strokeStyle = idx % 2 === 0 ? barkMid : barkDark;
+        ctx.lineWidth = idx === 2 || idx === 3 ? 6 : 4;
+        ctx.beginPath();
+        ctx.moveTo(cx + (rx * 0.25), groundY - 26);
+        ctx.quadraticCurveTo(cx + rx * 0.65, groundY - 8, cx + rx, groundY + 4);
+        ctx.stroke();
+      });
+
+      // Twisted ancient trunk with vertical bark ridges & hollow knot
+      ctx.fillStyle = barkDark;
+      ctx.fillRect(cx - 14, groundY - 78, 28, 66);
+      for (let bx = -12; bx <= 10; bx += 4) {
+        ctx.fillStyle = seeded(bx * 13) > 0.45 ? barkMid : barkLight;
+        ctx.fillRect(cx + bx, groundY - 76, 2, 62);
+      }
+      // Hollow knot
+      ctx.fillStyle = '#0d0807';
+      ctx.fillRect(cx - 3, groundY - 48, 6, 8);
+      ctx.fillStyle = barkLight;
+      ctx.fillRect(cx - 4, groundY - 49, 8, 1);
+
+      // Spreading primary & secondary boughs
+      const boughs = [
+        { x1: cx - 6, y1: groundY - 68, x2: cx - 54, y2: groundY - 96, w: 6 },
+        { x1: cx + 6, y1: groundY - 70, x2: cx + 56, y2: groundY - 98, w: 6 },
+        { x1: cx - 2, y1: groundY - 76, x2: cx - 28, y2: groundY - 114, w: 5 },
+        { x1: cx + 4, y1: groundY - 76, x2: cx + 30, y2: groundY - 116, w: 5 },
+        { x1: cx, y1: groundY - 78, x2: cx, y2: groundY - 122, w: 5 }
+      ];
+      boughs.forEach(b => {
+        ctx.strokeStyle = barkDark;
+        ctx.lineWidth = b.w + 1;
+        ctx.beginPath();
+        ctx.moveTo(b.x1, b.y1);
+        ctx.quadraticCurveTo((b.x1 + b.x2) * 0.5, b.y1 - 12, b.x2, b.y2);
+        ctx.stroke();
+        ctx.strokeStyle = barkLight;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(b.x1, b.y1 - 1);
+        ctx.quadraticCurveTo((b.x1 + b.x2) * 0.5, b.y1 - 13, b.x2, b.y2 - 1);
+        ctx.stroke();
+      });
+
+      // Multi-tiered pixel-clustered oak canopy (4 tonal tiers + pixel leaf stippling, zero flat ovals!)
+      const leafTiers = isDawn
+        ? ['#1f3b28', '#315e3b', '#4d874b', '#87bf67', '#d8f099']
+        : ['#101c18', '#1b2e24', '#2a4432', '#3f5e42', '#6c8c68'];
+
+      const clusterCenters = [
+        { x: cx - 56, y: groundY - 94, r: 22 },
+        { x: cx + 56, y: groundY - 94, r: 22 },
+        { x: cx - 34, y: groundY - 106, r: 26 },
+        { x: cx + 34, y: groundY - 106, r: 26 },
+        { x: cx, y: groundY - 104, r: 30 },
+        { x: cx - 18, y: groundY - 120, r: 24 },
+        { x: cx + 18, y: groundY - 120, r: 24 },
+        { x: cx, y: groundY - 128, r: 22 }
+      ];
+
+      // Under-shadow foliage mass
+      clusterCenters.forEach((cc, idx) => {
+        for (let p = 0; p < 26; p++) {
+          const ang = seeded(idx * 31 + p * 7.1) * Math.PI * 2;
+          const dist = seeded(idx * 17 + p * 3.7) * cc.r;
+          const lx = Math.round(cc.x + Math.cos(ang) * dist * 1.35);
+          const ly = Math.round(cc.y + Math.sin(ang) * dist * 0.78);
+          const tierIdx = ly < cc.y - 6 ? 3 : (ly < cc.y + 2 ? 2 : (ly < cc.y + 8 ? 1 : 0));
+          ctx.fillStyle = leafTiers[tierIdx];
+          ctx.fillRect(lx - 4, ly - 3, 8, 5);
+          ctx.fillRect(lx - 2, ly - 4, 4, 7);
+          // Rim-lit top pixel clusters
+          if (tierIdx >= 2 && seeded(p * 19 + idx) > 0.45) {
+            ctx.fillStyle = leafTiers[4];
+            ctx.fillRect(lx - 2, ly - 4, 3, 2);
+          }
+          // Blooming white dawn blossoms in the canopy during Epilogue!
+          if (isDawn && seeded(p * 41 + idx * 13) > 0.84) {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(lx, ly - 2, 2, 2);
+          }
+        }
+      });
+
+      // Hanging willow/moss strands beneath outer boughs
+      ctx.fillStyle = isDawn ? 'rgba(115, 168, 98, 0.65)' : 'rgba(52, 82, 64, 0.65)';
+      for (let vx = cx - 64; vx <= cx + 64; vx += 9) {
+        if (Math.abs(vx - cx) < 16) continue;
+        const vLen = 6 + Math.floor(seeded(vx * 3.3) * 12);
+        const startY = groundY - 86 + Math.floor(Math.abs(vx - cx) * 0.12);
+        for (let vy = 0; vy < vLen; vy += 2) {
+          ctx.fillRect(vx, startY + vy, 1, 2);
+        }
+      }
     };
 
     const drawPerspectiveCobblestones = (
@@ -791,36 +1052,49 @@ export class ProceduralAssetGenerator {
       ctx.fillStyle = floorGrad;
       ctx.fillRect(0, HORIZON_Y, BG_W, BG_H - HORIZON_Y);
 
-      // Perspective horizontal stone courses (tighter near horizon, wider in foreground)
+      // Perspective horizontal & vertical stone courses with crisp bevels and mortar seams
       let y = HORIZON_Y + 4;
       let row = 0;
       while (y < BG_H) {
-        const rowH = Math.round(7 + row * 1.45);
-        const stoneW = Math.round(20 + row * 3.6);
+        const rowH = Math.round(6 + row * 1.35);
+        const stoneW = Math.round(16 + row * 3.1);
         const offset = (row % 2) * Math.floor(stoneW / 2);
 
         for (let x = -stoneW; x < BG_W + stoneW; x += stoneW) {
           const sx = x + offset;
           const r = seeded(row * 97 + x * 0.37);
-          ctx.fillStyle = r > 0.55 ? stoneA : stoneB;
-          ctx.globalAlpha = 0.28 + r * 0.25;
+          ctx.fillStyle = r > 0.52 ? stoneA : stoneB;
+          ctx.globalAlpha = 0.42 + r * 0.32;
           ctx.fillRect(sx + 1, y + 1, stoneW - 2, rowH - 2);
-          ctx.globalAlpha = 0.22;
+
+          // Top & left stone bevel highlight
+          ctx.globalAlpha = 0.28;
           ctx.fillStyle = curbHighlight;
           ctx.fillRect(sx + 1, y + 1, stoneW - 3, 1);
+          ctx.fillRect(sx + 1, y + 1, 1, Math.max(1, rowH - 3));
+
+          // Vertical mortar joint
+          ctx.globalAlpha = 0.72;
+          ctx.fillStyle = seamColor;
+          ctx.fillRect(sx, y, 1, rowH);
         }
-        ctx.globalAlpha = 1;
+        ctx.globalAlpha = 0.82;
         ctx.fillStyle = seamColor;
         ctx.fillRect(0, y, BG_W, 1);
+        ctx.globalAlpha = 1;
         y += rowH;
         row++;
       }
 
-      // Grounded stone curb separating architecture from walkable belt
+      // Grounded dressed-stone curb separating architecture from walkable belt
       ctx.fillStyle = curbColor;
       ctx.fillRect(0, HORIZON_Y - 2, BG_W, 5);
       ctx.fillStyle = curbHighlight;
       ctx.fillRect(0, HORIZON_Y - 2, BG_W, 1);
+      ctx.fillStyle = seamColor;
+      for (let cx = 0; cx < BG_W; cx += 24) {
+        ctx.fillRect(cx, HORIZON_Y - 2, 1, 5);
+      }
     };
 
     const drawIronFence = (ctx: CanvasRenderingContext2D, x1: number, x2: number, baseY: number) => {
@@ -854,61 +1128,67 @@ export class ProceduralAssetGenerator {
       litWindows: boolean
     ) => {
       const topY = HORIZON_Y - wallH;
-      // Stone lower foundation & plaster upper wall
-      drawShadedRect(ctx, x, topY, w, wallH, '#181a24', '#272b3b', '#0d0e14');
-      drawShadedRect(ctx, x, HORIZON_Y - 24, w, 24, '#20222f', '#313547', '#10121a');
+      // Plastered upper timber frame + Ashlar stone lower foundation
+      drawShadedRect(ctx, x, topY, w, wallH, '#211f2e', '#323047', '#100e18');
+      drawAshlarStoneWall(ctx, x, HORIZON_Y - 28, w, 28, '#26293b', '#1c1f2e', '#0d0f17', '#4b5270');
 
-      // Half-timbered oak beams
-      ctx.fillStyle = '#100d12';
+      // Half-timbered oak beams + diagonal Tudor cross-bracing
+      ctx.fillStyle = '#140f14';
       ctx.fillRect(x, topY, w, 3);
       ctx.fillRect(x, topY + Math.floor(wallH * 0.48), w, 3);
       ctx.fillRect(x + 3, topY, 3, wallH);
       ctx.fillRect(x + w - 6, topY, 3, wallH);
       ctx.fillRect(x + Math.floor(w / 2) - 1, topY, 3, wallH);
 
-      // Steep gothic slate gable roof
-      ctx.fillStyle = '#141724';
-      ctx.beginPath();
-      ctx.moveTo(x - 8, topY + 2);
-      ctx.lineTo(x + w / 2, topY - roofH);
-      ctx.lineTo(x + w + 8, topY + 2);
-      ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = '#32374f';
+      ctx.strokeStyle = '#171117';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(x - 8, topY + 2);
-      ctx.lineTo(x + w / 2, topY - roofH);
-      ctx.lineTo(x + w + 8, topY + 2);
+      ctx.moveTo(x + 5, topY + 3);
+      ctx.lineTo(x + Math.floor(w * 0.24), topY + Math.floor(wallH * 0.48));
+      ctx.moveTo(x + w - 5, topY + 3);
+      ctx.lineTo(x + Math.floor(w * 0.76), topY + Math.floor(wallH * 0.48));
       ctx.stroke();
 
-      // Stone chimney
-      drawShadedRect(ctx, x + Math.floor(w * 0.72), topY - roofH + 8, 10, Math.max(18, roofH - 4), '#232635', '#373c52', '#10121b');
+      // Wooden arched cottage door with iron strap hinges
+      const doorX = x + Math.floor(w * 0.5) - 7;
+      drawShadedRect(ctx, doorX, HORIZON_Y - 22, 14, 22, '#2b1b15', '#472e24', '#120a08');
+      ctx.fillStyle = '#5c6278';
+      ctx.fillRect(doorX + 2, HORIZON_Y - 17, 10, 1);
+      ctx.fillRect(doorX + 2, HORIZON_Y - 9, 10, 1);
+
+      // Stone chimney with brick courses & chimney pot
+      const chimX = x + Math.floor(w * 0.72);
+      const chimY = topY - roofH + 6;
+      drawAshlarStoneWall(ctx, chimX, chimY, 12, Math.max(20, roofH - 2), '#2b2e42', '#1f2233', '#0f111a', '#525878');
+      drawShadedRect(ctx, chimX - 1, chimY - 3, 14, 4, '#383d54', '#586080', '#171a26');
+
+      // Steep gothic shingled slate gable roof
+      drawShingledGableRoof(ctx, x - 8, topY + 2, x + w / 2, topY - roofH, x + w + 8, '#151929', '#384163', '#49537a');
 
       // Mullioned arched windows (muted warm amber candle glow, never flat neon yellow!)
-      const winCount = w >= 85 ? 2 : 1;
+      const winCount = w >= 76 ? 2 : 1;
       for (let i = 0; i < winCount; i++) {
-        const wx = winCount === 2 ? x + Math.floor(w * (i === 0 ? 0.3 : 0.7)) : x + Math.floor(w * 0.5);
+        const wx = winCount === 2 ? x + Math.floor(w * (i === 0 ? 0.28 : 0.72)) : x + Math.floor(w * 0.5);
         if (litWindows) {
           drawGothicLancetWindow(
             ctx,
             wx,
-            topY + 14,
-            14,
-            24,
+            topY + 12,
+            15,
+            25,
             '#8d5a2b',
-            '#d69848',
-            'rgba(220, 145, 55, 0.24)'
+            '#e09e46',
+            'rgba(235, 160, 65, 0.28)'
           );
         } else {
           drawGothicLancetWindow(
             ctx,
             wx,
-            topY + 14,
-            14,
-            24,
+            topY + 12,
+            15,
+            25,
             '#182033',
-            '#24304a',
+            '#2b3959',
             'rgba(90, 120, 175, 0.14)'
           );
         }
@@ -977,61 +1257,59 @@ export class ProceduralAssetGenerator {
           drawCypressOrWillow(ctx, tx, HORIZON_Y - 12, th, '#0c101b');
         }
 
-        // SUB-SECTOR 1 (x: 0..235): Parroquia de San Jude (Gothic Stone Church & Bellspire)
-        drawShadedRect(ctx, 24, 92, 168, HORIZON_Y - 92, '#1b1d2b', '#2b2f45', '#0e1018');
+        // SUB-SECTOR 1 (x: 0..235): Parroquia de San Jude (Ashlar Stone Gothic Church & Shingled Bellspire)
+        drawAshlarStoneWall(ctx, 24, 92, 168, HORIZON_Y - 92, '#24273b', '#1a1d2c', '#0d0f18', '#484f70');
         // Stepped stone buttresses
-        drawShadedRect(ctx, 18, 120, 12, HORIZON_Y - 120, '#222536', '#363b54', '#10121c');
-        drawShadedRect(ctx, 186, 120, 12, HORIZON_Y - 120, '#222536', '#363b54', '#10121c');
-        // Church pitched roof + gothic spire + cross
-        ctx.fillStyle = '#141724';
+        drawAshlarStoneWall(ctx, 16, 118, 14, HORIZON_Y - 118, '#2b2f47', '#1f2234', '#0e101a', '#586085');
+        drawAshlarStoneWall(ctx, 186, 118, 14, HORIZON_Y - 118, '#2b2f47', '#1f2234', '#0e101a', '#586085');
+        // Church shingled pitched roof + gothic spire + cross
+        drawShingledGableRoof(ctx, 12, 94, 108, 42, 204, '#141828', '#363f61', '#505c85');
+        drawShingledGableRoof(ctx, 94, 48, 108, 12, 122, '#1b2036', '#444f78', '#6673a3');
+        ctx.fillStyle = '#e0c47a';
+        ctx.fillRect(107, 3, 2, 13);
+        ctx.fillRect(103, 7, 10, 2);
+        // Ornate Stained-Glass Rose Window + Twin Lancets
+        ctx.fillStyle = '#0d0a14';
         ctx.beginPath();
-        ctx.moveTo(14, 94);
-        ctx.lineTo(108, 44);
-        ctx.lineTo(202, 94);
-        ctx.closePath();
+        ctx.arc(108, 74, 13, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = '#1b1f30';
+        ctx.fillStyle = '#7c3f94';
         ctx.beginPath();
-        ctx.moveTo(96, 48);
-        ctx.lineTo(108, 14);
-        ctx.lineTo(120, 48);
-        ctx.closePath();
+        ctx.arc(108, 74, 9.5, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = '#c8b27c';
-        ctx.fillRect(107, 4, 2, 14);
-        ctx.fillRect(103, 8, 10, 2);
-        // Rose window + twin stained glass lancets
-        ctx.fillStyle = '#100c18';
-        ctx.beginPath();
-        ctx.arc(108, 76, 11, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#6b3b7d';
-        ctx.beginPath();
-        ctx.arc(108, 76, 8, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#d4af37';
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = '#e0ba58';
+        ctx.lineWidth = 1.2;
         ctx.stroke();
-        drawGothicLancetWindow(ctx, 62, 116, 18, 44, '#7d4d25', '#d99a44', 'rgba(235, 160, 65, 0.28)');
-        drawGothicLancetWindow(ctx, 154, 116, 18, 44, '#7d4d25', '#d99a44', 'rgba(235, 160, 65, 0.28)');
-        // Pointed gothic parish doorway
-        ctx.fillStyle = '#0b0912';
+        for (let a = 0; a < 4; a++) {
+          const rad = (a * Math.PI) / 4;
+          ctx.beginPath();
+          ctx.moveTo(108 - Math.cos(rad) * 9, 74 - Math.sin(rad) * 9);
+          ctx.lineTo(108 + Math.cos(rad) * 9, 74 + Math.sin(rad) * 9);
+          ctx.stroke();
+        }
+        drawGothicLancetWindow(ctx, 60, 116, 20, 46, '#7d4d25', '#e3a146', 'rgba(235, 160, 65, 0.30)');
+        drawGothicLancetWindow(ctx, 156, 116, 20, 46, '#7d4d25', '#e3a146', 'rgba(235, 160, 65, 0.30)');
+        // Pointed gothic parish doorway with recessed oak doors
+        ctx.fillStyle = '#0c0913';
         ctx.beginPath();
-        ctx.moveTo(92, HORIZON_Y);
-        ctx.lineTo(92, 158);
-        ctx.quadraticCurveTo(108, 134, 124, 158);
-        ctx.lineTo(124, HORIZON_Y);
+        ctx.moveTo(91, HORIZON_Y);
+        ctx.lineTo(91, 158);
+        ctx.quadraticCurveTo(108, 132, 125, 158);
+        ctx.lineTo(125, HORIZON_Y);
         ctx.closePath();
         ctx.fill();
-        ctx.strokeStyle = '#3a3f59';
+        ctx.strokeStyle = '#52597a';
         ctx.lineWidth = 2;
         ctx.stroke();
+        ctx.fillStyle = '#241612';
+        ctx.fillRect(96, 160, 24, HORIZON_Y - 160);
+        ctx.fillStyle = '#110b09';
+        ctx.fillRect(107, 160, 2, HORIZON_Y - 160);
 
-        // SUB-SECTOR 2 (x: 235..435): Colina del Viejo Roble (Ancient Moonlit Oak & Mossy Rise)
-        // Soft moonbeam shaft over the Old Oak
+        // SUB-SECTOR 2 (x: 235..435): Colina del Viejo Roble (Pixel-Art Ancient Oak & Mossy Rise)
         const oakBeam = ctx.createLinearGradient(340, 30, 340, 212);
         oakBeam.addColorStop(0, 'rgba(205, 225, 255, 0.04)');
-        oakBeam.addColorStop(0.7, 'rgba(205, 225, 255, 0.14)');
+        oakBeam.addColorStop(0.7, 'rgba(205, 225, 255, 0.16)');
         oakBeam.addColorStop(1, 'rgba(205, 225, 255, 0.02)');
         ctx.fillStyle = oakBeam;
         ctx.beginPath();
@@ -1042,35 +1320,7 @@ export class ProceduralAssetGenerator {
         ctx.closePath();
         ctx.fill();
 
-        // Gnarled Ancient Oak Trunk & Branches
-        ctx.fillStyle = '#241812';
-        ctx.fillRect(342, 108, 22, 74);
-        ctx.fillStyle = '#36241b';
-        ctx.fillRect(346, 112, 6, 68);
-        // Spreading branches
-        ctx.strokeStyle = '#241812';
-        ctx.lineWidth = 6;
-        ctx.beginPath();
-        ctx.moveTo(350, 122);
-        ctx.lineTo(306, 96);
-        ctx.moveTo(356, 120);
-        ctx.lineTo(400, 94);
-        ctx.stroke();
-        // Rich layered oak canopy (deep twilight green-amber foliage clusters)
-        const foliageClusters = [
-          { x: 304, y: 94, rx: 38, ry: 22, col: '#1e2c22' },
-          { x: 398, y: 94, rx: 40, ry: 22, col: '#1e2c22' },
-          { x: 352, y: 78, rx: 56, ry: 28, col: '#263829' },
-          { x: 325, y: 86, rx: 34, ry: 18, col: '#354832' },
-          { x: 378, y: 82, rx: 36, ry: 18, col: '#3b4e34' },
-          { x: 352, y: 66, rx: 38, ry: 16, col: '#4a5c3a' }
-        ];
-        foliageClusters.forEach(fc => {
-          ctx.fillStyle = fc.col;
-          ctx.beginPath();
-          ctx.ellipse(fc.x, fc.y, fc.rx, fc.ry, 0, 0, Math.PI * 2);
-          ctx.fill();
-        });
+        drawAncientOakPixelArt(ctx, 350, 188, false);
 
         // SUB-SECTOR 3 (x: 440..725): Plaza de la Gran Pira (Medieval Village Gables & Iron Fence)
         drawMedievalHouse(ctx, 446, 92, 82, 42, true);
@@ -1096,15 +1346,21 @@ export class ProceduralAssetGenerator {
           '#48506b'
         );
 
-        // Mossy elevated Colina del Viejo Roble knoll + stone stair steps seamlessly blending at y = 178..210
+        // Mossy elevated Colina del Viejo Roble knoll + pixel grass blades & stone steps
         const hillGrad = ctx.createRadialGradient(335, 192, 16, 335, 194, 108);
-        hillGrad.addColorStop(0, '#2c402f');
-        hillGrad.addColorStop(0.65, '#1d2b22');
+        hillGrad.addColorStop(0, '#314a35');
+        hillGrad.addColorStop(0.65, '#1e2f24');
         hillGrad.addColorStop(1, 'rgba(24, 30, 38, 0)');
         ctx.fillStyle = hillGrad;
         ctx.beginPath();
         ctx.ellipse(335, 196, 105, 24, 0, 0, Math.PI * 2);
         ctx.fill();
+        for (let gx = 248; gx <= 420; gx += 5) {
+          const gy = 186 + Math.floor(seeded(gx * 2.3) * 18);
+          ctx.fillStyle = seeded(gx * 5.1) > 0.5 ? '#4c6e4e' : '#2a402e';
+          ctx.fillRect(gx, gy, 1, 3);
+          ctx.fillRect(gx + 1, gy + 1, 1, 2);
+        }
         drawShadedRect(ctx, 250, 200, 26, 7, '#3c4252', '#586075', '#1d2029');
         drawShadedRect(ctx, 268, 192, 26, 7, '#3c4252', '#586075', '#1d2029');
 
@@ -1139,27 +1395,27 @@ export class ProceduralAssetGenerator {
         ctx.fillStyle = wallGrad;
         ctx.fillRect(0, 0, BG_W, HORIZON_Y);
 
-        // Ashlar masonry blocks
-        ctx.strokeStyle = '#241f33';
-        ctx.lineWidth = 1;
-        for (let y = 26; y < HORIZON_Y; y += 22) {
+        // Rich Ashlar stone tower masonry across full wall
+        drawAshlarStoneWall(ctx, 0, 22, BG_W, HORIZON_Y - 22, '#211d30', '#171424', '#0b0913', '#3f3859');
+
+        // Bronze Crucible giant cogwheel & chains silhouette in eastern forge bay
+        ctx.strokeStyle = '#3d2820';
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.arc(840, 128, 46, 0, Math.PI * 2);
+        ctx.stroke();
+        for (let cg = 0; cg < 12; cg++) {
+          const ang = (cg / 12) * Math.PI * 2;
           ctx.beginPath();
-          ctx.moveTo(0, y);
-          ctx.lineTo(BG_W, y);
+          ctx.moveTo(840 + Math.cos(ang) * 42, 128 + Math.sin(ang) * 42);
+          ctx.lineTo(840 + Math.cos(ang) * 53, 128 + Math.sin(ang) * 53);
           ctx.stroke();
-          const off = (y % 44 === 0) ? 0 : 28;
-          for (let x = off; x < BG_W; x += 56) {
-            ctx.beginPath();
-            ctx.moveTo(x, y);
-            ctx.lineTo(x, y + 22);
-            ctx.stroke();
-          }
         }
 
         // Heavy gothic stone ribs & oak ceiling trusses
-        drawShadedRect(ctx, 0, 0, BG_W, 24, '#241914', '#382720', '#120c09');
+        drawShadedRect(ctx, 0, 0, BG_W, 24, '#241914', '#3d2b23', '#120c09');
         for (let bx = 90; bx < BG_W; bx += 220) {
-          drawShadedRect(ctx, bx, 24, 18, HORIZON_Y - 24, '#231915', '#382821', '#120d0b');
+          drawAshlarStoneWall(ctx, bx, 24, 20, HORIZON_Y - 24, '#2c2224', '#21181a', '#0f0b0d', '#4d3b3d');
         }
 
         // Tall barred belltower moonlight lancet windows
@@ -1262,14 +1518,15 @@ export class ProceduralAssetGenerator {
 
         // Gothic Stone Balustrade along y = 176..202 with 2 dramatic broken gaps (x: 345..445 & 750..845)
         const drawBalustradeSegment = (sx: number, ex: number) => {
-          drawShadedRect(ctx, sx, 176, ex - sx, 5, '#413a59', '#615780', '#1d192b');
-          drawShadedRect(ctx, sx, 196, ex - sx, 7, '#332d47', '#4e466b', '#171421');
-          for (let px = sx + 8; px < ex - 6; px += 18) {
-            drawShadedRect(ctx, px, 181, 6, 15, '#2b263d', '#433b5c', '#14111f');
+          drawShadedRect(ctx, sx, 174, ex - sx, 6, '#463f61', '#6c6291', '#1d192b');
+          drawAshlarStoneWall(ctx, sx, 194, ex - sx, 9, '#352f4d', '#28233b', '#120f1c', '#584f7d');
+          for (let px = sx + 8; px < ex - 6; px += 16) {
+            drawShadedRect(ctx, px, 180, 6, 14, '#2e2942', '#4c4469', '#14111f');
           }
-          // Heavy buttress piers
-          for (let bp = sx; bp <= ex - 14; bp += 110) {
-            drawShadedRect(ctx, bp, 168, 16, 35, '#352f4a', '#554c73', '#181424');
+          // Heavy dressed-stone buttress piers
+          for (let bp = sx; bp <= ex - 16; bp += 110) {
+            drawAshlarStoneWall(ctx, bp, 164, 18, 39, '#3d3657', '#2b2640', '#141121', '#665c8f');
+            drawShadedRect(ctx, bp - 2, 161, 22, 4, '#4e466e', '#756a9e', '#1c182b');
           }
         };
         drawBalustradeSegment(0, 345);
@@ -1318,17 +1575,30 @@ export class ProceduralAssetGenerator {
         ctx.fillStyle = sunHalo;
         ctx.fillRect(710, 0, 340, HORIZON_Y);
 
-        // Vaulted Cathedral Arches & Fluted Marble Columns
+        // Vaulted Cathedral Arches & Fluted Marble Columns with Gilded Capitals
         for (let cx = 60; cx < BG_W; cx += 150) {
-          drawShadedRect(ctx, cx, 18, 22, HORIZON_Y - 18, '#362945', '#544269', '#1c1426');
-          drawShadedRect(ctx, cx - 4, 18, 30, 10, '#a68232', '#e0ba58', '#5c4412');
-          drawShadedRect(ctx, cx - 4, HORIZON_Y - 12, 30, 12, '#a68232', '#e0ba58', '#5c4412');
-          // Pointed gothic arch between pillars
-          ctx.strokeStyle = '#694e80';
+          drawShadedRect(ctx, cx, 18, 24, HORIZON_Y - 18, '#3b2d4d', '#5d4975', '#1c1426');
+          // Fluted marble vertical channels
+          for (let fx = cx + 4; fx <= cx + 18; fx += 4) {
+            ctx.fillStyle = '#241a30';
+            ctx.fillRect(fx, 28, 2, HORIZON_Y - 40);
+            ctx.fillStyle = '#5c4875';
+            ctx.fillRect(fx + 2, 28, 1, HORIZON_Y - 40);
+          }
+          drawShadedRect(ctx, cx - 4, 18, 32, 10, '#b38c36', '#f0ca65', '#5c4412');
+          drawShadedRect(ctx, cx - 4, HORIZON_Y - 12, 32, 12, '#b38c36', '#f0ca65', '#5c4412');
+          // Pointed double gothic arch with gold tracery
+          ctx.strokeStyle = '#8b69a8';
           ctx.lineWidth = 3;
           ctx.beginPath();
-          ctx.moveTo(cx + 22, 62);
+          ctx.moveTo(cx + 24, 62);
           ctx.quadraticCurveTo(cx + 85, 8, cx + 150, 62);
+          ctx.stroke();
+          ctx.strokeStyle = '#c9a13c';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(cx + 24, 66);
+          ctx.quadraticCurveTo(cx + 85, 14, cx + 150, 66);
           ctx.stroke();
         }
 
@@ -1489,22 +1759,35 @@ export class ProceduralAssetGenerator {
         ctx.closePath();
         ctx.fill();
 
-        // Parish of San Jude bathed in warm morning gold
-        drawShadedRect(ctx, 24, 92, 168, HORIZON_Y - 92, '#4a3d4f', '#75607a', '#2c2230');
-        ctx.fillStyle = '#36293d';
+        // Parish of San Jude bathed in warm morning gold (Ashlar stone + shingled spire + rose window)
+        drawAshlarStoneWall(ctx, 24, 92, 168, HORIZON_Y - 92, '#5c4d63', '#46394d', '#281f2e', '#8e7899');
+        drawAshlarStoneWall(ctx, 16, 118, 14, HORIZON_Y - 118, '#66566e', '#4c3e54', '#292030', '#9c84a8');
+        drawAshlarStoneWall(ctx, 186, 118, 14, HORIZON_Y - 118, '#66566e', '#4c3e54', '#292030', '#9c84a8');
+        drawShingledGableRoof(ctx, 12, 94, 108, 42, 204, '#36293d', '#634d70', '#8f729e');
+        drawShingledGableRoof(ctx, 94, 48, 108, 12, 122, '#42324a', '#755b85', '#b391ab');
+        ctx.fillStyle = '#ffe294';
+        ctx.fillRect(107, 3, 2, 13);
+        ctx.fillRect(103, 7, 10, 2);
+        ctx.fillStyle = '#26182c';
         ctx.beginPath();
-        ctx.moveTo(14, 94);
-        ctx.lineTo(108, 44);
-        ctx.lineTo(202, 94);
-        ctx.closePath();
+        ctx.arc(108, 74, 13, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = '#ffd984';
-        ctx.fillRect(107, 16, 2, 16);
-        ctx.fillRect(102, 20, 12, 2);
-        drawGothicLancetWindow(ctx, 62, 116, 18, 44, '#c7883c', '#ffdf88', 'rgba(255, 220, 125, 0.35)');
-        drawGothicLancetWindow(ctx, 154, 116, 18, 44, '#c7883c', '#ffdf88', 'rgba(255, 220, 125, 0.35)');
+        ctx.fillStyle = '#e09358';
+        ctx.beginPath();
+        ctx.arc(108, 74, 9.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#ffe596';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+        drawGothicLancetWindow(ctx, 60, 116, 20, 46, '#c7883c', '#ffe699', 'rgba(255, 220, 125, 0.38)');
+        drawGothicLancetWindow(ctx, 156, 116, 20, 46, '#c7883c', '#ffe699', 'rgba(255, 220, 125, 0.38)');
+        ctx.fillStyle = '#38221b';
+        ctx.fillRect(96, 158, 24, HORIZON_Y - 158);
+        ctx.strokeStyle = '#8e7899';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(95, 158, 26, HORIZON_Y - 158);
 
-        // Colina del Viejo Roble in full morning bloom (x: 235..435)
+        // Colina del Viejo Roble in full morning bloom (Pixel-Art Ancient Oak & Sunbeam)
         const oakSunbeam = ctx.createLinearGradient(345, 20, 345, 215);
         oakSunbeam.addColorStop(0, 'rgba(255, 238, 175, 0.12)');
         oakSunbeam.addColorStop(0.65, 'rgba(255, 228, 150, 0.28)');
@@ -1518,31 +1801,7 @@ export class ProceduralAssetGenerator {
         ctx.closePath();
         ctx.fill();
 
-        ctx.fillStyle = '#40291e';
-        ctx.fillRect(342, 108, 22, 74);
-        ctx.strokeStyle = '#40291e';
-        ctx.lineWidth = 6;
-        ctx.beginPath();
-        ctx.moveTo(350, 122);
-        ctx.lineTo(306, 96);
-        ctx.moveTo(356, 120);
-        ctx.lineTo(400, 94);
-        ctx.stroke();
-
-        const dawnFoliage = [
-          { x: 304, y: 94, rx: 40, ry: 22, col: '#2f5438' },
-          { x: 398, y: 94, rx: 42, ry: 22, col: '#2f5438' },
-          { x: 352, y: 78, rx: 58, ry: 28, col: '#3e6e44' },
-          { x: 325, y: 86, rx: 36, ry: 18, col: '#558a52' },
-          { x: 378, y: 82, rx: 38, ry: 18, col: '#699e5b' },
-          { x: 352, y: 66, rx: 40, ry: 16, col: '#8ebf6b' }
-        ];
-        dawnFoliage.forEach(fc => {
-          ctx.fillStyle = fc.col;
-          ctx.beginPath();
-          ctx.ellipse(fc.x, fc.y, fc.rx, fc.ry, 0, 0, Math.PI * 2);
-          ctx.fill();
-        });
+        drawAncientOakPixelArt(ctx, 350, 188, true);
 
         // Peaceful Rebuilt Village Gables (no fire pyres!)
         drawMedievalHouse(ctx, 462, 92, 82, 42, true);
@@ -1561,15 +1820,21 @@ export class ProceduralAssetGenerator {
           '#d4b483'
         );
 
-        // Lush Emerald-Gold Old Oak Hill Knoll + Stone Steps
+        // Lush Emerald-Gold Old Oak Hill Knoll + Pixel Grass Blades & Stone Steps
         const dawnHill = ctx.createRadialGradient(335, 192, 16, 335, 196, 112);
-        dawnHill.addColorStop(0, '#4f7d49');
-        dawnHill.addColorStop(0.65, '#355736');
+        dawnHill.addColorStop(0, '#55874d');
+        dawnHill.addColorStop(0.65, '#375c38');
         dawnHill.addColorStop(1, 'rgba(58, 51, 66, 0)');
         ctx.fillStyle = dawnHill;
         ctx.beginPath();
         ctx.ellipse(335, 196, 108, 25, 0, 0, Math.PI * 2);
         ctx.fill();
+        for (let gx = 244; gx <= 424; gx += 5) {
+          const gy = 185 + Math.floor(seeded(gx * 2.9) * 19);
+          ctx.fillStyle = seeded(gx * 6.7) > 0.45 ? '#8ac46c' : '#4a7846';
+          ctx.fillRect(gx, gy, 1, 3);
+          ctx.fillRect(gx + 1, gy + 1, 1, 2);
+        }
         drawShadedRect(ctx, 250, 200, 26, 7, '#6b6475', '#968da3', '#3a3542');
         drawShadedRect(ctx, 268, 192, 26, 7, '#6b6475', '#968da3', '#3a3542');
 

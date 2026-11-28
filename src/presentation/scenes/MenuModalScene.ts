@@ -3,6 +3,7 @@ import { Character } from '../../domain/character/Character';
 import { Weapon } from '../../domain/weapon/Weapon';
 import { ProphecyRepository } from '../../domain/mission/Mission';
 import { WebAudioSoundAdapter } from '../../infrastructure/audio/WebAudioSoundAdapter';
+import { configureHDSceneCamera } from '../ui/CrispTextPipeline';
 
 export class MenuModalScene extends Phaser.Scene {
   private player!: Character;
@@ -30,6 +31,7 @@ export class MenuModalScene extends Phaser.Scene {
   }
 
   public create(): void {
+    configureHDSceneCamera(this);
     // 0. Sleep and completely HIDE HUDScene so HUD elements don't bleed through or conflict with the modal
     const hud = this.scene.get('HUDScene');
     if (hud) {

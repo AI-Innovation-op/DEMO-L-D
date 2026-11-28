@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { CharacterId } from '../../domain/character/CharacterEnums';
 import { WebAudioSoundAdapter } from '../../infrastructure/audio/WebAudioSoundAdapter';
+import { configureHDSceneCamera } from '../ui/CrispTextPipeline';
 
 export interface CinematicSlide {
   title: string;
@@ -182,6 +183,7 @@ export class CinematicScene extends Phaser.Scene {
   }
 
   public create(): void {
+    configureHDSceneCamera(this);
     this.cameras.main.resetFX();
     this.cameras.main.fadeIn(400, 0, 0, 0);
 
@@ -273,7 +275,7 @@ export class CinematicScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-ENTER', () => this.handleAdvance());
     this.input.keyboard?.on('keydown-ESC', () => this.finishCinematic());
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (pointer.x < 550 || pointer.y > 40) {
+      if (pointer.worldX < 550 || pointer.worldY > 40) {
         this.handleAdvance();
       }
     });

@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { CharacterId } from '../../domain/character/CharacterEnums';
 import { WebAudioSoundAdapter } from '../../infrastructure/audio/WebAudioSoundAdapter';
 import { SessionStateStore } from '../../domain/save/SessionStateStore';
+import { configureHDSceneCamera } from '../ui/CrispTextPipeline';
 
 export class TitleScene extends Phaser.Scene {
   private selectedCharacter: CharacterId = 'thomas';
@@ -40,6 +41,7 @@ export class TitleScene extends Phaser.Scene {
   }
 
   public create(): void {
+    configureHDSceneCamera(this);
     this.cameras.main.resetFX();
     this.cameras.main.fadeIn(300, 0, 0, 0);
 

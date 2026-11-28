@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { ProceduralAssetGenerator } from '../../infrastructure/graphics/ProceduralAssetGenerator';
 import { preloadVisualPackInPhaser, registerVisualPackAnimations } from '../assets/VisualPackCatalog';
+import { applyHybridPixelArtFilterPolicy } from '../ui/CrispTextPipeline';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -50,10 +51,25 @@ export class BootScene extends Phaser.Scene {
     // Generate all procedural pixel art assets as baseline/fallback for any missing textures
     ProceduralAssetGenerator.generateAll(this);
 
+    // Apply NEAREST filtering to pixel-art sprites/props/backgrounds & LINEAR to HD art/text
+    applyHybridPixelArtFilterPolicy(this.textures);
+
     // Register all 87 multi-frame animations from the visual pack
     registerVisualPackAnimations(this);
 
-    // Boot directly into the Title Cover scene as the first screen
-    this.scene.start('TitleScene');
+    // Wait briefly for Google Fonts (Cinzel, Cormorant Garamond, Inter, JetBrains Mono) before first UI render
+    const startTitle = () => this.scene.start('TitleScene');
+    if (typeof document !== 'undefined' && document.fonts && document.fonts.ready) {
+      let started = false;
+      const launchOnce = () => {
+        if (started) return;
+        started = true;
+        startTitle();
+      };
+      document.fonts.ready.then(launchOnce).catch(launchOnce);
+      this.time.delayedCall(550, launchOnce);
+    } else {
+      startTitle();
+    }
   }
 }

@@ -3,6 +3,7 @@ import { Character } from '../../domain/character/Character';
 import { ProphecyRepository } from '../../domain/mission/Mission';
 import { Weapon } from '../../domain/weapon/Weapon';
 import { WebAudioSoundAdapter } from '../../infrastructure/audio/WebAudioSoundAdapter';
+import { configureHDSceneCamera, drawGothicOrnamentFrame } from '../ui/CrispTextPipeline';
 
 export interface InventorySceneData {
   player: Character;
@@ -30,12 +31,12 @@ export class InventoryScene extends Phaser.Scene {
   }
 
   public create(): void {
+    configureHDSceneCamera(this);
     // Dim background
     this.add.rectangle(320, 180, 640, 360, 0x0a0812, 0.94);
 
-    // Modal frame with Celtic gold borders
-    this.add.rectangle(320, 180, 580, 320, 0x140e21).setStrokeStyle(2, 0xd4af37);
-    this.add.rectangle(320, 180, 572, 312, 0x000000, 0).setStrokeStyle(1, 0x5a3e75);
+    // Modal frame with Celtic gold borders & corner finials
+    drawGothicOrnamentFrame(this, 30, 20, 580, 320, 1, { bgColor: 0x120b1f, bgAlpha: 0.97 });
 
     // Title
     this.add.text(320, 36, '★ ARSENAL, RELIQUIAS Y PROFECÍA ORIGINAL ★', {

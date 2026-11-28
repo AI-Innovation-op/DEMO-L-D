@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { Character } from '../../domain/character/Character';
 import { WebAudioSoundAdapter } from '../../infrastructure/audio/WebAudioSoundAdapter';
+import { configureHDSceneCamera, drawGothicOrnamentFrame } from '../ui/CrispTextPipeline';
 
 export interface DialogueBeat {
   speaker: 'Thomas' | 'Khaterine' | 'Shalem' | 'Elowen' | string;
@@ -473,52 +474,56 @@ export class CharacterDialogueScene extends Phaser.Scene {
   }
 
   public create(): void {
+    configureHDSceneCamera(this);
     // 1. Semi-transparent Backdrop
-    this.add.rectangle(320, 180, 640, 360, 0x050308, 0.75).setInteractive();
+    this.add.rectangle(320, 180, 640, 360, 0x050308, 0.72).setInteractive();
 
-    // 2. Large Dialogue Container at the bottom
-    this.add.rectangle(320, 275, 590, 130, 0x140e21, 0.95)
-      .setStrokeStyle(2, 0xd4af37);
-    this.add.rectangle(320, 275, 582, 122, 0x000000, 0)
-      .setStrokeStyle(1, 0x5a3e75);
+    // 2. Ornate Gothic Dialogue Container at the bottom
+    drawGothicOrnamentFrame(this, 24, 206, 592, 136, 2, { bgColor: 0x110a1f, bgAlpha: 0.96 });
+
+    // Portrait Medallion Frames
+    this.add.rectangle(66, 274, 72, 72, 0x090512, 0.95).setStrokeStyle(1.5, 0xc9a24b).setDepth(3);
+    this.add.rectangle(574, 274, 72, 72, 0x090512, 0.95).setStrokeStyle(1.5, 0xc9a24b).setDepth(3);
 
     // Left Portrait Box
-    this.leftPortrait = this.add.image(65, 275, 'portrait_thomas').setDisplaySize(68, 68);
+    this.leftPortrait = this.add.image(66, 274, 'portrait_thomas').setDisplaySize(66, 66).setDepth(4);
     // Right Portrait Box
-    this.rightPortrait = this.add.image(575, 275, 'portrait_khaterine').setDisplaySize(68, 68).setVisible(false);
+    this.rightPortrait = this.add.image(574, 274, 'portrait_khaterine').setDisplaySize(66, 66).setDepth(4).setVisible(false);
 
     // Speaker Name Banner
-    this.speakerNameText = this.add.text(115, 225, 'THOMAS', {
+    this.speakerNameText = this.add.text(114, 218, 'THOMAS', {
       fontFamily: 'Cinzel, Georgia, serif',
-      fontSize: '11px',
+      fontSize: '11.5px',
       color: '#ffd700',
       fontStyle: 'bold'
-    });
+    }).setDepth(5);
 
-    // Dialogue Body Text
-    this.dialogueBodyText = this.add.text(115, 245, '', {
-      fontFamily: 'serif',
-      fontSize: '11px',
-      color: '#f0e6ff',
-      wordWrap: { width: 440 },
-      lineSpacing: 4
-    });
+    this.add.rectangle(114, 234, 260, 1, 0x67478f, 0.75).setOrigin(0, 0.5).setDepth(4);
+
+    // Dialogue Body Text (Literary Cormorant Garamond in crisp HD!)
+    this.dialogueBodyText = this.add.text(114, 240, '', {
+      fontFamily: 'Cormorant Garamond, Georgia, serif',
+      fontSize: '12px',
+      color: '#f4ecff',
+      wordWrap: { width: 416 },
+      lineSpacing: 3
+    }).setDepth(5);
 
     // Advance Hint
-    this.add.text(510, 325, '[ESPACIO / ENTER] Siguiente ▶', {
+    this.add.text(526, 326, 'ESPACIO / ENTER · Siguiente ▶', {
       fontFamily: 'monospace',
-      fontSize: '9px',
+      fontSize: '8.5px',
       color: '#ffd700',
-      backgroundColor: '#2b1a3d',
+      backgroundColor: '#29173d',
       padding: { x: 6, y: 3 }
-    }).setOrigin(1, 0.5);
+    }).setOrigin(1, 0.5).setDepth(5);
 
     // Close button top right
-    const closeBtn = this.add.text(595, 222, '✕ CERRAR [ESC]', {
+    const closeBtn = this.add.text(604, 216, '✕ ESC', {
       fontFamily: 'monospace',
-      fontSize: '9px',
-      color: '#c2b0d6'
-    }).setOrigin(1, 0).setInteractive({ useHandCursor: true });
+      fontSize: '8.5px',
+      color: '#cbb8e0'
+    }).setOrigin(1, 0).setDepth(5).setInteractive({ useHandCursor: true });
     closeBtn.on('pointerdown', () => this.closeDialogue());
 
     // Click / Input to advance
@@ -527,7 +532,7 @@ export class CharacterDialogueScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-ESC', () => this.closeDialogue());
     this.input.keyboard?.on('keydown-C', () => this.handleAdvance());
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (pointer.y > 180) {
+      if (pointer.worldY > 180) {
         this.handleAdvance();
       }
     });

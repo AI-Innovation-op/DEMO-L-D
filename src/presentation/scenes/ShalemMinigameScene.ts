@@ -3,6 +3,7 @@ import { Character } from '../../domain/character/Character';
 import { ShalemCompanion, ShalemMinigameState } from '../../domain/companion/ShalemCompanion';
 import { ShalemUseCases } from '../../application/usecases/ShalemUseCases';
 import { WebAudioSoundAdapter } from '../../infrastructure/audio/WebAudioSoundAdapter';
+import { configureHDSceneCamera, drawGothicOrnamentFrame } from '../ui/CrispTextPipeline';
 
 export class ShalemMinigameScene extends Phaser.Scene {
   private player!: Character;
@@ -23,11 +24,12 @@ export class ShalemMinigameScene extends Phaser.Scene {
   }
 
   public create(): void {
+    configureHDSceneCamera(this);
     // Semi-transparent background modal overlay
     this.add.rectangle(320, 180, 640, 360, 0x07050d, 0.9);
 
-    // Modal Box
-    this.add.rectangle(320, 180, 520, 290, 0x1b1528).setStrokeStyle(2, 0xd4af37);
+    // Ornate Gothic Modal Box
+    drawGothicOrnamentFrame(this, 60, 35, 520, 290, 1, { bgColor: 0x160f24, bgAlpha: 0.97 });
 
     // Shalem Cat Avatar (animated spritesheet when available)
     const shalemKey = this.textures.exists('shalem_sit_idle') ? 'shalem_sit_idle' : 'shalem_cat';

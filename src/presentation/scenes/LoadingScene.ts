@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { WebAudioSoundAdapter } from '../../infrastructure/audio/WebAudioSoundAdapter';
+import { configureHDSceneCamera } from '../ui/CrispTextPipeline';
 
 export interface LoadingSceneConfig {
   targetScene: string;
@@ -86,6 +87,7 @@ export class LoadingScene extends Phaser.Scene {
   }
 
   public create(): void {
+    configureHDSceneCamera(this);
     // 1. Background Artwork (Crisp, High-Resolution 640x360)
     const activeKey = this.textures.exists(this.imageKey) ? this.imageKey : 'bg_oakhaven';
     this.bgImage = this.add.image(320, 180, activeKey).setDisplaySize(640, 360).setOrigin(0.5).setDepth(0);
