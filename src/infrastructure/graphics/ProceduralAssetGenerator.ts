@@ -1449,6 +1449,142 @@ export class ProceduralAssetGenerator {
       }
     }
 
+    // --- 7.6 EPÍLOGO JUGABLE: OAKHAVEN — EL PRIMER AMANECER (1180x360 PANORAMIC) ---
+    if (!textures.exists('bg_oakhaven_dawn')) {
+      const c = textures.createCanvas('bg_oakhaven_dawn', BG_W, BG_H);
+      if (c) {
+        const ctx = c.getContext();
+        const dawnSky = ctx.createLinearGradient(0, 0, 0, HORIZON_Y);
+        dawnSky.addColorStop(0, '#2a1d42');
+        dawnSky.addColorStop(0.38, '#6e3b68');
+        dawnSky.addColorStop(0.72, '#d47c64');
+        dawnSky.addColorStop(1, '#ffcf86');
+        ctx.fillStyle = dawnSky;
+        ctx.fillRect(0, 0, BG_W, HORIZON_Y);
+
+        // Radiant Rising Sun over the Old Oak Hill & Eastern Meadows
+        const sunX = 690;
+        const sunY = 128;
+        const sunHalo = ctx.createRadialGradient(sunX, sunY, 14, sunX, sunY, 210);
+        sunHalo.addColorStop(0, 'rgba(255, 250, 215, 0.96)');
+        sunHalo.addColorStop(0.28, 'rgba(255, 215, 125, 0.62)');
+        sunHalo.addColorStop(0.65, 'rgba(255, 145, 105, 0.24)');
+        sunHalo.addColorStop(1, 'rgba(255, 120, 90, 0)');
+        ctx.fillStyle = sunHalo;
+        ctx.fillRect(sunX - 220, 0, 440, HORIZON_Y);
+        ctx.fillStyle = '#fff9df';
+        ctx.beginPath();
+        ctx.arc(sunX, sunY, 26, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Warm sunlit rolling hills
+        ctx.fillStyle = '#3b2d3f';
+        ctx.beginPath();
+        ctx.moveTo(0, HORIZON_Y);
+        ctx.lineTo(0, 152);
+        ctx.quadraticCurveTo(180, 118, 360, 138);
+        ctx.quadraticCurveTo(540, 108, 720, 142);
+        ctx.quadraticCurveTo(940, 112, BG_W, 146);
+        ctx.lineTo(BG_W, HORIZON_Y);
+        ctx.closePath();
+        ctx.fill();
+
+        // Parish of San Jude bathed in warm morning gold
+        drawShadedRect(ctx, 24, 92, 168, HORIZON_Y - 92, '#4a3d4f', '#75607a', '#2c2230');
+        ctx.fillStyle = '#36293d';
+        ctx.beginPath();
+        ctx.moveTo(14, 94);
+        ctx.lineTo(108, 44);
+        ctx.lineTo(202, 94);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#ffd984';
+        ctx.fillRect(107, 16, 2, 16);
+        ctx.fillRect(102, 20, 12, 2);
+        drawGothicLancetWindow(ctx, 62, 116, 18, 44, '#c7883c', '#ffdf88', 'rgba(255, 220, 125, 0.35)');
+        drawGothicLancetWindow(ctx, 154, 116, 18, 44, '#c7883c', '#ffdf88', 'rgba(255, 220, 125, 0.35)');
+
+        // Colina del Viejo Roble in full morning bloom (x: 235..435)
+        const oakSunbeam = ctx.createLinearGradient(345, 20, 345, 215);
+        oakSunbeam.addColorStop(0, 'rgba(255, 238, 175, 0.12)');
+        oakSunbeam.addColorStop(0.65, 'rgba(255, 228, 150, 0.28)');
+        oakSunbeam.addColorStop(1, 'rgba(255, 220, 135, 0.04)');
+        ctx.fillStyle = oakSunbeam;
+        ctx.beginPath();
+        ctx.moveTo(285, 20);
+        ctx.lineTo(410, 20);
+        ctx.lineTo(445, 215);
+        ctx.lineTo(235, 215);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = '#40291e';
+        ctx.fillRect(342, 108, 22, 74);
+        ctx.strokeStyle = '#40291e';
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.moveTo(350, 122);
+        ctx.lineTo(306, 96);
+        ctx.moveTo(356, 120);
+        ctx.lineTo(400, 94);
+        ctx.stroke();
+
+        const dawnFoliage = [
+          { x: 304, y: 94, rx: 40, ry: 22, col: '#2f5438' },
+          { x: 398, y: 94, rx: 42, ry: 22, col: '#2f5438' },
+          { x: 352, y: 78, rx: 58, ry: 28, col: '#3e6e44' },
+          { x: 325, y: 86, rx: 36, ry: 18, col: '#558a52' },
+          { x: 378, y: 82, rx: 38, ry: 18, col: '#699e5b' },
+          { x: 352, y: 66, rx: 40, ry: 16, col: '#8ebf6b' }
+        ];
+        dawnFoliage.forEach(fc => {
+          ctx.fillStyle = fc.col;
+          ctx.beginPath();
+          ctx.ellipse(fc.x, fc.y, fc.rx, fc.ry, 0, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        // Peaceful Rebuilt Village Gables (no fire pyres!)
+        drawMedievalHouse(ctx, 462, 92, 82, 42, true);
+        drawMedievalHouse(ctx, 578, 86, 74, 38, true);
+        drawMedievalHouse(ctx, 815, 84, 80, 40, true);
+
+        // Sunlit Cobblestone & Meadow Roadway (y = 202..360)
+        drawPerspectiveCobblestones(
+          ctx,
+          '#3a3342',
+          '#26202c',
+          '#54495e',
+          '#453b4f',
+          '#1f1924',
+          '#8c7355',
+          '#d4b483'
+        );
+
+        // Lush Emerald-Gold Old Oak Hill Knoll + Stone Steps
+        const dawnHill = ctx.createRadialGradient(335, 192, 16, 335, 196, 112);
+        dawnHill.addColorStop(0, '#4f7d49');
+        dawnHill.addColorStop(0.65, '#355736');
+        dawnHill.addColorStop(1, 'rgba(58, 51, 66, 0)');
+        ctx.fillStyle = dawnHill;
+        ctx.beginPath();
+        ctx.ellipse(335, 196, 108, 25, 0, 0, Math.PI * 2);
+        ctx.fill();
+        drawShadedRect(ctx, 250, 200, 26, 7, '#6b6475', '#968da3', '#3a3542');
+        drawShadedRect(ctx, 268, 192, 26, 7, '#6b6475', '#968da3', '#3a3542');
+
+        // Warm morning mist ribbon along horizon
+        const warmMist = ctx.createLinearGradient(0, HORIZON_Y - 18, 0, HORIZON_Y + 26);
+        warmMist.addColorStop(0, 'rgba(255, 220, 155, 0)');
+        warmMist.addColorStop(0.5, 'rgba(255, 215, 145, 0.22)');
+        warmMist.addColorStop(1, 'rgba(255, 215, 145, 0)');
+        ctx.fillStyle = warmMist;
+        ctx.fillRect(0, HORIZON_Y - 18, BG_W, 44);
+
+        c.refresh();
+      }
+    }
+
     // Weapons Icons
     if (!textures.exists('icon_sword')) {
       const c = textures.createCanvas('icon_sword', 24, 24);

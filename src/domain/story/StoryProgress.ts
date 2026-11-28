@@ -60,8 +60,14 @@ export class StoryProgress {
     // Act 5: La Catedral Invertida — El Sol del Abismo (Caps XVIII-XX)
     this.milestones.set(5, [
       { id: 'act5_abyss', description: 'Atraviesa las ruinas flotantes de la sima cósmica', progressWeight: 30, isCompleted: false },
-      { id: 'act5_weapon', description: 'Canaliza la Gota de Luz de Elowen en Alba Gris', progressWeight: 30, isCompleted: false },
+      { id: 'act5_weapon', description: 'Elige tu destino en el Altar y forja Alba Gris [E]', progressWeight: 30, isCompleted: false },
       { id: 'act5_astaroth', description: 'Destruye a Astaroth y trae el Primer Amanecer', progressWeight: 40, isCompleted: false }
+    ]);
+
+    // Epilogue (Scenario 6): El Primer Amanecer en la Colina del Viejo Roble (Cap. XX)
+    this.milestones.set(6, [
+      { id: 'epilogue_elowen', description: 'Conversa con Elowen bajo el Viejo Roble en flor [E]', progressWeight: 50, isCompleted: false },
+      { id: 'epilogue_companions', description: 'Habla con tus compañeros o avanza al Arco Dorado [ENTER]', progressWeight: 50, isCompleted: false }
     ]);
   }
 
@@ -97,6 +103,7 @@ export class StoryProgress {
       case 3: return 'ACTO III — EL GRAN PUENTE DE PIEDRA';
       case 4: return 'ACTO IV — LONDINIUM (CIUDADELA)';
       case 5: return 'ACTO V — CATEDRAL INVERTIDA';
+      case 6: return 'EPÍLOGO — EL PRIMER AMANECER';
       default: return 'PRÓLOGO';
     }
   }

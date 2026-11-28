@@ -5,6 +5,7 @@ import { EventBus } from '../../domain/shared/DomainEvent';
 import { FinisherStyle, FinisherTriggeredEvent } from '../../domain/combat/CombatTypes';
 import { WebAudioSoundAdapter } from '../../infrastructure/audio/WebAudioSoundAdapter';
 import { StoryProgress } from '../../domain/story/StoryProgress';
+import { ARROW_SPECS_2D, ArrowType2D } from '../../domain/combat/Combat2DFluidity';
 
 export class HUDScene extends Phaser.Scene {
   private playerHealthFill!: Phaser.GameObjects.Rectangle;
@@ -348,7 +349,10 @@ export class HUDScene extends Phaser.Scene {
     interactionPrompt?: string,
     allyName?: string,
     sectorCompassLabel?: string,
-    balmsCount?: number
+    balmsCount?: number,
+    activeArrowType?: ArrowType2D,
+    isCounterReady?: boolean,
+    meleeComboStep?: number
   ): void {
     if (!this.scene.isActive() || !this.playerHealthFill || !this.playerHealthFill.geom) return;
 
@@ -404,24 +408,37 @@ export class HUDScene extends Phaser.Scene {
       this.storyObjectiveText.setText(`▸ ${objStr}`);
     }
 
-    // Equipped Weapon, Balms & Disarm
+    // Equipped Weapon / Khaterine Elemental Arrow, Balms & Disarm
     const currentWeapon = player.disarmManager.getCurrentWeapon();
-    let weaponStr = `⚔ ${currentWeapon.name}`;
-    if (currentWeapon.durability !== Infinity) {
-      weaponStr += ` [${currentWeapon.durability}]`;
+    if (player.id === 'khaterine' && activeArrowType) {
+      const arrowSpec = ARROW_SPECS_2D[activeArrowType];
+      this.weaponBadgeText.setText(`🏹 ${arrowSpec.badge} ${arrowSpec.shortName}`.slice(0, 23));
+      this.weaponBadgeText.setColor(arrowSpec.popupColor);
+    } else {
+      let weaponStr = `⚔ ${currentWeapon.name}`;
+      if (currentWeapon.durability !== Infinity) {
+        weaponStr += ` [${currentWeapon.durability}]`;
+      }
+      this.weaponBadgeText.setText(weaponStr.length > 22 ? `${weaponStr.slice(0, 21)}…` : weaponStr);
+      this.weaponBadgeText.setColor('#dfd2f0');
     }
-    this.weaponBadgeText.setText(weaponStr.length > 24 ? `${weaponStr.slice(0, 23)}…` : weaponStr);
     if (this.balmBadgeText && typeof balmsCount === 'number') {
       this.balmBadgeText.setText(`🌿[H]${balmsCount}`);
       this.balmBadgeText.setColor(balmsCount > 0 ? '#7ef5a6' : '#806b8f');
     }
     this.disarmWarningText.setVisible(player.disarmManager.isPlayerDisarmed());
 
-    // Combo
+    // Combo & Perfect Dodge Counter-Attack Indicator
     const combo = player.comboSystem.getComboCount();
-    if (combo > 1) {
+    if (isCounterReady) {
+      this.comboText.setText('⚡ ¡CONTRAATAQUE +50% LISTO! ⚡');
+      this.comboText.setColor('#7ef5ff');
+      this.comboText.setAlpha(1);
+    } else if (combo > 1) {
       const mult = player.comboSystem.getDamageMultiplier().toFixed(2);
-      this.comboText.setText(`★ ${combo} GOLPES · x${mult} ★`);
+      const stepTag = player.id === 'thomas' && meleeComboStep ? ` · TAJO ${meleeComboStep}/3` : '';
+      this.comboText.setText(`★ ${combo} GOLPES · x${mult}${stepTag} ★`);
+      this.comboText.setColor('#ffd700');
       this.comboText.setAlpha(1);
     } else {
       this.comboText.setText('');

@@ -25,6 +25,20 @@ import {
   clampWorldY2D,
   resolveActEnemyClearInfo
 } from './SpriteOrientation2D';
+import {
+  ACT4_GUILT_MIRRORS_2D,
+  CanonEvents2DTracker,
+  GuiltMirrorSpec2D
+} from '../../domain/combat/CanonEvents2DState';
+import {
+  ARROW_SPECS_2D,
+  ArrowType2D,
+  ComboChain2D,
+  ComboStepSpec2D,
+  PerfectDodgeTracker2D,
+  cycleArrowType2D,
+  resolveDestructibleDrop2D
+} from '../../domain/combat/Combat2DFluidity';
 
 export class GameScene extends Phaser.Scene {
   // Dual Characters (Thomas & Khaterine)
@@ -96,7 +110,36 @@ export class GameScene extends Phaser.Scene {
   private lastGuardPressTime: number = 0;
   private hasAlbaGrisAwakened: boolean = false;
 
-  // Phase 2 & 3 2.5D Mechanics (Acts II - V)
+  // Opción B: Deep 2D Combat Fluidity (3-Hit Combos, 3 Elemental Arrows, Perfect Dodge & Destructibles)
+  public comboChain2D: ComboChain2D = new ComboChain2D(950);
+  public activeArrowType2D: ArrowType2D = 'abyssal';
+  public perfectDodge2D: PerfectDodgeTracker2D = new PerfectDodgeTracker2D();
+  private destructibleProps2D: Array<{
+    sprite: Phaser.GameObjects.Sprite;
+    shadow: Phaser.GameObjects.Ellipse;
+    x: number;
+    y: number;
+    kind: 'wood' | 'stone';
+    broken: boolean;
+  }> = [];
+  private keyR!: Phaser.Input.Keyboard.Key;
+
+  // Phase 2 & 3 2.5D Mechanics (Acts II - V) + Opción A Canonical Events & Epilogue
+  public canonEvents2D: CanonEvents2DTracker = new CanonEvents2DTracker();
+  private barnSlabRect2D?: Phaser.GameObjects.Rectangle;
+  private barnSlabLabel2D?: Phaser.GameObjects.Text;
+  private guiltMirrors2D: Array<{
+    spec: GuiltMirrorSpec2D;
+    frame: Phaser.GameObjects.Rectangle;
+    glass: Phaser.GameObjects.Rectangle;
+    label: Phaser.GameObjects.Text;
+    shattered: boolean;
+  }> = [];
+  private activeMirrorIndex2D?: 1 | 2 | 3;
+  private isDilemmaModalOpen2D: boolean = false;
+  private isEclipseEndingView2D: boolean = false;
+  private dilemmaModalContainer?: Phaser.GameObjects.Container;
+  private dilemmaFocusIndex2D: number = 0;
   private martinSprite?: Phaser.GameObjects.Sprite;
   private tobiasSprite?: Phaser.GameObjects.Sprite;
   private bridgeAlliesAttackTimer2D: number = 0;
@@ -114,7 +157,17 @@ export class GameScene extends Phaser.Scene {
 
   // Proximity Interaction
   private activeInteractionTarget?: string;
-  private activeInteractionType?: 'finisher' | 'elowen' | 'cedric' | 'censer' | 'shalem' | 'ally' | 'weapon';
+  private activeInteractionType?:
+    | 'finisher'
+    | 'elowen'
+    | 'cedric'
+    | 'censer'
+    | 'shalem'
+    | 'ally'
+    | 'weapon'
+    | 'barn_slab'
+    | 'guilt_mirror'
+    | 'epilogue_credits';
   private floatingPromptBadge?: Phaser.GameObjects.Text;
 
   // Finisher & Hit-Stop Mechanics
@@ -159,6 +212,7 @@ export class GameScene extends Phaser.Scene {
   private key3!: Phaser.Input.Keyboard.Key;
   private key4!: Phaser.Input.Keyboard.Key;
   private key5!: Phaser.Input.Keyboard.Key;
+  private key6!: Phaser.Input.Keyboard.Key;
   private keyEnter!: Phaser.Input.Keyboard.Key;
 
   // Act Transition and Exit Portal state
@@ -252,6 +306,19 @@ export class GameScene extends Phaser.Scene {
     this.floatingPromptBadge = undefined;
     this.isGameOverModalOpen = false;
     this.gameOverContainer = undefined;
+    this.isDilemmaModalOpen2D = false;
+    this.isEclipseEndingView2D = false;
+    this.dilemmaModalContainer = undefined;
+    this.guiltMirrors2D = [];
+    this.barnSlabRect2D = undefined;
+    this.barnSlabLabel2D = undefined;
+    this.activeMirrorIndex2D = undefined;
+    this.comboChain2D.reset();
+    this.perfectDodge2D.reset();
+    this.destructibleProps2D = [];
+    if (this.initialScenario === 1) {
+      this.canonEvents2D.resetAll();
+    }
     this.lastGuardPressTime = 0;
     this.hasAlbaGrisAwakened = false;
     this.targetFocusMarker = undefined;
@@ -410,6 +477,7 @@ export class GameScene extends Phaser.Scene {
       this.keyTab = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TAB);
       this.keyT = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.T);
       this.keyQ = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q);
+      this.keyR = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
       this.keyE = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
       this.keyH = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.H);
       this.keyM = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M);
@@ -422,6 +490,7 @@ export class GameScene extends Phaser.Scene {
       this.key3 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.THREE);
       this.key4 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.FOUR);
       this.key5 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.FIVE);
+      this.key6 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SIX);
       this.keyEnter = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
       this.keyEsc = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
     }
@@ -464,6 +533,12 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    // 2.5 Chapter XX Moral Dilemma Modal lock (Act V Altar of Communion)
+    if (this.isDilemmaModalOpen2D) {
+      this.handleDilemmaModalInput();
+      return;
+    }
+
     if (this.isTransitioningAct || this.player.state === CharacterState.DEAD) {
       if (this.player.state === CharacterState.DEAD) {
         if (!this.isGameOverModalOpen) {
@@ -484,26 +559,33 @@ export class GameScene extends Phaser.Scene {
       this.player.stats.restorePosture(22 * (delta / 1000));
     }
 
+    this.perfectDodge2D.update(delta);
+    const enemyDelta = delta * this.perfectDodge2D.getEnemyDeltaScale();
+
     this.handleInput(delta);
     if (this.isTutorialActive) {
       this.updateTraining(delta);
     }
     this.updateShalemAndAlly(delta);
-    this.updateEnemies(delta);
-    this.updateBoss(delta);
+    this.updateEnemies(enemyDelta);
+    this.updateBoss(enemyDelta);
     this.updateDroppedWeapons();
     this.updateProximityInteractions();
 
     // Proximity next-level auto-transition when walking into the eastern exit portal of a cleared act!
     const exitTriggerX = this.exitPortalZone ? this.exitPortalZone.x - 22 : WORLD_2D.MAX_X - 35;
     if (this.isActCleared && !this.isTransitioningAct && this.player.position.x >= exitTriggerX) {
-      const nextAct = this.currentScenario < 5 ? (this.currentScenario + 1) : 1;
+      if (this.currentScenario === 6) {
+        this.launchFinalCreditsFromEpilogue();
+        return;
+      }
+      const nextAct = this.currentScenario < 5 ? (this.currentScenario + 1) : 6;
       this.clearActExit();
       this.transitionToActWithLoading(nextAct);
       return;
     }
 
-    // Sync HUD with active character, dynamic interaction target, bottom sector compass & balms
+    // Sync HUD with active character, dynamic interaction target, bottom sector compass, balms & 2D combat mastery
     const hud = this.scene.get('HUDScene') as HUDScene;
     if (hud && this.scene.isActive('HUDScene')) {
       hud.updateHUD(
@@ -513,7 +595,10 @@ export class GameScene extends Phaser.Scene {
         this.activeInteractionTarget,
         this.allyChar.name,
         this.currentSectorCompassLabel,
-        this.maidenBalmsCount
+        this.maidenBalmsCount,
+        this.activeArrowType2D,
+        this.perfectDodge2D.isCounterReady(),
+        this.comboChain2D.getCurrentStep()
       );
     }
   }
@@ -529,16 +614,24 @@ export class GameScene extends Phaser.Scene {
     if (this.isActCleared && !this.isTransitioningAct) {
       if (
         (this.keyEnter && Phaser.Input.Keyboard.JustDown(this.keyEnter)) ||
-        (this.keySpace && Phaser.Input.Keyboard.JustDown(this.keySpace))
+        (this.keySpace && Phaser.Input.Keyboard.JustDown(this.keySpace) && this.currentScenario !== 6)
       ) {
-        const nextAct = this.currentScenario < 5 ? (this.currentScenario + 1) : 1;
+        if (this.currentScenario === 6) {
+          this.launchFinalCreditsFromEpilogue();
+          return;
+        }
+        const nextAct = this.currentScenario < 5 ? (this.currentScenario + 1) : 6;
         this.clearActExit();
         this.transitionToActWithLoading(nextAct);
         return;
       }
       const nearExit = this.exitPortalZone ? Math.abs(this.player.position.x - this.exitPortalZone.x) < 75 : this.player.position.x > WORLD_2D.MAX_X - 100;
-      if ((this.keyE && Phaser.Input.Keyboard.JustDown(this.keyE) || gp.interactOrConfirmPressed) && nearExit) {
-        const nextAct = this.currentScenario < 5 ? (this.currentScenario + 1) : 1;
+      if (((this.keyE && Phaser.Input.Keyboard.JustDown(this.keyE)) || gp.interactOrConfirmPressed) && nearExit) {
+        if (this.currentScenario === 6) {
+          this.launchFinalCreditsFromEpilogue();
+          return;
+        }
+        const nextAct = this.currentScenario < 5 ? (this.currentScenario + 1) : 6;
         this.clearActExit();
         this.transitionToActWithLoading(nextAct);
         return;
@@ -569,6 +662,11 @@ export class GameScene extends Phaser.Scene {
     if (Phaser.Input.Keyboard.JustDown(this.key5)) {
       this.clearActExit();
       this.transitionToActWithLoading(5);
+      return;
+    }
+    if (this.key6 && Phaser.Input.Keyboard.JustDown(this.key6)) {
+      this.clearActExit();
+      this.transitionToActWithLoading(6);
       return;
     }
 
@@ -622,11 +720,39 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Dodge [SPACE] / Gamepad B — actual forward dash (no yoyo snap-back!) with ghost afterimage
+    // Cycle Khaterine's 3 Elemental Arrows with [R] or Gamepad D-Pad Left / Right
+    if ((this.keyR && Phaser.Input.Keyboard.JustDown(this.keyR)) || gp.cycleArrowRightPressed) {
+      this.cycleKhaterineArrow2D(1);
+    } else if (gp.cycleArrowLeftPressed) {
+      this.cycleKhaterineArrow2D(-1);
+    }
+
+    // Dodge [SPACE] / Gamepad B — actual forward dash + Perfect Dodge Slow-Mo & +50% Counter-Attack!
     if (Phaser.Input.Keyboard.JustDown(this.keySpace) || gp.dodgeOrBackPressed) {
       if (this.player.startDodge()) {
         this.audio.playSfx('dodge');
         const dashDir = this.player.facingDirection;
+
+        // Check if any nearby enemy or boss is currently telegraphing a WINDUP strike!
+        const px = this.playerSprite.x;
+        const py = this.playerSprite.y;
+        const enemyInWindup = this.enemies.some(
+          e => e.isAlive() && e.state === 'WINDUP' && Math.hypot(e.position.x - px, e.position.y - py) < 110
+        );
+        const bossInWindup = Boolean(
+          this.currentBoss &&
+          this.currentBoss.health > 0 &&
+          this.currentBoss.state === 'WINDUP' &&
+          Math.hypot(this.currentBoss.position.x - px, this.currentBoss.position.y - py) < 140
+        );
+        const isPerfectDodge = this.perfectDodge2D.tryTriggerPerfectDodge(enemyInWindup || bossInWindup);
+
+        if (isPerfectDodge) {
+          this.audio.playCosmicChime();
+          this.cameras.main.flash(140, 110, 240, 255);
+          this.player.stats.restorePosture(this.perfectDodge2D.postureRestoreAmount);
+          this.spawnDamageNumber(px, py - 56, '⚡ ¡ESQUIVA PERFECTA! (+50% CONTRAATAQUE)', true, '#7ef5ff');
+        }
 
         // Play Dodge animation from Visual Pack
         const dodgeAnim = this.player.id === 'thomas' ? 'thomas_dodge' : 'khaterine_dodge';
@@ -635,21 +761,21 @@ export class GameScene extends Phaser.Scene {
         // Spawn afterimage ghost using positive scale + flipX
         const ghost = this.add.sprite(this.playerSprite.x, this.playerSprite.y, this.playerSprite.texture.key, this.playerSprite.frame?.name ?? 0)
           .setOrigin(0.5, this.playerSprite.originY)
-          .setAlpha(0.6)
+          .setAlpha(isPerfectDodge ? 0.8 : 0.6)
           .setScale(Math.abs(this.playerSprite.scaleX), Math.abs(this.playerSprite.scaleY))
           .setFlipX(this.playerSprite.flipX)
-          .setTint(0x9933ff)
+          .setTint(isPerfectDodge ? 0x55f2ff : 0x9933ff)
           .setDepth(this.playerSprite.depth - 1);
 
         this.tweens.add({
           targets: ghost,
           alpha: 0,
           scaleX: ghost.scaleX * 1.2,
-          duration: 240,
+          duration: isPerfectDodge ? 340 : 240,
           onComplete: () => ghost.destroy()
         });
 
-        const targetX = clampWorldX2D(this.playerSprite.x + dashDir * 68);
+        const targetX = clampWorldX2D(this.playerSprite.x + dashDir * (isPerfectDodge ? 78 : 68));
         this.tweens.add({
           targets: this.playerSprite,
           x: targetX,
@@ -698,16 +824,32 @@ export class GameScene extends Phaser.Scene {
       this.playAnimSafe(this.playerSprite, idleAnim);
     }
 
-    // Light Attack [J] / Gamepad X
-    if ((Phaser.Input.Keyboard.JustDown(this.keyJ) || gp.lightAttackPressed) && this.attackCooldown <= 0) {
-      this.executeAttack(false);
-      this.attackCooldown = 240;
-    }
+    // Light [J] / Heavy [K] Attacks with 3-Hit Combo Chain & Input Buffering!
+    const lightJustPressed = Phaser.Input.Keyboard.JustDown(this.keyJ) || gp.lightAttackPressed;
+    const heavyJustPressed = Phaser.Input.Keyboard.JustDown(this.keyK) || gp.heavyAttackPressed;
 
-    // Heavy Attack [K] / Gamepad Y
-    if ((Phaser.Input.Keyboard.JustDown(this.keyK) || gp.heavyAttackPressed) && this.attackCooldown <= 0) {
-      this.executeAttack(true);
-      this.attackCooldown = 420;
+    if (this.attackCooldown <= 0) {
+      const buffered = this.comboChain2D.consumeBufferedAttack();
+      if (heavyJustPressed || buffered === 'heavy') {
+        this.comboChain2D.reset();
+        this.executeAttack(true);
+        this.attackCooldown = 400;
+      } else if (lightJustPressed || buffered === 'light') {
+        if (this.player.id === 'thomas' && !this.player.disarmManager.isPlayerDisarmed()) {
+          const stepSpec = this.comboChain2D.advanceLightCombo(this.time.now);
+          this.executeAttack(false, stepSpec);
+          this.attackCooldown = stepSpec.cooldownMs;
+        } else {
+          this.executeAttack(false);
+          this.attackCooldown = 230;
+        }
+      }
+    } else {
+      if (heavyJustPressed) {
+        this.comboChain2D.bufferAttack('heavy');
+      } else if (lightJustPressed) {
+        this.comboChain2D.bufferAttack('light');
+      }
     }
 
     // Voluntary Weapon Throw (Option B) [T] / [Q] / Gamepad RB
@@ -755,9 +897,9 @@ export class GameScene extends Phaser.Scene {
       const vy = normY * baseSpeed * 0.72 * (delta / 1000);
 
       const nextX = clampWorldX2D(this.playerSprite.x + vx);
-      // Allow climbing elevated terraces: Act I Old Oak Hill (x: 225..425) & Act II Elevated Salt Cell (x: 170..290)
+      // Allow climbing elevated terraces: Act I & Epilogue Old Oak Hill (x: 225..425) & Act II Elevated Salt Cell (x: 170..290)
       const isOnElevatedTerrace =
-        (this.currentScenario === 1 && nextX >= 225 && nextX <= 425) ||
+        ((this.currentScenario === 1 || this.currentScenario === 6) && nextX >= 225 && nextX <= 425) ||
         (this.currentScenario === 2 && nextX >= 170 && nextX <= 290);
       const nextY = clampWorldY2D(this.playerSprite.y + vy, isOnElevatedTerrace);
 
@@ -813,20 +955,29 @@ export class GameScene extends Phaser.Scene {
         label = '📍 CEMENTERIO ANTIGUO Y CRIPTAS (CAP. IV–VI) · 🐈‍⬛ Explora hacia el Mausoleo oriental';
       }
     } else if (this.currentScenario === 2) {
-      label = px < 380
-        ? '📍 CELDA DE SAL DE ELOWEN (CAP. VII) · 🐈‍⬛ Habla con Elowen [E] para el Pájaro de Sauce'
-        : '📍 GRAN CRISOL DEL CAMPANARIO (CAP. VIII–IX) · 🐈‍⬛ Lanza tu espada [T] o vence al Guardián';
+      if (px < 180 && !this.canonEvents2D.hasOpenedBarnSlab) {
+        label = '📍 GRANERO QUEMADO (CAP. VIII) · 🗡 Levanta la losa oculta [E] para el Colmillo del Sauce';
+      } else if (px < 380) {
+        label = '📍 CELDA DE SAL DE ELOWEN (CAP. VII) · 🐈‍⬛ Habla con Elowen [E] para el Pájaro de Sauce';
+      } else {
+        label = '📍 GRAN CRISOL DEL CAMPANARIO (CAP. VIII–IX) · 🐈‍⬛ Lanza tu espada [T] o vence al Guardián';
+      }
     } else if (this.currentScenario === 3) {
       label = px < 350
         ? '📍 CONVOY EN EL GRAN PUENTE (CAP. X–XI) · 🐈‍⬛ Protege a Elowen y los refugiados'
         : '📍 ARCO CENTRAL DEL PUENTE (CAP. XII–XIII) · 🐈‍⬛ Rompe el escudo del Capitán Vane [K]';
     } else if (this.currentScenario === 4) {
-      label = px < 380
-        ? '📍 SALÓN DE LOS ESPEJOS (CAP. XIV–XV) · 🐈‍⬛ Rompe los 3 braseros dorados y libera a Elowen'
+      const mCount = this.canonEvents2D.getShatteredMirrorCount();
+      label = px < 470
+        ? `📍 SALÓN DE LOS ESPEJOS (CAP. XV) · 🪞 Espejos: ${mCount}/3 · 🌿 Braseros: ${this.destroyedBraziers2DCount}/3`
         : '📍 TRONO ASTRAL DE REX MALPHAS (CAP. XVI–XVII) · 🐈‍⬛ Derrota al Rey Demonio Alaric';
+    } else if (this.currentScenario === 6) {
+      label = px < 720
+        ? '🌅 EPÍLOGO · COLINA DEL VIEJO ROBLE (16 FLORES DEL ALBA) · Habla con Elowen y Cedric [E]'
+        : '🌅 SENDERO DEL PRIMER AMANECER · Avanza al Arco Dorado o pulsa [ENTER] para los créditos';
     } else {
       label = px < 340
-        ? '📍 ALTAR DE LA COMUNIÓN (CAP. XVIII–XIX) · 🐈‍⬛ Recibe la Gota de Luz [E] para forjar Alba Gris'
+        ? '📍 ALTAR DE LA COMUNIÓN (CAP. XX) · ✦ Habla con Elowen [E] para elegir el destino de Albion'
         : '📍 EL SOL DEL ABISMO (CAP. XX) · 🐈‍⬛ Derrota a Astaroth para traer el Primer Amanecer';
     }
 
@@ -898,6 +1049,12 @@ export class GameScene extends Phaser.Scene {
   private executeContextInteraction(): void {
     if (this.activeInteractionType === 'finisher') {
       this.executeFinisherSequence();
+    } else if (this.activeInteractionType === 'barn_slab') {
+      this.interactWithBarnSlab2D();
+    } else if (this.activeInteractionType === 'guilt_mirror' && this.activeMirrorIndex2D) {
+      this.shatterGuiltMirror2D(this.activeMirrorIndex2D);
+    } else if (this.activeInteractionType === 'epilogue_credits') {
+      this.launchFinalCreditsFromEpilogue();
     } else if (this.activeInteractionType === 'elowen') {
       this.interactWithElowen();
     } else if (this.activeInteractionType === 'cedric') {
@@ -907,7 +1064,11 @@ export class GameScene extends Phaser.Scene {
     } else if (this.activeInteractionType === 'weapon') {
       this.executeWeaponPickup();
     } else if (this.activeInteractionType === 'shalem') {
-      if (this.player.levelUp.isMinigameReady) {
+      if (this.currentScenario === 6) {
+        this.canonEvents2D.recordEpilogueConversation('shalem');
+        this.storyProgress.completeMilestone('epilogue_companions');
+        this.triggerShalemBalloon('Shalem ronronea al sol: «Tres mil años en tinieblas... y resulta que una colina soleada y tu compañía bastaban, monaguillo.»', 5500);
+      } else if (this.player.levelUp.isMinigameReady) {
         this.scene.pause('GameScene');
         this.scene.launch('ShalemMinigameScene', {
           player: this.player,
@@ -918,6 +1079,10 @@ export class GameScene extends Phaser.Scene {
         this.triggerShalemBalloon(`Shalem: «${this.dialogues.getShalemSarcasm()}»`, 4000);
       }
     } else if (this.activeInteractionType === 'ally') {
+      if (this.currentScenario === 6) {
+        this.canonEvents2D.recordEpilogueConversation('ally');
+        this.storyProgress.completeMilestone('epilogue_companions');
+      }
       this.scene.pause('GameScene');
       this.scene.launch('CharacterDialogueScene', {
         player: this.player,
@@ -930,8 +1095,363 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private interactWithBarnSlab2D(): void {
+    const res = this.canonEvents2D.openBarnSlab();
+    if (!res.openedNow) return;
+
+    this.audio.playWillowWhisper();
+    this.audio.playDaggerVortex();
+    this.spawnAnimatedVfx(145, 266, 'fx_stone_debris', 1.1, false);
+    this.spawnAnimatedVfx(145, 256, 'fx_slash_abyss', 1.0, false);
+
+    if (this.barnSlabRect2D?.active) {
+      this.barnSlabRect2D.setFillStyle(0x160f21, 0.95).setStrokeStyle(1.5, 0xffd700);
+      this.tweens.add({ targets: this.barnSlabRect2D, x: 162, duration: 240, ease: 'Cubic.easeOut' });
+    }
+    if (this.barnSlabLabel2D?.active) {
+      this.barnSlabLabel2D.setText('✓ RELIQUIA DE LYRA RECUPERADA').setColor('#ffd700');
+    }
+
+    if (!this.unlockedWeaponIds.includes('colmillo_sauce')) {
+      this.unlockedWeaponIds.push('colmillo_sauce');
+    }
+
+    // Equip Colmillo del Sauce Negro on Thomas & empower Khaterine with Lyra's Coven Echo (+3 ATK)
+    const thomasChar = this.player.id === 'thomas' ? this.player : this.allyChar;
+    const khaterineChar = this.player.id === 'khaterine' ? this.player : this.allyChar;
+    thomasChar.disarmManager.setEquippedPrimary(Weapon.createColmilloSauce());
+    khaterineChar.stats.attackPower += res.khaterineAtkBonus;
+
+    this.prophecy.unlockFragment(2);
+    this.player.gainExperience(res.expReward);
+    this.maidenBalmsCount = Math.min(this.maxMaidenBalms, this.maidenBalmsCount + 1);
+    this.storyProgress.addProgress(20);
+    this.spawnDamageNumber(145, 232, '🗡 ¡COLMILLO DEL SAUCE NEGRO!', true, '#ffd700');
+
+    this.scene.pause('GameScene');
+    this.scene.launch('CharacterDialogueScene', {
+      player: this.player,
+      scenarioIndex: 2,
+      audio: this.audio,
+      dialogueType: 'barn_slab'
+    });
+  }
+
+  private shatterGuiltMirror2D(index: 1 | 2 | 3): void {
+    const res = this.canonEvents2D.shatterMirror(index);
+    if (!res.shatteredNow) return;
+
+    const entry = this.guiltMirrors2D.find(m => m.spec.index === index);
+    if (entry) {
+      entry.shattered = true;
+      if (entry.glass.active) {
+        entry.glass.setFillStyle(0x120b1c, 0.85).setStrokeStyle(1, 0x5c3e7a);
+      }
+      if (entry.frame.active) {
+        entry.frame.setStrokeStyle(1.5, 0x6e558a);
+      }
+      if (entry.label.active) {
+        entry.label.setText(`✦ ESPEJO ${index} ROTO`).setColor('#b89fd4');
+      }
+      this.spawnAnimatedVfx(entry.spec.x, entry.spec.y - 26, 'fx_stone_debris', 1.15, false);
+      this.spawnAnimatedVfx(entry.spec.x, entry.spec.y - 34, 'fx_parry_spark', 1.1, false);
+    }
+
+    this.audio.playSfx('glass_shatter');
+    this.audio.playAstralDistortion();
+    this.cameras.main.shake(180, 0.014);
+    this.player.gainExperience(35);
+    this.storyProgress.addProgress(12);
+    this.spawnDamageNumber(res.spec.x, res.spec.y - 62, `🪞 ESPEJO ${res.shatteredCount}/3 ROTO`, true, '#e6b8ff');
+
+    if (res.allShattered) {
+      this.storyProgress.completeMilestone('act4_prophecy');
+      this.prophecy.unlockFragment(3);
+      if (this.currentBoss && this.currentBoss.health > 0) {
+        this.currentBoss.posture = Math.max(0, this.currentBoss.posture - 80);
+        this.spawnDamageNumber(this.currentBoss.position.x, this.currentBoss.position.y - 68, '✨ ¡ESPEJISMOS DE ALARIC ROTOS!', true, '#ffd700');
+      }
+    }
+
+    this.triggerShalemBalloon(`${res.spec.reflectionQuote} — ${res.spec.shalemOrHeroReply}`, 5600);
+  }
+
+  private openChapterXXDilemmaModal2D(): void {
+    if (this.isDilemmaModalOpen2D) return;
+    this.isDilemmaModalOpen2D = true;
+    this.isEclipseEndingView2D = false;
+    this.dilemmaFocusIndex2D = 0;
+    this.audio.playCosmicChime();
+    this.renderChapterXXDilemmaView();
+  }
+
+  private renderChapterXXDilemmaView(): void {
+    this.dilemmaModalContainer?.destroy();
+    const container = this.add.container(320, 180).setDepth(460).setScrollFactor(0);
+    this.dilemmaModalContainer = container;
+
+    const backdrop = this.add.rectangle(0, 0, 640, 360, this.isEclipseEndingView2D ? 0x0a0308 : 0x06030d, 0.90)
+      .setInteractive();
+    backdrop.on('pointerdown', (p: Phaser.Input.Pointer) => p.event.stopPropagation());
+
+    const panel = this.add.rectangle(0, 0, 520, 248, this.isEclipseEndingView2D ? 0x1a0812 : 0x120a21, 0.98)
+      .setStrokeStyle(2, this.isEclipseEndingView2D ? 0xc93b5b : 0xffd700);
+    const inner = this.add.rectangle(0, 0, 510, 238, 0x000000, 0)
+      .setStrokeStyle(1, this.isEclipseEndingView2D ? 0x6e1e32 : 0x6a498f);
+
+    if (!this.isEclipseEndingView2D) {
+      const title = this.add.text(0, -94, '✦ CAPÍTULO XX · ENCRUCIJADA DEL SOL DEL ABISMO ✦', {
+        fontFamily: 'Cinzel, Georgia, serif',
+        fontSize: '12px',
+        color: '#ffd700',
+        fontStyle: 'bold'
+      }).setOrigin(0.5);
+
+      const lore = this.add.text(
+        0,
+        -50,
+        '«Astaroth te ofrece el Trono Invertido para silenciar todo dolor bajo un cielo de ceniza eterna.\nFrente a ti, Elowen extiende su última Gota de Luz Divina para unirla a tu fuego negro.»',
+        {
+          fontFamily: 'serif',
+          fontSize: '9.5px',
+          color: '#e8dcf7',
+          align: 'center',
+          lineSpacing: 4,
+          wordWrap: { width: 470 }
+        }
+      ).setOrigin(0.5);
+
+      const isCanonFocus = this.dilemmaFocusIndex2D === 0;
+      const btnCanonBg = this.add.rectangle(0, 14, 464, 36, isCanonFocus ? 0x2e1b4a : 0x191029, 0.98)
+        .setStrokeStyle(isCanonFocus ? 1.8 : 1, isCanonFocus ? 0xffd700 : 0x705296)
+        .setInteractive({ useHandCursor: true });
+      const btnCanonTxt = this.add.text(
+        0,
+        14,
+        '⚔ [1] UNIR FUEGO Y LUZ (CANON): FORJAR ALBA GRIS & DESPERTAR A SHALEM LEÓN',
+        {
+          fontFamily: 'Cinzel, monospace',
+          fontSize: '8.5px',
+          color: isCanonFocus ? '#fff6c2' : '#d6c6eb',
+          fontStyle: 'bold'
+        }
+      ).setOrigin(0.5);
+
+      const btnDarkBg = this.add.rectangle(0, 62, 464, 34, !isCanonFocus ? 0x3b1020 : 0x1a0b14, 0.96)
+        .setStrokeStyle(!isCanonFocus ? 1.8 : 1, !isCanonFocus ? 0xff6688 : 0x66293d)
+        .setInteractive({ useHandCursor: true });
+      const btnDarkTxt = this.add.text(
+        0,
+        62,
+        '🌑 [2] TOMAR EL TRONO ABISAL (ALTERNATIVO): EL ECLIPSE DE CENIZA',
+        {
+          fontFamily: 'Cinzel, monospace',
+          fontSize: '8.5px',
+          color: !isCanonFocus ? '#ffd6de' : '#c99aa8',
+          fontStyle: 'bold'
+        }
+      ).setOrigin(0.5);
+
+      const hint = this.add.text(0, 102, 'Pulsa [1] / [2], [W/S + ENTER] o haz clic para decidir el destino de Albion', {
+        fontFamily: 'monospace',
+        fontSize: '8px',
+        color: '#a995c4'
+      }).setOrigin(0.5);
+
+      btnCanonBg.on('pointerover', () => {
+        this.dilemmaFocusIndex2D = 0;
+        this.renderChapterXXDilemmaView();
+      });
+      btnDarkBg.on('pointerover', () => {
+        this.dilemmaFocusIndex2D = 1;
+        this.renderChapterXXDilemmaView();
+      });
+      btnCanonBg.on('pointerdown', () => this.chooseCanonAlbaGris2D());
+      btnDarkBg.on('pointerdown', () => this.chooseEclipseDeCeniza2D());
+
+      container.add([backdrop, panel, inner, title, lore, btnCanonBg, btnCanonTxt, btnDarkBg, btnDarkTxt, hint]);
+    } else {
+      const title = this.add.text(0, -92, '🌑 FINAL ALTERNATIVO · EL ECLIPSE DE CENIZA 🌑', {
+        fontFamily: 'Cinzel, Georgia, serif',
+        fontSize: '12.5px',
+        color: '#ff6e88',
+        fontStyle: 'bold'
+      }).setOrigin(0.5);
+
+      const body = this.add.text(
+        0,
+        -28,
+        '«Thomas acepta la corona hueca del Sol Negro para impedir que nadie vuelva a sufrir.\nLas hogueras se apagan, pero también toda calidez humana: sobre Oakhaven cae una nieve gris perpetua,\nShalem enmudece en piedra y el Viejo Roble jamás conoce la primavera...»',
+        {
+          fontFamily: 'serif',
+          fontSize: '9.5px',
+          color: '#f0d5dc',
+          align: 'center',
+          lineSpacing: 4,
+          wordWrap: { width: 470 }
+        }
+      ).setOrigin(0.5);
+
+      const btnRewindBg = this.add.rectangle(0, 48, 430, 34, 0x2f1b4d, 0.98)
+        .setStrokeStyle(1.8, 0xffd700)
+        .setInteractive({ useHandCursor: true });
+      const btnRewindTxt = this.add.text(0, 48, '↺ [E / ENTER] REBOBINAR AL ALTAR Y ELEGIR EL VERDADERO AMANECER', {
+        fontFamily: 'Cinzel, monospace',
+        fontSize: '8.5px',
+        color: '#fff5bf',
+        fontStyle: 'bold'
+      }).setOrigin(0.5);
+
+      const btnTitleBg = this.add.rectangle(0, 90, 260, 24, 0x170b14, 0.95)
+        .setStrokeStyle(1, 0x703449)
+        .setInteractive({ useHandCursor: true });
+      const btnTitleTxt = this.add.text(0, 90, '⮌ [ESC] VOLVER AL TÍTULO', {
+        fontFamily: 'monospace',
+        fontSize: '8px',
+        color: '#d4aab8'
+      }).setOrigin(0.5);
+
+      btnRewindBg.on('pointerdown', () => {
+        this.audio.playSfx('menu_select');
+        this.canonEvents2D.rewindEclipseToAltar();
+        this.isEclipseEndingView2D = false;
+        this.dilemmaFocusIndex2D = 0;
+        this.renderChapterXXDilemmaView();
+      });
+
+      btnTitleBg.on('pointerdown', () => {
+        this.closeChapterXXDilemmaModal2D();
+        if (this.scene.isActive('HUDScene')) {
+          this.scene.stop('HUDScene');
+        }
+        this.scene.start('TitleScene');
+      });
+
+      container.add([backdrop, panel, inner, title, body, btnRewindBg, btnRewindTxt, btnTitleBg, btnTitleTxt]);
+    }
+  }
+
+  private chooseCanonAlbaGris2D(): void {
+    this.canonEvents2D.selectChapterXXChoice('CANON_ALBA_GRIS');
+    this.closeChapterXXDilemmaModal2D();
+    this.hasTalkedToElowen = true;
+    this.player.heal(this.player.stats.maxHealth);
+    this.maidenBalmsCount = this.maxMaidenBalms;
+    this.player.stats.restorePosture(this.player.stats.maxPosture);
+    this.storyProgress.completeMilestone('act5_weapon');
+    this.awakenAlbaGris();
+    this.scene.pause('GameScene');
+    this.scene.launch('CharacterDialogueScene', {
+      player: this.player,
+      scenarioIndex: 5,
+      audio: this.audio,
+      dialogueType: 'elowen_cathedral'
+    });
+  }
+
+  private chooseEclipseDeCeniza2D(): void {
+    this.audio.playHolyCurse();
+    this.canonEvents2D.selectChapterXXChoice('ECLIPSE_DE_CENIZA');
+    this.isEclipseEndingView2D = true;
+    this.renderChapterXXDilemmaView();
+  }
+
+  private closeChapterXXDilemmaModal2D(): void {
+    this.dilemmaModalContainer?.destroy();
+    this.dilemmaModalContainer = undefined;
+    this.isDilemmaModalOpen2D = false;
+    this.isEclipseEndingView2D = false;
+  }
+
+  private handleDilemmaModalInput(): void {
+    const gp = this.gamepadAdapter.poll();
+    if (!this.isEclipseEndingView2D) {
+      if (Phaser.Input.Keyboard.JustDown(this.key1)) {
+        this.chooseCanonAlbaGris2D();
+        return;
+      }
+      if (Phaser.Input.Keyboard.JustDown(this.key2)) {
+        this.chooseEclipseDeCeniza2D();
+        return;
+      }
+      if (Phaser.Input.Keyboard.JustDown(this.keyW) || (this.cursors && Phaser.Input.Keyboard.JustDown(this.cursors.up))) {
+        this.dilemmaFocusIndex2D = 0;
+        this.audio.playSfx('menu_select');
+        this.renderChapterXXDilemmaView();
+      } else if (Phaser.Input.Keyboard.JustDown(this.keyS) || (this.cursors && Phaser.Input.Keyboard.JustDown(this.cursors.down))) {
+        this.dilemmaFocusIndex2D = 1;
+        this.audio.playSfx('menu_select');
+        this.renderChapterXXDilemmaView();
+      } else if (
+        Phaser.Input.Keyboard.JustDown(this.keyEnter) ||
+        Phaser.Input.Keyboard.JustDown(this.keySpace) ||
+        gp.interactOrConfirmPressed
+      ) {
+        if (this.dilemmaFocusIndex2D === 0) {
+          this.chooseCanonAlbaGris2D();
+        } else {
+          this.chooseEclipseDeCeniza2D();
+        }
+      }
+    } else {
+      if (
+        Phaser.Input.Keyboard.JustDown(this.keyE) ||
+        Phaser.Input.Keyboard.JustDown(this.keyEnter) ||
+        Phaser.Input.Keyboard.JustDown(this.keySpace) ||
+        gp.interactOrConfirmPressed
+      ) {
+        this.audio.playSfx('menu_select');
+        this.canonEvents2D.rewindEclipseToAltar();
+        this.isEclipseEndingView2D = false;
+        this.dilemmaFocusIndex2D = 0;
+        this.renderChapterXXDilemmaView();
+      } else if (this.keyEsc && Phaser.Input.Keyboard.JustDown(this.keyEsc)) {
+        this.closeChapterXXDilemmaModal2D();
+        if (this.scene.isActive('HUDScene')) {
+          this.scene.stop('HUDScene');
+        }
+        this.scene.start('TitleScene');
+      }
+    }
+  }
+
+  private launchFinalCreditsFromEpilogue(): void {
+    if (this.isTransitioningAct) return;
+    this.isTransitioningAct = true;
+    this.clearActExit();
+    if (this.scene.isActive('HUDScene')) {
+      this.scene.stop('HUDScene');
+    }
+    this.scene.start('CinematicScene', {
+      actTransition: 5,
+      targetAct: 1,
+      characterId: this.player.id
+    });
+  }
+
   private interactWithElowen(): void {
     this.audio.playSfx('menu_select');
+
+    // Act V Chapter XX Moral Dilemma Modal before forging Alba Gris!
+    if (this.currentScenario === 5 && this.canonEvents2D.chapterXXChoice !== 'CANON_ALBA_GRIS') {
+      this.openChapterXXDilemmaModal2D();
+      return;
+    }
+
+    // Playable First Dawn Epilogue (Scenario 6)
+    if (this.currentScenario === 6) {
+      this.canonEvents2D.recordEpilogueConversation('elowen');
+      this.storyProgress.completeMilestone('epilogue_elowen');
+      this.player.heal(this.player.stats.maxHealth);
+      this.scene.pause('GameScene');
+      this.scene.launch('CharacterDialogueScene', {
+        player: this.player,
+        scenarioIndex: 6,
+        audio: this.audio,
+        dialogueType: 'epilogue_elowen'
+      });
+      return;
+    }
 
     if (!this.hasTalkedToElowen) {
       this.hasTalkedToElowen = true;
@@ -1009,6 +1529,19 @@ export class GameScene extends Phaser.Scene {
   private interactWithCedric(): void {
     this.audio.playSfx('menu_select');
 
+    if (this.currentScenario === 6) {
+      this.canonEvents2D.recordEpilogueConversation('cedric');
+      this.storyProgress.completeMilestone('epilogue_companions');
+      this.scene.pause('GameScene');
+      this.scene.launch('CharacterDialogueScene', {
+        player: this.player,
+        scenarioIndex: 6,
+        audio: this.audio,
+        dialogueType: 'epilogue_cedric'
+      });
+      return;
+    }
+
     if (!this.hasTalkedToCedric) {
       this.hasTalkedToCedric = true;
       this.hasRosarioCedric = true;
@@ -1061,10 +1594,22 @@ export class GameScene extends Phaser.Scene {
     const py = this.playerSprite.y;
 
     let closestDist = Infinity;
-    let targetType: 'finisher' | 'elowen' | 'cedric' | 'censer' | 'shalem' | 'ally' | 'weapon' | undefined = undefined;
+    let targetType:
+      | 'finisher'
+      | 'elowen'
+      | 'cedric'
+      | 'censer'
+      | 'shalem'
+      | 'ally'
+      | 'weapon'
+      | 'barn_slab'
+      | 'guilt_mirror'
+      | 'epilogue_credits'
+      | undefined = undefined;
     let targetLabel: string | undefined = undefined;
     let targetX = 0;
     let targetY = 0;
+    this.activeMirrorIndex2D = undefined;
 
     // 0. PRIORITY 1: Stunned / Broken Posture Enemies or Boss for Finisher [E]
     this.finisherTarget = undefined;
@@ -1117,13 +1662,53 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // 0.5. Check Padre Cedric (Scenario 1)
-    if (this.currentScenario === 1 && this.cedricSprite) {
+    // 0.4. Act II Burned Barn Hidden Slab (Cap. VIII — Colmillo del Sauce Negro)
+    if (this.currentScenario === 2 && !this.canonEvents2D.hasOpenedBarnSlab) {
+      const distSlab = Math.hypot(px - 145, py - 272);
+      if (distSlab < 50 && distSlab < closestDist) {
+        closestDist = distSlab;
+        targetType = 'barn_slab';
+        targetLabel = 'Levantar Losa del Granero (Cap. VIII)';
+        targetX = 145;
+        targetY = 242;
+      }
+    }
+
+    // 0.45. Act IV Shatterable Venetian Guilt Mirrors (Cap. XV)
+    if (this.currentScenario === 4 && this.guiltMirrors2D.length > 0) {
+      for (const mirror of this.guiltMirrors2D) {
+        if (mirror.shattered) continue;
+        const distMirror = Math.hypot(px - mirror.spec.x, py - mirror.spec.y);
+        if (distMirror < 54 && distMirror < closestDist) {
+          closestDist = distMirror;
+          targetType = 'guilt_mirror';
+          targetLabel = `Quebrar ${mirror.spec.title}`;
+          targetX = mirror.spec.x;
+          targetY = mirror.spec.y - 68;
+          this.activeMirrorIndex2D = mirror.spec.index;
+        }
+      }
+    }
+
+    // 0.48. Scenario 6 Epilogue Golden Credits Arch
+    if (this.currentScenario === 6 && this.exitPortalZone) {
+      const distCredits = Math.hypot(px - this.exitPortalZone.x, py - this.exitPortalZone.y);
+      if (distCredits < 64 && distCredits < closestDist) {
+        closestDist = distCredits;
+        targetType = 'epilogue_credits';
+        targetLabel = 'Culminar El Primer Amanecer (Créditos Finales)';
+        targetX = this.exitPortalZone.x;
+        targetY = this.exitPortalZone.y - 46;
+      }
+    }
+
+    // 0.5. Check Padre Cedric (Scenario 1 & Scenario 6 Epilogue)
+    if ((this.currentScenario === 1 || this.currentScenario === 6) && this.cedricSprite) {
       const dist = Math.hypot(px - this.cedricSprite.x, py - this.cedricSprite.y);
       if (dist < 48 && dist < closestDist) {
         closestDist = dist;
         targetType = 'cedric';
-        targetLabel = 'Padre Cedric (Anciano Devoto)';
+        targetLabel = this.currentScenario === 6 ? 'Padre Cedric (Memoria de San Jude)' : 'Padre Cedric (Anciano Devoto)';
         targetX = this.cedricSprite.x;
         targetY = this.cedricSprite.y - 55;
       }
@@ -1202,24 +1787,101 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private executeAttack(isHeavy: boolean): void {
+  private cycleKhaterineArrow2D(direction: 1 | -1): void {
+    this.activeArrowType2D = cycleArrowType2D(this.activeArrowType2D, direction);
+    this.audio.playArrowSwitch();
+    const spec = ARROW_SPECS_2D[this.activeArrowType2D];
+    this.spawnDamageNumber(this.playerSprite.x, this.playerSprite.y - 50, `🏹 ${spec.shortName.toUpperCase()}`, false, spec.popupColor);
+  }
+
+  private breakDestructibleProp2D(prop: {
+    sprite: Phaser.GameObjects.Sprite;
+    shadow: Phaser.GameObjects.Ellipse;
+    x: number;
+    y: number;
+    kind: 'wood' | 'stone';
+    broken: boolean;
+  }): void {
+    if (prop.broken) return;
+    prop.broken = true;
+    this.audio.playCombatHit(false);
+    if (prop.sprite.active) {
+      prop.sprite.stop();
+      prop.sprite.setFrame(2);
+      prop.sprite.setAlpha(0.76);
+    }
+    this.spawnAnimatedVfx(prop.x, prop.y - 16, prop.kind === 'wood' ? 'fx_wood_splinters' : 'fx_stone_debris', 1.05, false);
+
+    const drop = resolveDestructibleDrop2D(Math.random(), this.maidenBalmsCount, this.maxMaidenBalms);
+    if (drop.balmGranted > 0) {
+      this.maidenBalmsCount = Math.min(this.maxMaidenBalms, this.maidenBalmsCount + drop.balmGranted);
+      this.audio.playHealingEmber();
+    }
+    if (drop.healAmount > 0) {
+      this.player.heal(drop.healAmount);
+      this.audio.playHealingEmber();
+    }
+    if (drop.expAmount > 0) {
+      this.player.gainExperience(drop.expAmount);
+    }
+    this.spawnDamageNumber(prop.x, prop.y - 34, drop.label, true, drop.color);
+  }
+
+  private applyFireArrowBurn2D(targetEnemy?: Enemy, isBoss: boolean = false): void {
+    const spec = ARROW_SPECS_2D.fire;
+    for (let tick = 1; tick <= spec.burnTicks; tick++) {
+      this.time.delayedCall(tick * 600, () => {
+        if (!this.scene.isActive() || this.isActCleared) return;
+        if (isBoss && this.currentBoss && this.currentBoss.health > 0 && this.bossSprite) {
+          this.currentBoss.takeDamage(spec.burnTickDamage);
+          this.spawnDamageNumber(this.currentBoss.position.x + 12, this.currentBoss.position.y - 58, `🔥 -${spec.burnTickDamage}`, false, '#ff8833');
+          if (this.currentBoss.health <= 0) {
+            this.handleBossDefeated();
+          }
+        } else if (targetEnemy && targetEnemy.isAlive()) {
+          targetEnemy.takeDamage(spec.burnTickDamage);
+          this.spawnDamageNumber(targetEnemy.position.x + 8, targetEnemy.position.y - 42, `🔥 -${spec.burnTickDamage}`, false, '#ff8833');
+          if (!targetEnemy.isAlive()) {
+            const spr = this.enemySprites.get(targetEnemy.id);
+            if (spr) {
+              this.playAnimSafe(spr, this.getEnemyAnimKey(targetEnemy.id, 'death'), true);
+              this.tweens.add({
+                targets: spr,
+                alpha: 0,
+                delay: 220,
+                duration: 240,
+                onComplete: () => {
+                  spr.destroy();
+                  this.enemyShadows.get(targetEnemy.id)?.destroy();
+                  this.enemyShadows.delete(targetEnemy.id);
+                }
+              });
+            }
+          }
+        }
+      });
+    }
+  }
+
+  private executeAttack(isHeavy: boolean, comboStep?: ComboStepSpec2D): void {
     const isDisarmed = this.player.disarmManager.isPlayerDisarmed();
 
-    // Khaterine: Ranged Abyssal Spellcasting / Bow Shot
+    // Khaterine: Ranged Abyssal / Elemental Bow Shot
     if (this.player.id === 'khaterine' && !isDisarmed) {
       this.castKhaterineSpell(isHeavy);
       return;
     }
 
+    const isFinisherCombo = Boolean(comboStep?.isFinisherStep);
     const attackAnim = isDisarmed
       ? (isHeavy ? 'thomas_punch_heavy' : 'thomas_punch_light')
-      : (isHeavy ? 'thomas_slash_heavy' : 'thomas_slash_light');
+      : ((isHeavy || isFinisherCombo) ? 'thomas_slash_heavy' : 'thomas_slash_light');
 
     this.playAnimSafe(this.playerSprite, attackAnim, true);
-    this.audio.playCombatHit(isHeavy);
+    this.audio.playCombatHit(isHeavy || isFinisherCombo);
 
-    if (isHeavy) {
-      this.cameras.main.shake(180, 0.014);
+    if (isHeavy || isFinisherCombo) {
+      this.cameras.main.shake(180, isFinisherCombo ? 0.016 : 0.014);
     }
 
     const playerX = this.playerSprite.x;
@@ -1227,8 +1889,8 @@ export class GameScene extends Phaser.Scene {
     const facing = this.player.facingDirection;
     const attackRange = this.player.disarmManager.getCurrentWeapon().range;
 
-    // Fluid forward micro-step during attack (full 1180px panoramic width)
-    const stepDist = isHeavy ? 10 : 6;
+    // Fluid forward micro-step during attack (escalates across the 3-hit combo chain!)
+    const stepDist = isHeavy ? 10 : (comboStep ? comboStep.stepForwardPx : 6);
     const nextPlayerX = clampWorldX2D(playerX + facing * stepDist);
     this.tweens.add({
       targets: [this.playerSprite, this.playerShadow],
@@ -1242,26 +1904,49 @@ export class GameScene extends Phaser.Scene {
     if (!isDisarmed) {
       const curWpn = this.player.disarmManager.getCurrentWeapon();
       const isAlbaGris = curWpn.id === 'alba_gris' || this.hasAlbaGrisAwakened;
-
-      const vfxKey = (isAlbaGris || isHeavy) ? 'fx_slash_gold' : 'fx_slash_abyss';
+      const useGoldSlash = isAlbaGris || isHeavy || (comboStep !== undefined && comboStep.step >= 2);
+      const vfxKey = useGoldSlash ? 'fx_slash_gold' : 'fx_slash_abyss';
+      const vfxScale = isFinisherCombo ? 1.35 : (isHeavy ? 1.25 : (comboStep?.step === 2 ? 1.12 : 1.0));
       this.spawnAnimatedVfx(
-        playerX + facing * (isHeavy ? 32 : 26),
+        playerX + facing * (isHeavy || isFinisherCombo ? 32 : 26),
         playerY - 26,
         vfxKey,
-        isHeavy ? 1.25 : 1.0,
+        vfxScale,
         facing < 0
       );
 
+      if (isFinisherCombo) {
+        this.spawnDamageNumber(playerX + facing * 24, playerY - 52, '⚡ ¡COMBO x3!', true, '#ffd700');
+      }
+
       if (isAlbaGris) {
-        this.castAlbaGrisWave(playerX, playerY, facing, isHeavy);
+        this.castAlbaGrisWave(playerX, playerY, facing, isHeavy || isFinisherCombo);
       }
     }
 
-    const reachX = attackRange + (isHeavy ? 65 : 45);
-    const reachY = isHeavy ? 35 : 26;
+    const reachX = attackRange + (isHeavy || isFinisherCombo ? 65 : 45);
+    const reachY = isHeavy || isFinisherCombo ? 35 : 26;
 
-    // Phase 2 Act IV: Check hit against 3 Destructible Golden Narcotic Braziers
-    if (this.currentScenario === 4 && this.narcoticBraziers2D.length > 0) {
+    // Opción B: Smash nearby Destructible Props (barrels, crates, Celtic gravestones)
+    for (const prop of this.destructibleProps2D) {
+      if (prop.broken) continue;
+      const pdx = (prop.x - playerX) * facing;
+      const pdy = Math.abs(prop.y - playerY);
+      if (pdx > -14 && pdx <= reachX + 18 && pdy <= reachY + 22) {
+        this.breakDestructibleProp2D(prop);
+      }
+    }
+
+    // Phase 2 Act IV: Check hit against 3 Destructible Golden Narcotic Braziers & 3 Venetian Guilt Mirrors
+    if (this.currentScenario === 4) {
+      for (const mirror of this.guiltMirrors2D) {
+        if (mirror.shattered) continue;
+        const mdx = (mirror.spec.x - playerX) * facing;
+        const mdy = Math.abs(mirror.spec.y - playerY);
+        if (mdx > -20 && mdx <= reachX + 24 && mdy <= reachY + 34) {
+          this.shatterGuiltMirror2D(mirror.spec.index);
+        }
+      }
       for (const brazier of this.narcoticBraziers2D) {
         if (brazier.destroyed) continue;
         const bdx = (brazier.x - playerX) * facing;
@@ -1288,13 +1973,41 @@ export class GameScene extends Phaser.Scene {
       const dy = Math.abs(enemy.position.y - playerY);
 
       if (dx > 0 && dx <= reachX && dy <= reachY) {
+        const counter = this.perfectDodge2D.consumeCounterAttack();
+        const comboMult = comboStep?.damageMultiplier ?? 1.0;
+        const totalExtraMult = comboMult * counter.damageMultiplier;
         const res = CombatUseCases.executeAttackOnEnemy(this.player, enemy, isHeavy);
+        let totalShownDmg = res.damageDealt;
 
-        this.cameras.main.shake(isHeavy ? 160 : 100, isHeavy ? 0.012 : 0.006);
-        this.spawnDamageNumber(enemy.position.x, enemy.position.y - 35, res.damageDealt, isHeavy);
+        if (totalExtraMult > 1.01 && enemy.isAlive()) {
+          const bonusDmg = Math.max(1, Math.round(res.damageDealt * (totalExtraMult - 1.0)));
+          enemy.takeDamage(bonusDmg);
+          totalShownDmg += bonusDmg;
+        }
+        const extraPosture = (comboStep?.bonusPostureDamage ?? 0) + counter.bonusPosture;
+        if (extraPosture > 0 && enemy.isAlive()) {
+          enemy.damagePosture(extraPosture);
+        }
+
+        const curWpn = this.player.disarmManager.getCurrentWeapon();
+        if (curWpn.specialEffect === 'ECO_AQUELARRE' && (isHeavy || isFinisherCombo || counter.triggered) && enemy.isAlive()) {
+          enemy.takeDamage(12);
+          totalShownDmg += 12;
+          this.spawnAnimatedVfx(enemy.position.x, enemy.position.y - 26, 'fx_slash_abyss', 1.15, facing < 0);
+          this.spawnDamageNumber(enemy.position.x, enemy.position.y - 54, '🌙 ECO DE LYRA +12', true, '#d999ff');
+        }
+
+        if (counter.triggered) {
+          this.audio.playFinisherSound(false);
+          this.spawnAnimatedVfx(enemy.position.x, enemy.position.y - 24, 'fx_slash_gold', 1.3, facing < 0);
+          this.spawnDamageNumber(enemy.position.x, enemy.position.y - 56, '⚡ ¡CONTRAATAQUE!', true, '#7ef5ff');
+        }
+
+        const enemyKilledNow = res.targetKilled || !enemy.isAlive();
+        this.cameras.main.shake(isHeavy || isFinisherCombo || counter.triggered ? 160 : 100, isHeavy || isFinisherCombo ? 0.012 : 0.006);
+        this.spawnDamageNumber(enemy.position.x, enemy.position.y - 35, totalShownDmg, isHeavy || isFinisherCombo || counter.triggered);
 
         // Passive Effect: Cosecha de Culpa (Lamento de Oakhaven heals on strike)
-        const curWpn = this.player.disarmManager.getCurrentWeapon();
         if (curWpn.specialEffect === 'COSECHA_CULPA') {
           this.player.heal(5);
           this.audio.playHealingEmber();
@@ -1303,14 +2016,14 @@ export class GameScene extends Phaser.Scene {
 
         const sprite = this.enemySprites.get(enemy.id);
         if (sprite) {
-          if (isHeavy) {
-            this.triggerHitStop(70, sprite);
+          if (isHeavy || isFinisherCombo || counter.triggered) {
+            this.triggerHitStop(counter.triggered ? 85 : 65, sprite);
           }
           sprite.setTint(0xff3333);
           this.time.delayedCall(120, () => sprite.clearTint());
 
           // Phase 2 Act III: Heavy attacks on the Great Stone Bridge push enemies toward the broken parapet -> river abyss!
-          if (!res.targetKilled && this.currentScenario === 3 && isHeavy) {
+          if (!enemyKilledNow && this.currentScenario === 3 && (isHeavy || isFinisherCombo)) {
             const pushedY = enemy.position.y - 35;
             enemy.position = new Vector2(enemy.position.x, pushedY);
             if (pushedY <= 208) {
@@ -1338,7 +2051,7 @@ export class GameScene extends Phaser.Scene {
             }
           }
 
-          if (res.targetKilled) {
+          if (enemyKilledNow) {
             const deathAnim = this.getEnemyAnimKey(enemy.id, 'death');
             this.playAnimSafe(sprite, deathAnim, true);
             this.spawnAnimatedVfx(enemy.position.x, enemy.position.y - 24, 'fx_bone_shatter', 1.0, false);
@@ -1431,11 +2144,31 @@ export class GameScene extends Phaser.Scene {
           this.triggerShalemBalloon("Shalem: «¡Eso es, muchacho! ¡El escudo se hizo añicos! ¡Remátala!»", 3200);
         }
 
+        const counter = this.perfectDodge2D.consumeCounterAttack();
+        const comboMult = comboStep?.damageMultiplier ?? 1.0;
+        const totalExtraMult = comboMult * counter.damageMultiplier;
         const prevPhase = this.currentBoss.phase;
         const res = CombatUseCases.executeAttackOnBoss(this.player, this.currentBoss, isHeavy, false);
+        let shownBossDmg = res.damageDealt;
+
+        if (totalExtraMult > 1.01 && this.currentBoss.health > 0) {
+          const bonusBossDmg = Math.max(1, Math.round(res.damageDealt * (totalExtraMult - 1.0)));
+          this.currentBoss.takeDamage(bonusBossDmg);
+          shownBossDmg += bonusBossDmg;
+        }
+        const extraBossPosture = (comboStep?.bonusPostureDamage ?? 0) + counter.bonusPosture;
+        if (extraBossPosture > 0 && this.currentBoss.health > 0) {
+          this.currentBoss.posture = Math.max(0, this.currentBoss.posture - extraBossPosture);
+        }
+        if (counter.triggered) {
+          this.audio.playFinisherSound(false);
+          this.spawnAnimatedVfx(this.currentBoss.position.x, this.currentBoss.position.y - 32, 'fx_slash_gold', 1.35, facing < 0);
+          this.spawnDamageNumber(this.currentBoss.position.x, this.currentBoss.position.y - 72, '⚡ ¡CONTRAATAQUE! (+50%)', true, '#7ef5ff');
+        }
+
         // Phase 2 Act IV: Extra +15% damage per destroyed narcotic brazier against Rex Malphas
         if (this.currentScenario === 4 && this.destroyedBraziers2DCount > 0 && this.currentBoss.health > 0) {
-          const extraDmg = Math.round(res.damageDealt * (this.destroyedBraziers2DCount * 0.15));
+          const extraDmg = Math.round(shownBossDmg * (this.destroyedBraziers2DCount * 0.15));
           if (extraDmg > 0) {
             this.currentBoss.takeDamage(extraDmg);
             this.spawnDamageNumber(this.currentBoss.position.x + 18, this.currentBoss.position.y - 65, `+${extraDmg} SIN INCIENSO`, true, '#ffd700');
@@ -1446,12 +2179,12 @@ export class GameScene extends Phaser.Scene {
           this.spawnAnimatedVfx(this.currentBoss.position.x, this.currentBoss.position.y - 35, 'fx_pyre_explosion', 1.1, false);
         }
 
-        if (isHeavy) {
-          this.triggerHitStop(75, this.bossSprite);
+        if (isHeavy || isFinisherCombo || counter.triggered) {
+          this.triggerHitStop(counter.triggered ? 90 : 70, this.bossSprite);
         }
 
-        this.cameras.main.shake(isHeavy ? 200 : 140, isHeavy ? 0.016 : 0.01);
-        this.spawnDamageNumber(this.currentBoss.position.x, this.currentBoss.position.y - 50, res.damageDealt, true);
+        this.cameras.main.shake(isHeavy || isFinisherCombo ? 200 : 140, isHeavy || isFinisherCombo ? 0.016 : 0.01);
+        this.spawnDamageNumber(this.currentBoss.position.x, this.currentBoss.position.y - 50, shownBossDmg, true);
 
         // Passive Effect: Cosecha de Culpa
         const curWpn = this.player.disarmManager.getCurrentWeapon();
@@ -1503,10 +2236,12 @@ export class GameScene extends Phaser.Scene {
     });
     this.player.position = new Vector2(nextPlayerX, py);
 
-    // Official Animated Abyssal Arrow Projectile (fx_arrow_abyssal)
+    // Official Animated Elemental/Abyssal Arrow Projectile (fx_arrow_abyssal tinted by activeArrowType2D)
+    const arrowSpec = ARROW_SPECS_2D[this.activeArrowType2D];
     const projectile = this.add.sprite(px + facing * 22, py - 28, 'fx_arrow_abyssal', 0)
       .setFlipX(facing < 0)
-      .setScale(isHeavy ? 1.2 : 0.95)
+      .setScale(isHeavy ? 1.25 : 0.98)
+      .setTint(arrowSpec.tint)
       .setDepth(py + 3);
     this.playAnimSafe(projectile, 'fx_arrow_abyssal');
 
@@ -1541,6 +2276,41 @@ export class GameScene extends Phaser.Scene {
             if (this.tutorialHits >= 2) {
               this.advanceTrainingStep(3);
             }
+            return;
+          }
+        }
+
+        // Check collision with Act IV Venetian Guilt Mirrors & Golden Narcotic Braziers
+        if (this.currentScenario === 4) {
+          for (const mirror of this.guiltMirrors2D) {
+            if (!mirror.shattered && Math.hypot(mirror.spec.x - currentX, mirror.spec.y - (currentY + 18)) < 42) {
+              hasHit = true;
+              this.shatterGuiltMirror2D(mirror.spec.index);
+              projectile.destroy();
+              return;
+            }
+          }
+          for (const brazier of this.narcoticBraziers2D) {
+            if (!brazier.destroyed && Math.hypot(brazier.x - currentX, brazier.y - (currentY + 18)) < 36) {
+              hasHit = true;
+              brazier.destroyed = true;
+              this.destroyedBraziers2DCount = Math.min(3, this.destroyedBraziers2DCount + 1);
+              this.spawnAnimatedVfx(brazier.x, brazier.y - 20, 'fx_pyre_explosion', 0.9, false);
+              this.audio.playCombatHit(true);
+              brazier.sprite.destroy();
+              this.spawnDamageNumber(brazier.x, brazier.y - 40, `🌿 BRASERO ${this.destroyedBraziers2DCount}/3`, true, '#ffd700');
+              projectile.destroy();
+              return;
+            }
+          }
+        }
+
+        // Check collision with Destructible Props (barrels, crates, gravestones)
+        for (const prop of this.destructibleProps2D) {
+          if (!prop.broken && Math.hypot(prop.x - currentX, prop.y - (currentY + 18)) < 32) {
+            hasHit = true;
+            this.breakDestructibleProp2D(prop);
+            projectile.destroy();
             return;
           }
         }
@@ -1589,33 +2359,94 @@ export class GameScene extends Phaser.Scene {
   }
 
   private explodeAbyssalOrb(x: number, y: number, isHeavy: boolean, targetEnemy?: Enemy, isBoss: boolean = false): void {
-    this.audio.playCombatHit(isHeavy);
-    this.cameras.main.shake(isHeavy ? 160 : 90, isHeavy ? 0.012 : 0.006);
+    const arrowSpec = ARROW_SPECS_2D[this.activeArrowType2D];
+    const counter = this.perfectDodge2D.consumeCounterAttack();
+    this.audio.playCombatHit(isHeavy || counter.triggered);
+    this.cameras.main.shake(isHeavy || counter.triggered ? 160 : 90, isHeavy ? 0.012 : 0.006);
 
-    // Animated Abyssal Slash/Explosion VFX
-    this.spawnAnimatedVfx(x, y, 'fx_slash_abyss', isHeavy ? 1.25 : 0.95, false);
+    // Elemental Impact VFX per Arrow Type
+    if (arrowSpec.id === 'fire') {
+      this.spawnAnimatedVfx(x, y, 'fx_pyre_explosion', isHeavy ? 0.85 : 0.65, false);
+    } else if (arrowSpec.id === 'silver') {
+      this.spawnAnimatedVfx(x, y, 'fx_parry_spark', isHeavy ? 1.25 : 1.0, false);
+    } else {
+      this.spawnAnimatedVfx(x, y, 'fx_slash_abyss', isHeavy ? 1.25 : 0.95, false);
+    }
 
     if (isBoss && this.currentBoss && this.bossSprite) {
       const prevPhase = this.currentBoss.phase;
       const res = CombatUseCases.executeAttackOnBoss(this.player, this.currentBoss, isHeavy, true);
+      let shownBossDmg = res.damageDealt;
+
+      // Silver Arrow pierces Flame Shield & deals heavy bonus posture break!
+      if (arrowSpec.piercesFlameShield && this.currentBoss.isFlameShieldActive && this.currentBoss.health > 0) {
+        const pierceBonus = isHeavy ? 22 : 16;
+        this.currentBoss.takeDamage(pierceBonus);
+        shownBossDmg += pierceBonus;
+        this.spawnDamageNumber(this.currentBoss.position.x, this.currentBoss.position.y - 68, `🥈 PERFORA ESCUDO +${pierceBonus}`, true, '#8cf4ff');
+      }
+      if (counter.triggered && this.currentBoss.health > 0) {
+        const counterBonus = Math.max(1, Math.round(shownBossDmg * 0.5));
+        this.currentBoss.takeDamage(counterBonus);
+        shownBossDmg += counterBonus;
+        this.audio.playFinisherSound(false);
+        this.spawnDamageNumber(this.currentBoss.position.x, this.currentBoss.position.y - 74, '⚡ ¡CONTRAATAQUE!', true, '#7ef5ff');
+      }
+      const totalBossPosture = arrowSpec.bonusPosture + counter.bonusPosture;
+      if (totalBossPosture > 0 && this.currentBoss.health > 0) {
+        this.currentBoss.posture = Math.max(0, this.currentBoss.posture - totalBossPosture);
+      }
+      if (arrowSpec.burnTicks > 0 && this.currentBoss.health > 0) {
+        this.applyFireArrowBurn2D(undefined, true);
+      }
+
       if (this.currentBoss.id === 'madre_morwenna' && prevPhase === BossPhaseType.PHASE_1 && this.currentBoss.phase === BossPhaseType.PHASE_2) {
         this.playAnimSafe(this.bossSprite, 'morwenna_phase2_shockwave', true);
         this.spawnAnimatedVfx(this.currentBoss.position.x, this.currentBoss.position.y - 35, 'fx_pyre_explosion', 1.1, false);
       }
-      const damageCol = this.currentBoss.isFlameShieldActive ? '#ffaa44' : '#d477ff';
-      const label = this.currentBoss.isFlameShieldActive ? `${res.damageDealt} [ESCUDO]` : res.damageDealt;
-      this.spawnDamageNumber(this.currentBoss.position.x, this.currentBoss.position.y - 50, label, isHeavy, damageCol);
-      this.bossSprite.setTint(0xba68c8);
+      const damageCol = this.currentBoss.isFlameShieldActive && !arrowSpec.piercesFlameShield ? '#ffaa44' : arrowSpec.popupColor;
+      const label = this.currentBoss.isFlameShieldActive && !arrowSpec.piercesFlameShield ? `${shownBossDmg} [ESCUDO]` : shownBossDmg;
+      this.spawnDamageNumber(this.currentBoss.position.x, this.currentBoss.position.y - 50, label, isHeavy || counter.triggered, damageCol);
+      this.bossSprite.setTint(arrowSpec.tint);
       this.time.delayedCall(120, () => this.bossSprite?.clearTint());
       if (res.targetKilled || this.currentBoss.health <= 0) {
         this.handleBossDefeated();
       }
     } else if (targetEnemy) {
       const res = CombatUseCases.executeAttackOnEnemy(this.player, targetEnemy, isHeavy);
-      this.spawnDamageNumber(targetEnemy.position.x, targetEnemy.position.y - 35, res.damageDealt, isHeavy, '#d477ff');
+      let shownEnemyDmg = res.damageDealt;
+
+      if (counter.triggered && targetEnemy.isAlive()) {
+        const counterBonus = Math.max(1, Math.round(shownEnemyDmg * 0.5));
+        targetEnemy.takeDamage(counterBonus);
+        shownEnemyDmg += counterBonus;
+        this.audio.playFinisherSound(false);
+        this.spawnDamageNumber(targetEnemy.position.x, targetEnemy.position.y - 54, '⚡ ¡CONTRAATAQUE!', true, '#7ef5ff');
+      }
+      const totalPosture = arrowSpec.bonusPosture + counter.bonusPosture;
+      if (totalPosture > 0 && targetEnemy.isAlive()) {
+        targetEnemy.damagePosture(totalPosture);
+      }
+      if (arrowSpec.burnTicks > 0 && targetEnemy.isAlive()) {
+        this.applyFireArrowBurn2D(targetEnemy, false);
+      }
+
+      // Abyssal Arrow AoE Splash to nearby enemies!
+      if (arrowSpec.splashRadiusPx > 0) {
+        for (const other of this.enemies) {
+          if (other.id === targetEnemy.id || !other.isAlive()) continue;
+          if (Math.hypot(other.position.x - x, other.position.y - y) <= arrowSpec.splashRadiusPx) {
+            const splashDmg = Math.max(6, Math.round(shownEnemyDmg * 0.55));
+            other.takeDamage(splashDmg);
+            this.spawnDamageNumber(other.position.x, other.position.y - 32, splashDmg, false, '#d477ff');
+          }
+        }
+      }
+
+      this.spawnDamageNumber(targetEnemy.position.x, targetEnemy.position.y - 35, shownEnemyDmg, isHeavy || counter.triggered, arrowSpec.popupColor);
       const sprite = this.enemySprites.get(targetEnemy.id);
       if (sprite) {
-        sprite.setTint(0xba68c8);
+        sprite.setTint(arrowSpec.tint);
         this.time.delayedCall(120, () => sprite.clearTint());
 
         if (res.targetKilled || targetEnemy.health <= 0) {
@@ -1643,9 +2474,10 @@ export class GameScene extends Phaser.Scene {
         } else {
           const staggerAnim = this.getEnemyAnimKey(targetEnemy.id, 'stagger');
           this.playAnimSafe(sprite, staggerAnim, true);
-          // Knockback across full 1180px world
+          // Knockback scaled by Arrow Type across full 1180px world
           const facing = this.player.facingDirection;
-          const knockX = clampWorldX2D(targetEnemy.position.x + facing * (isHeavy ? 16 : 10));
+          const baseKnock = arrowSpec.knockbackPx + (isHeavy ? 6 : 0);
+          const knockX = clampWorldX2D(targetEnemy.position.x + facing * baseKnock);
           targetEnemy.position = new Vector2(knockX, targetEnemy.position.y);
           this.tweens.add({ targets: sprite, x: knockX, duration: 110, ease: 'Cubic.easeOut' });
           const shadow = this.enemyShadows.get(targetEnemy.id);
@@ -2550,17 +3382,38 @@ export class GameScene extends Phaser.Scene {
       this.storyProgress.scenarioProgress = 100;
 
       this.triggerShalemBalloon(
-        "Shalem: «¡Astaroth y la teocracia han caído! La luz y la oscuridad han alcanzado el equilibrio. ¡EL PRIMER AMANECER HA LLEGADO!»",
+        "Shalem: «¡Astaroth ha caído! Regresemos a Oakhaven para contemplar juntos El Primer Amanecer sobre la Colina del Viejo Roble.»",
         10000
       );
 
-      // Victory Banner for Finale
-      this.victoryBannerBg = this.add.rectangle(320, 160, 460, 84, 0x11081f, 0.96)
+      this.exitPortalZone = this.add.ellipse(portalX, 250, 52, 18, 0xffd770, 0.72).setDepth(220);
+      this.exitPortalMarker = this.add.text(portalX, 204, '🌅 AL PRIMER AMANECER ▶\n[E] o Avanza a Oakhaven', {
+        fontFamily: 'Cinzel, monospace',
+        fontSize: '8px',
+        color: '#fff4bd',
+        backgroundColor: '#261808',
+        padding: { x: 6, y: 4 },
+        align: 'center',
+        fontStyle: 'bold'
+      }).setOrigin(0.5).setDepth(340);
+
+      this.exitPortalTween = this.tweens.add({
+        targets: [this.exitPortalMarker, this.exitPortalZone],
+        scaleX: 1.06,
+        scaleY: 1.06,
+        duration: 820,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+      });
+
+      // Victory Banner for Finale -> Playable First Dawn Epilogue (Scenario 6)
+      this.victoryBannerBg = this.add.rectangle(320, 160, 480, 84, 0x11081f, 0.96)
         .setStrokeStyle(2, 0xffd700)
         .setDepth(360)
         .setScrollFactor(0);
 
-      this.victoryBannerTitle = this.add.text(320, 140, '★ ¡ALBION REDIMIDO: LA LUZ EN LAS TINIEBLAS! ★', {
+      this.victoryBannerTitle = this.add.text(320, 140, '★ ¡ALBION REDIMIDO: EL SOL NEGRO HA CAÍDO! ★', {
         fontFamily: 'Cinzel, Georgia, serif',
         fontSize: '12.5px',
         color: '#ffd700',
@@ -2569,25 +3422,18 @@ export class GameScene extends Phaser.Scene {
         fontStyle: 'bold'
       }).setOrigin(0.5).setDepth(361).setScrollFactor(0);
 
-      this.victoryBannerPrompt = this.add.text(320, 172, 'PULSA [ENTER] PARA VER EL EPÍLOGO Y LOS CRÉDITOS ▶', {
+      this.victoryBannerPrompt = this.add.text(320, 172, 'PULSA [ENTER], [E] O AVANZA AL EPÍLOGO JUGABLE: EL PRIMER AMANECER ▶', {
         fontFamily: 'monospace',
-        fontSize: '9px',
+        fontSize: '8.5px',
         color: '#ffffff',
         backgroundColor: '#3d1f5e',
-        padding: { x: 10, y: 4 },
+        padding: { x: 8, y: 4 },
         fontStyle: 'bold'
       }).setOrigin(0.5).setDepth(361).setScrollFactor(0).setInteractive({ useHandCursor: true });
 
       this.victoryBannerPrompt.on('pointerdown', () => {
         this.clearActExit();
-        if (this.scene.isActive('HUDScene')) {
-          this.scene.stop('HUDScene');
-        }
-        this.scene.start('CinematicScene', {
-          actTransition: 5,
-          targetAct: 1,
-          characterId: this.player.id
-        });
+        this.transitionToActWithLoading(6);
       });
     }
   }
@@ -2884,7 +3730,13 @@ export class GameScene extends Phaser.Scene {
         image: 'loading_shalem_wall',
         title: 'ACTO V — LA CATEDRAL INVERTIDA: EL SOL DEL ABISMO',
         story: '«El Rex Malphas ha sido derribado y las leyes del mundo colapsan. Ante ellos se abre la sima cósmica hacia la Catedral Invertida: el templo sacrílego donde el demonio primordial Astaroth aguarda su manifestación definitiva.»',
-        tip: '«Shalem: Elowen te otorgará su Gota de Luz Divina para forjar Alba Gris. ¡Usa su Onda Sagrada para purgar las sombras!»'
+        tip: '«Shalem: Acércate al Altar con [E] para elegir tu destino y forjar Alba Gris.»'
+      },
+      6: {
+        image: 'loading_pyre_remains',
+        title: 'EPÍLOGO — EL PRIMER AMANECER EN LA COLINA DEL VIEJO ROBLE',
+        story: '«El Sol Negro se ha extinguido para siempre. Sobre los tejados de Oakhaven se alza el primer amanecer cálido en dieciocho inviernos, y dieciséis flores blancas brotan al pie del Viejo Roble.»',
+        tip: '«Camina en paz por Oakhaven, conversa con Elowen, Cedric, Khaterine y Shalem con [E], o avanza al Arco Dorado para ver los créditos.»'
       }
     };
 
@@ -3010,8 +3862,9 @@ export class GameScene extends Phaser.Scene {
     const facing = this.player.facingDirection;
 
     // Ally follows smoothly in 2.5D, facing movement direction while catching up
+    const hasTerrace = this.currentScenario === 1 || this.currentScenario === 2 || this.currentScenario === 6;
     const allyTargetX = clampWorldX2D(px - 45 * facing);
-    const allyTargetY = clampWorldY2D(py - 4, this.currentScenario === 1 || this.currentScenario === 2);
+    const allyTargetY = clampWorldY2D(py - 4, hasTerrace);
     const allyDx = allyTargetX - this.allySprite.x;
     const allyDist = Math.hypot(allyDx, allyTargetY - this.allySprite.y);
     this.allySprite.x = Phaser.Math.Linear(this.allySprite.x, allyTargetX, 0.08);
@@ -3036,7 +3889,7 @@ export class GameScene extends Phaser.Scene {
 
     // Shalem Cat follows smoothly in 2.5D, facing actual movement direction
     const catTargetX = clampWorldX2D(px - 22 * facing);
-    const catTargetY = clampWorldY2D(py + 6, this.currentScenario === 1 || this.currentScenario === 2);
+    const catTargetY = clampWorldY2D(py + 6, hasTerrace);
     const catDx = catTargetX - this.shalemSprite.x;
     const catDist = Math.hypot(catDx, catTargetY - this.shalemSprite.y);
     this.shalemSprite.x = Phaser.Math.Linear(this.shalemSprite.x, catTargetX, 0.1);
@@ -3874,14 +4727,29 @@ export class GameScene extends Phaser.Scene {
   private spawnScenarioProps(scenarioIndex: number): void {
     this.scenarioProps.forEach(p => p.destroy());
     this.scenarioProps = [];
+    this.destructibleProps2D = [];
 
     const addProp = (key: string, x: number, y: number, maxW: number, maxH: number, animate: boolean = true) => {
       if (!this.textures.exists(key)) return;
       // Subtle grounded contact shadow so no prop ever appears floating above cobblestones
       const shadow = this.add.ellipse(x, y, Math.min(62, Math.max(20, maxW * 0.62)), 7, 0x000000, 0.42).setDepth(y - 3);
       const spr = this.normalizeSprite(this.add.sprite(x, y, key, 0), maxW, maxH, 0.5, 0.95).setDepth(y - 2);
-      if (animate && this.anims.exists(key)) {
+      const isDestructible =
+        scenarioIndex !== 6 &&
+        (key === 'prop_barrel' || key === 'prop_parish_crate' || key === 'prop_celtic_gravestone');
+
+      if (!isDestructible && animate && this.anims.exists(key)) {
         spr.play(key);
+      } else if (isDestructible) {
+        spr.setFrame(0);
+        this.destructibleProps2D.push({
+          sprite: spr,
+          shadow,
+          x,
+          y,
+          kind: key === 'prop_celtic_gravestone' ? 'stone' : 'wood',
+          broken: false
+        });
       }
       this.scenarioProps.push(shadow, spr);
     };
@@ -3903,6 +4771,8 @@ export class GameScene extends Phaser.Scene {
       addProp('prop_sanctuary_altar', 194, 218, 60, 44, true);
       addProp('prop_barrel', 238, 224, 30, 44, false);
       addProp('prop_parish_crate', 260, 226, 28, 28, false);
+      addProp('prop_barrel', 310, 266, 30, 44, false);
+      addProp('prop_parish_crate', 498, 274, 28, 28, false);
       addProp('prop_street_lamp', 445, 212, 32, 92, true);
       addProp('prop_great_pyre', 565, 226, 92, 92, true);
       addProp('prop_cemetery_gate', 715, 216, 62, 90, false);
@@ -3912,14 +4782,24 @@ export class GameScene extends Phaser.Scene {
       addProp('prop_mausoleum_facade', 1080, 222, 94, 122, true);
     } else if (scenarioIndex === 2) {
       // Act II: Burned Barn Slab (Cap. VIII) + Elevated Salt Cell Terrace (Cap. VII) & Belltower Crucible Props
-      const barnSlab = this.add.rectangle(145, 272, 42, 20, 0x2c2238, 0.92).setStrokeStyle(1.5, 0xaa44ff).setDepth(204);
-      const barnLabel = this.add.text(145, 254, '🗡 LOSA DEL GRANERO (CAP. VIII)', {
-        fontFamily: 'Cinzel, monospace',
-        fontSize: '7px',
-        color: '#d999ff',
-        backgroundColor: 'rgba(18, 10, 28, 0.82)',
-        padding: { x: 3, y: 1 }
-      }).setOrigin(0.5).setDepth(205);
+      const slabOpened = this.canonEvents2D.hasOpenedBarnSlab;
+      const barnSlab = this.add.rectangle(slabOpened ? 162 : 145, 272, 42, 20, slabOpened ? 0x160f21 : 0x2c2238, 0.92)
+        .setStrokeStyle(1.5, slabOpened ? 0xffd700 : 0xaa44ff)
+        .setDepth(204);
+      const barnLabel = this.add.text(
+        145,
+        254,
+        slabOpened ? '✓ RELIQUIA DE LYRA RECUPERADA' : '🗡 [E] LOSA DEL GRANERO (CAP. VIII)',
+        {
+          fontFamily: 'Cinzel, monospace',
+          fontSize: '7px',
+          color: slabOpened ? '#ffd700' : '#d999ff',
+          backgroundColor: 'rgba(18, 10, 28, 0.85)',
+          padding: { x: 3, y: 1 }
+        }
+      ).setOrigin(0.5).setDepth(205);
+      this.barnSlabRect2D = barnSlab;
+      this.barnSlabLabel2D = barnLabel;
 
       const saltTerrace = this.add.ellipse(220, 194, 126, 30, 0x322d3d, 0.92).setStrokeStyle(1.5, 0xc8c8ee).setDepth(174);
       const saltStep1 = this.add.rectangle(175, 208, 22, 8, 0x4b4656, 0.95).setStrokeStyle(1, 0x8b8698).setDepth(175);
@@ -3934,6 +4814,8 @@ export class GameScene extends Phaser.Scene {
       this.scenarioProps.push(barnSlab, barnLabel, saltTerrace, saltStep1, saltStep2, saltLabel);
 
       addProp('prop_barrel', 90, 224, 30, 44, false);
+      addProp('prop_parish_crate', 285, 262, 28, 28, false);
+      addProp('prop_barrel', 488, 272, 30, 44, false);
       addProp('prop_soul_brazier', 310, 218, 32, 46, true);
       addProp('prop_monumental_sarcophagus', 425, 220, 60, 60, false);
       addProp('prop_soul_brazier', 550, 218, 32, 46, true);
@@ -3944,13 +4826,36 @@ export class GameScene extends Phaser.Scene {
       addProp('prop_street_lamp', 110, 212, 32, 92, true);
       addProp('prop_parish_crate', 148, 232, 28, 28, false);
       addProp('prop_barrel', 172, 234, 30, 44, false);
+      addProp('prop_barrel', 330, 266, 30, 44, false);
+      addProp('prop_parish_crate', 485, 272, 28, 28, false);
       addProp('prop_street_lamp', 310, 212, 32, 92, true);
       addProp('prop_street_lamp', 520, 212, 32, 92, true);
       addProp('prop_cemetery_gate', 660, 216, 62, 90, false);
       addProp('prop_street_lamp', 875, 212, 32, 92, true);
       addProp('prop_mausoleum_facade', 1075, 220, 92, 120, true);
     } else if (scenarioIndex === 4) {
-      // Act IV: Londinium Citadel Props + 3 Destructible Golden Narcotic Braziers
+      // Act IV: Londinium Citadel Props + 3 Venetian Guilt Mirrors (Cap. XV) + 3 Golden Narcotic Braziers
+      this.guiltMirrors2D = [];
+      this.canonEvents2D.resetAct4Mirrors();
+      for (const spec of ACT4_GUILT_MIRRORS_2D) {
+        const mShadow = this.add.ellipse(spec.x, spec.y, 32, 7, 0x000000, 0.45).setDepth(spec.y - 3);
+        const frame = this.add.rectangle(spec.x, spec.y - 32, 34, 62, 0x26183b, 0.96)
+          .setStrokeStyle(2, 0xd4af37)
+          .setDepth(spec.y - 2);
+        const glass = this.add.rectangle(spec.x, spec.y - 32, 26, 52, 0x5c3485, 0.78)
+          .setStrokeStyle(1, 0xe8c7ff)
+          .setDepth(spec.y - 1);
+        const label = this.add.text(spec.x, spec.y - 70, `🪞 ESPEJO ${spec.index}/3`, {
+          fontFamily: 'Cinzel, monospace',
+          fontSize: '7px',
+          color: '#f3d9ff',
+          backgroundColor: 'rgba(18, 10, 28, 0.85)',
+          padding: { x: 3, y: 1 }
+        }).setOrigin(0.5).setDepth(spec.y);
+        this.guiltMirrors2D.push({ spec, frame, glass, label, shattered: false });
+        this.scenarioProps.push(mShadow, frame, glass, label);
+      }
+
       this.narcoticBraziers2D = [];
       this.destroyedBraziers2DCount = 0;
       const brazierCoords = [
@@ -3971,13 +4876,47 @@ export class GameScene extends Phaser.Scene {
       });
 
       addProp('prop_sanctuary_altar', 310, 216, 60, 44, true);
+      addProp('prop_parish_crate', 220, 264, 28, 28, false);
+      addProp('prop_barrel', 505, 272, 30, 44, false);
       addProp('prop_soul_brazier', 690, 218, 32, 46, true);
       addProp('prop_sanctuary_cross', 895, 216, 46, 76, true);
+      addProp('prop_mausoleum_facade', 1075, 220, 92, 120, true);
+    } else if (scenarioIndex === 6) {
+      // Epílogo Jugable (Cap. XX): Oakhaven en el Primer Amanecer + 16 Flores Blancas en la Colina del Viejo Roble
+      const dawnHillLabel = this.add.text(335, 134, '🌸 COLINA DEL VIEJO ROBLE · EL PRIMER AMANECER', {
+        fontFamily: 'Cinzel, monospace',
+        fontSize: '7.5px',
+        color: '#fff4bd',
+        backgroundColor: 'rgba(38, 28, 18, 0.80)',
+        padding: { x: 5, y: 1 }
+      }).setOrigin(0.5).setDepth(186);
+      this.scenarioProps.push(dawnHillLabel);
+
+      // 16 Canonical Blooming White Dawn Flowers around Old Oak Hill (x: 246..418, y: 184..214)
+      for (let i = 0; i < 16; i++) {
+        const angle = (i / 16) * Math.PI * 2;
+        const rx = 74 * Math.cos(angle) + ((i % 3) - 1) * 8;
+        const ry = 14 * Math.sin(angle) + ((i % 2) === 0 ? -2 : 3);
+        const fx = Math.round(332 + rx);
+        const fy = Math.round(198 + ry);
+        const stem = this.add.rectangle(fx, fy + 2, 1.5, 5, 0x5ca85c, 0.95).setDepth(fy - 1);
+        const petals = this.add.circle(fx, fy - 1, 3.2, 0xffffff, 0.96).setDepth(fy);
+        const center = this.add.circle(fx, fy - 1, 1.3, 0xffd75e, 1.0).setDepth(fy + 1);
+        this.scenarioProps.push(stem, petals, center);
+      }
+
+      addProp('prop_street_lamp', 75, 212, 32, 92, true);
+      addProp('prop_sanctuary_cross', 128, 216, 46, 76, true);
+      addProp('prop_sanctuary_altar', 202, 218, 60, 44, true);
+      addProp('prop_street_lamp', 455, 212, 32, 92, true);
+      addProp('prop_street_lamp', 760, 212, 32, 92, true);
       addProp('prop_mausoleum_facade', 1075, 220, 92, 120, true);
     } else {
       // Act V: Inverted Cathedral Props grounded on fractured marble causeway
       addProp('prop_sanctuary_cross', 145, 222, 46, 76, true);
       addProp('prop_sanctuary_altar', 202, 224, 60, 44, true);
+      addProp('prop_celtic_gravestone', 285, 264, 30, 46, false);
+      addProp('prop_celtic_gravestone', 465, 274, 30, 46, false);
       addProp('prop_soul_brazier', 320, 218, 32, 46, true);
       addProp('prop_soul_brazier', 495, 218, 32, 46, true);
       addProp('prop_great_pyre', 755, 224, 92, 92, true);
@@ -4116,6 +5055,19 @@ export class GameScene extends Phaser.Scene {
     this.closeGameOverModal();
     this.isGameOverModalOpen = false;
     this.gameOverContainer = undefined;
+    this.isDilemmaModalOpen2D = false;
+    this.isEclipseEndingView2D = false;
+    this.dilemmaModalContainer = undefined;
+    this.guiltMirrors2D = [];
+    this.barnSlabRect2D = undefined;
+    this.barnSlabLabel2D = undefined;
+    this.activeMirrorIndex2D = undefined;
+    this.comboChain2D.reset();
+    this.perfectDodge2D.reset();
+    this.destructibleProps2D = [];
+    if (this.initialScenario === 1) {
+      this.canonEvents2D.resetAll();
+    }
     this.lastGuardPressTime = 0;
 
     // Clear Phase 2 & 3 dynamic 2D allies, narcotic braziers, Shalem Lion & First Dawn overlay
@@ -4291,6 +5243,67 @@ export class GameScene extends Phaser.Scene {
       this.elowenSprite = this.normalizeSprite(this.add.sprite(185, 268, 'elowen_idle', 0), 54, 54, 0.5, 0.9)
         .setDepth(268).setFlipX(true).setTint(0xc8b8e8);
       this.playAnimSafe(this.elowenSprite, 'elowen_pray');
+    } else if (scenarioIndex === 6) {
+      // Epílogo Jugable: El Primer Amanecer sobre Oakhaven y la Colina del Viejo Roble (Cap. XX)
+      this.canonEvents2D.enterFirstDawnEpilogue();
+      this.bgImage.setTexture('bg_oakhaven_dawn').setDisplaySize(WORLD_2D.WIDTH, WORLD_2D.HEIGHT);
+      this.audio.playBgm('bgm_first_dawn_epilogue');
+      this.audio.playCosmicChime();
+      this.emberParticles.stop();
+      this.currentBoss = undefined;
+      this.isActCleared = true;
+      this.isInvulnerable = true;
+
+      // Full restoration in the dawn light
+      this.player.heal(this.player.stats.maxHealth);
+      this.allyChar.heal(this.allyChar.stats.maxHealth);
+      this.player.stats.restorePosture(this.player.stats.maxPosture);
+
+      // Position party near San Jude atrium looking toward Old Oak Hill
+      this.playerSprite.setPosition(135, 248);
+      this.player.position = new Vector2(135, 248);
+      this.allySprite.setPosition(98, 254);
+      this.allyChar.position = new Vector2(98, 254);
+      this.shalemSprite.setPosition(118, 260).setTint(0xffeaa8);
+
+      // Elowen in radiant morning dress atop Colina del Viejo Roble surrounded by 16 white dawn flowers
+      this.elowenShadow = this.add.ellipse(325, 196, 24, 7, 0x000000, 0.35).setDepth(195);
+      this.elowenSprite = this.normalizeSprite(this.add.sprite(325, 196, 'elowen_idle', 0), 54, 54, 0.5, 0.9)
+        .setDepth(196).setFlipX(true);
+      this.playAnimSafe(this.elowenSprite, 'elowen_idle');
+
+      // Padre Cedric's warm presence at San Jude's sunlit cross
+      this.cedricShadow = this.add.ellipse(172, 224, 24, 7, 0x000000, 0.35).setDepth(223);
+      this.cedricSprite = this.normalizeSprite(this.add.sprite(172, 224, 'cedric_idle', 0), 54, 54, 0.5, 0.9)
+        .setDepth(224).setFlipX(true);
+      this.playAnimSafe(this.cedricSprite, 'cedric_bless');
+
+      // Radiant Golden Credits Arch in the eastern meadow
+      this.exitPortalZone = this.add.ellipse(1015, 248, 56, 18, 0xffdf7a, 0.72).setDepth(220);
+      this.exitPortalMarker = this.add.text(1015, 202, '🌅 CRÉDITOS FINALES ▶\n[E] o [ENTER] para culminar', {
+        fontFamily: 'Cinzel, monospace',
+        fontSize: '8px',
+        color: '#fff8cc',
+        backgroundColor: 'rgba(42, 28, 12, 0.88)',
+        padding: { x: 6, y: 4 },
+        align: 'center',
+        fontStyle: 'bold'
+      }).setOrigin(0.5).setDepth(340);
+
+      this.exitPortalTween = this.tweens.add({
+        targets: [this.exitPortalMarker, this.exitPortalZone],
+        scaleX: 1.06,
+        scaleY: 1.06,
+        duration: 900,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+      });
+
+      this.triggerShalemBalloon(
+        '🌅 EPÍLOGO JUGABLE — EL PRIMER AMANECER: «Sube a la Colina del Viejo Roble para hablar con Elowen [E] o pulsa [ENTER] cuando desees ver los créditos.»',
+        7500
+      );
     } else {
       // Catedral Invertida — El Sol del Abismo (Caps XVIII-XX)
       this.bgImage.setTexture('bg_cathedral').setDisplaySize(WORLD_2D.WIDTH, WORLD_2D.HEIGHT);

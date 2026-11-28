@@ -43,17 +43,95 @@ export class CharacterDialogueScene extends Phaser.Scene {
       this.dialogueBeats = this.generateElowenDialogue();
     } else if (type === 'elowen_belltower') {
       this.dialogueBeats = this.generateElowenBelltowerDialogue();
+    } else if (type === 'barn_slab') {
+      this.dialogueBeats = this.generateBarnSlabDialogue();
     } else if (type === 'elowen_bridge') {
       this.dialogueBeats = this.generateElowenBridgeDialogue();
     } else if (type === 'elowen_londinium') {
       this.dialogueBeats = this.generateElowenLondiniumDialogue();
     } else if (type === 'elowen_cathedral') {
       this.dialogueBeats = this.generateElowenCathedralDialogue();
+    } else if (type === 'epilogue_elowen') {
+      this.dialogueBeats = this.generateEpilogueElowenDialogue();
+    } else if (type === 'epilogue_cedric') {
+      this.dialogueBeats = this.generateEpilogueCedricDialogue();
     } else if (type === 'cedric') {
       this.dialogueBeats = this.generateCedricDialogue();
     } else {
       this.dialogueBeats = this.generateDialogueForScenario(this.currentScenario);
     }
+  }
+
+  /** Act II (Cap. VIII) – Lifting the burned barn stone slab to recover Colmillo del Sauce Negro & Lyra's shawl. */
+  private generateBarnSlabDialogue(): DialogueBeat[] {
+    return [
+      {
+        speaker: 'Khaterine',
+        portraitKey: 'portrait_khaterine',
+        portraitSide: 'right',
+        text: '«Bajo esta losa tiznada... aún permanece intacto el chal gris de mi madre, Lyra. Huele a humo de leña y lluvia del Sauce Negro, tal como la noche en que me ocultó para salvarme.»'
+      },
+      {
+        speaker: 'Thomas',
+        portraitKey: 'portrait_thomas',
+        portraitSide: 'left',
+        text: '«Envueltas en la lana descansan las hojas curvas gemelas: el Colmillo del Sauce Negro. Su acero vibra con el juramento de quienes protegieron la vida frente al dogma.»'
+      },
+      {
+        speaker: 'Shalem',
+        portraitKey: 'portrait_shalem',
+        portraitSide: 'left',
+        text: '«Acero brujo templado con memoria verdadera. Empuña ese filo, Thomas, y que tu arco recuerde el pulso de Lyra, cazadora. ¡Es hora de derribar la celda del campanario!»'
+      }
+    ];
+  }
+
+  /** Playable Epilogue (Scenario 6, Cap. XX) – Elowen & Thomas under the Old Oak in the First Dawn. */
+  private generateEpilogueElowenDialogue(): DialogueBeat[] {
+    return [
+      {
+        speaker: 'Elowen',
+        portraitKey: 'portrait_elowen',
+        portraitSide: 'right',
+        text: '«Mira el cielo sobre el Viejo Roble, Thomas... Dieciséis flores blancas han brotado donde antes solo había escarcha y ceniza. Por fin llegó el amanecer que nos prometimos de niños.»'
+      },
+      {
+        speaker: 'Thomas',
+        portraitKey: 'portrait_thomas',
+        portraitSide: 'left',
+        text: '«El fuego negro se apagó cuando cayó Astaroth, pero no siento frío, Elowen. Por primera vez en dieciocho años, mis manos solo pesan lo que pesa un hombre libre.»'
+      },
+      {
+        speaker: 'Elowen',
+        portraitKey: 'portrait_elowen',
+        portraitSide: 'right',
+        text: '«Porque nunca fuiste el monstruo de sus profecías. Fuiste la oscuridad que eligió amar y amparar a los débiles. Bienvenido a casa, Thomas.»'
+      },
+      {
+        speaker: 'Shalem',
+        portraitKey: 'portrait_shalem',
+        portraitSide: 'left',
+        text: '«Miau... Mucha poesía matutina y poca trucha asada. Aunque admito que este sol tibio sobre el lomo supera por mucho tres milenios en el Abismo.»'
+      }
+    ];
+  }
+
+  /** Playable Epilogue (Scenario 6, Cap. XX) – Memory & Legacy of Padre Cedric at San Jude's Sunlit Cross. */
+  private generateEpilogueCedricDialogue(): DialogueBeat[] {
+    return [
+      {
+        speaker: 'Padre Cedric',
+        portraitKey: 'portrait_cedric',
+        portraitSide: 'right',
+        text: '«La campana de San Jude vuelve a sonar sin temor, hijo mío. Los huérfanos y los enfermos que defendiste hoy caminan bajo la luz sin cadenas ni sal.»'
+      },
+      {
+        speaker: 'Thomas',
+        portraitKey: 'portrait_thomas',
+        portraitSide: 'left',
+        text: '«Guardé vuestro rosario de madera hasta el último abismo, Padre Cedric. Vuestra bondad fue el verdadero escudo que jamás pudieron romper.»'
+      }
+    ];
   }
 
   private generateCedricDialogue(): DialogueBeat[] {
@@ -347,6 +425,27 @@ export class CharacterDialogueScene extends Phaser.Scene {
           portraitKey: 'portrait_shalem',
           portraitSide: 'left',
           text: '«El "Monarca de los Deseos" y su salón de espejos temporales. Yo solo deseo que le arranques esa corona de oropel de un buen mandoble.»'
+        }
+      ];
+    } else if (scenario === 6) {
+      return [
+        {
+          speaker: mainProtagonist,
+          portraitKey: mainPortrait,
+          portraitSide: 'left',
+          text: '«El Primer Amanecer sobre Oakhaven... Las cenizas de la pira han desaparecido y las campanas anuncian paz desde la colina hasta el río.»'
+        },
+        {
+          speaker: allyName,
+          portraitKey: allyPortrait,
+          portraitSide: 'right',
+          text: '«Mi madre Lyra y el Padre Cedric sonríen en cada brisa que mueve las ramas del Sauce y del Viejo Roble. Cumplimos nuestra promesa.»'
+        },
+        {
+          speaker: 'Shalem',
+          portraitKey: 'portrait_shalem',
+          portraitSide: 'left',
+          text: '«Y ahora viene el juramento más sagrado de todos: me prometisteis trucha fresca y sardinas de Londinium. ¡Espero un festín digno de un antiguo Señor del Abismo!»'
         }
       ];
     } else {
